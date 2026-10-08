@@ -1,0 +1,54 @@
+# Recorder configuration. See docs/03_RECORDER_SPEC.md §12.
+# Anything that affects env_fingerprint must not change mid-session.
+
+[target]
+window_title_re = "^LDPlayer"    # must match exactly one visible window
+
+# Emulator window furniture, excluded from the content area. NOT auto-detected
+# (it is not black, so the letterbox scan misses it). Measure once with
+# tools/verify/g2b_chrome.py; changing it invalidates the env fingerprint.
+# Values below: LDPlayer 14, 100% display scaling, 2026-09-15 measurement.
+[target.chrome]
+left   = 0                       # left border falls outside the client here
+top    = 40                      # title bar + tab bar
+right  = 39                      # icon sidebar
+bottom = 0
+# Measured 2026-09-16 with g2b_chrome.py, battle screen, client 1200x2104,
+# 100% scaling. Content = 1161x2064 (exactly 9:16, matches wm size 1440x2560).
+
+[capture]
+backend       = "dxcam"
+target_fps    = 30
+out_long_edge = 2059           # native content height (2026-10-07: 1280 made pips ~70px, too small to label)
+codec         = "h264_nvenc"     # auto-falls back to libx264 if unavailable
+crf           = 23
+segment_sec   = 600
+queue_frames  = 120              # ~4s buffer; absorbs ffmpeg process rotation
+monitor_index = 0                # dxcam output index
+
+[input]
+tap_radius_n            = 0.012  # normalized distance; tap/drag boundary
+record_moves_while_down = true
+move_throttle_ms        = 8
+
+[calib]
+trials         = 20
+button_uv      = [0.93, 0.05]    # TODO(M0): measure a safe no-op toggle button
+roi_px         = 80
+diff_threshold = 12.0
+max_sigma_ms   = 15.0            # above this, do not start collecting
+
+[hotkeys]
+episode_toggle = "f9"
+discard        = "f10"
+pause          = "f11"
+stop           = "f12"
+
+[limits]
+max_dup_ratio  = 0.02
+min_disk_gb    = 20
+watchdog_sec   = 5
+fps_warn_ratio = 0.8
+
+[data]
+root = "data/sessions"

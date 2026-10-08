@@ -1,0 +1,24 @@
+[project]
+name = "rdom"
+version = "0.1.0"
+description = "Random Dice 2 gameplay recorder and automation research"
+requires-python = ">=3.11"
+dependencies = [
+    "dxcam>=0.3.0 ; sys_platform == 'win32'",
+    "pynput>=1.7",
+    "numpy>=1.24",
+]
+
+[project.optional-dependencies]
+probe = ["pillow>=10.0"]   # first_frame.png eyeball aid only
+
+[project.scripts]
+rdom-record = "rdom.recorder.record:main"
+rdom-replay = "rdom.tools.replay_overlay:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
