@@ -11,9 +11,10 @@ from rdom.perception.gear import predict_types, predict_pips, TYPES, kind
 
 ap = argparse.ArgumentParser(); ap.add_argument("--tags", default="s4,s5,s6,s7,s8")
 ap.add_argument("--n", type=int, default=1000); ap.add_argument("--seed", type=int, default=0)
+ap.add_argument("--out", default="review")
 a = ap.parse_args()
 torch.set_num_threads(int(os.environ.get("TRAIN_THREADS", 8)))
-D = r"C:\dev\rdom\data\crops_gear"; OUT = os.path.join(D, "review"); os.makedirs(OUT, exist_ok=True)
+D = r"C:\dev\rdom\data\crops_gear"; OUT = os.path.join(D, a.out); os.makedirs(OUT, exist_ok=True)
 pool = []
 for tag in a.tags.split(","):
     names = np.load(os.path.join(D, f"feats_{tag}.npz"))["names"]
@@ -52,7 +53,8 @@ for tag in a.tags.split(","):
                 cur = [c, t, [i]]
         if cur and len(cur[2]) >= 3: pool.append((tag, cur[2]))
     # drop runs that are already labelled
-    pool = [(tg, idx) for tg, idx in pool if tg != tag or (p[idx] == 0).all()]
+    # skip runs already reviewed (any type label, incl. Doom/drop-free type-only labels)
+    pool = [(tg, idx) for tg, idx in pool if tg != tag or ((p[idx] == 0).all() and (y[idx] == "").all())]
     globals().setdefault("META", {})[tag] = (names, T, P)
 print("unlabelled runs", len(pool), "covering", sum(len(i) for _, i in pool), "crops", flush=True)
 rng = np.random.RandomState(a.seed)

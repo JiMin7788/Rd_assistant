@@ -21,6 +21,9 @@ from rdom.perception.gear import TYPES, PipNet, PIP_IN, PIP_PATTERNS, decode_pat
 D = r"C:\dev\rdom\data\crops_gear"
 
 
+NAMES = {}
+
+
 def load(tag, cap=8000, seed=0):
     if tag == "s1":
         names = np.load(os.path.join(D, "feats.npz"))["names"]
@@ -44,6 +47,7 @@ def load(tag, cap=8000, seed=0):
     X = np.stack([cv2.cvtColor(cv2.imread(os.path.join(D, "_raw", names[i] + ".png")),
                                cv2.COLOR_BGR2RGB) for i in sel])
     T = np.array([TYPES.index(y[i]) for i in sel])
+    NAMES[tag] = names[sel]
     return X, T, pip[sel] - 1, grp[sel]
 
 
@@ -75,6 +79,13 @@ def augment(xb, rng, hue=True):
                 r = rng.randint(3, 9); cx, cy = rng.randint(0, 72, 2)
                 col = _SPLASH[rng.randint(len(_SPLASH))]
                 cv2.circle(im, (int(cx), int(cy)), int(r), col, -1)
+        if rng.rand() < 0.35:                                             # specular glint/sparkle:
+            gl = np.zeros((72, 72), np.float32)                           # a soft white spot that is
+            for _ in range(rng.randint(1, 3)):                            # NOT a pip (grey gear read
+                cx, cy = (36 + rng.uniform(-14, 14, 2)) if rng.rand() < 0.6 else rng.uniform(8, 64, 2)
+                cv2.circle(gl, (int(cx), int(cy)), int(rng.randint(2, 6)), 1.0, -1)   # 2->3, 2026-10-09)
+            gl = cv2.GaussianBlur(gl, (0, 0), rng.uniform(1.0, 2.5))[..., None]
+            im = im * (1 - gl * 0.9) + 255 * gl * 0.9
         out[j] = cv2.resize(np.clip(im, 0, 255), (PIP_IN, PIP_IN))
     return torch.from_numpy(out.transpose(0, 3, 1, 2) / 255.0)
 
@@ -126,6 +137,8 @@ if __name__ == "__main__":
     ap.add_argument("--split", default=None, help="time-split held-out tag: train on its first half")
     ap.add_argument("--epochs", type=int, default=12)
     ap.add_argument("--pattern", action="store_true", help="dot-position head (gear_pip_pat.pt)")
+    ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--out", default=None, help="save weights here (ensemble member)")
     a = ap.parse_args()
     PATTERN = a.pattern
     torch.set_num_threads(int(os.environ.get("TRAIN_THREADS", os.cpu_count() or 4)))
@@ -146,9 +159,16 @@ if __name__ == "__main__":
             pr = predict(net, Xe, Te)
             per = {TYPES[t][:6]: f"{(pr[Te == t] == Pe[Te == t]).mean():.2f}" for t in np.unique(Te)}
             return f"| {a.eval} acc {(pr == Pe).mean():.3f} {per}"
-        train(X, T, P, a.epochs, log=log)
+        net = train(X, T, P, a.epochs, seed=a.seed, log=log)
+        if a.out:
+            torch.save(net.state_dict(), a.out)
+        if a.eval in NAMES:     # dump held-out predictions for error review
+            np.savez(os.path.join(D, f"heldout_pip_{a.eval}.npz"), names=NAMES[a.eval], T=Te, P=Pe,
+                     pred=predict(net, Xe, Te))
     else:
-        net = train(X, T, P, a.epochs)
+        net = train(X, T, P, a.epochs, seed=a.seed)
+        if a.out:
+            torch.save(net.state_dict(), a.out); print("saved", a.out); sys.exit(0)
         _dst = os.path.join(r"C:\dev\rdom\data", "gear_pip_pat.pt" if PATTERN else "gear_pip_cnn.pt")
         torch.save(net.state_dict(), _dst + ".tmp"); os.replace(_dst + ".tmp", _dst)   # atomic: the bot hot-reloads
         print("saved", _dst)

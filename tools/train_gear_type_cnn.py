@@ -61,25 +61,25 @@ def predict(net, X):
 
 
 if __name__ == "__main__":
-    ap = argparse.ArgumentParser(); ap.add_argument("--eval", action="store_true"); ap.add_argument("--epochs", type=int, default=8)
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--holdout", default=None, help="tag left out entirely and scored per kind")
+    ap.add_argument("--epochs", type=int, default=8)
     a = ap.parse_args(); torch.set_num_threads(int(os.environ.get("TRAIN_THREADS", os.cpu_count() or 4)))
-    X1, Y1, _ = load("s1"); X2, Y2, _ = load("s2"); X3, Y3, T3 = load("s3", cap=100000)
-    X6, Y6, _ = load("s6", cap=100000)                     # crystals + relabelled bubbles
-    X7, Y7, _ = load("s7", cap=100000)                     # jokers + adjust/doom
-    X6, Y6 = np.concatenate([X6, X7]), np.concatenate([Y6, Y7])
-    for _t in ("s4", "s5", "s8", "s9"):                    # random-review labels 2026-10-08
-        if os.path.exists(os.path.join(D, f"y_{_t}.npy")):
-            _x, _y, _ = load(_t, cap=6000); X6, Y6 = np.concatenate([X6, _x]), np.concatenate([Y6, _y])
+    CAPS = {"s1": 4000, "s2": 4000, "s3": 100000, "s6": 100000, "s7": 100000,
+            "s4": 6000, "s5": 6000, "s8": 6000, "s9": 6000}
+    data = {t: load(t, cap=c) for t, c in CAPS.items() if os.path.exists(os.path.join(D, f"y_{t}.npy")) or t == "s1"}
     kind = lambda i: "Gear" if TYPE_CLASSES[i].startswith("Gear") else TYPE_CLASSES[i]
-    if a.eval:
-        h = np.median(T3); tr, te = T3 < h, T3 >= h
+    tr = [t for t in data if t != a.holdout]
+    X = np.concatenate([data[t][0] for t in tr]); Y = np.concatenate([data[t][1] for t in tr])
+    if a.holdout:
+        Xe, Ye, _ = load(a.holdout, cap=100000)
         def log(net):
-            pr = predict(net, X3[te])
-            k = np.mean([kind(p) == kind(q) for p, q in zip(pr, Y3[te])])
-            bub = Y3[te] == TYPE_CLASSES.index("Bubble")
-            return f"| s3-2nd kind {k:.3f} bubble {np.mean([kind(p)=='Bubble' for p in pr[bub]]):.3f}"
-        train(np.concatenate([X1, X2, X3[tr], X6]), np.concatenate([Y1, Y2, Y3[tr], Y6]), a.epochs, log)
+            pr = predict(net, Xe); ks = sorted({kind(i) for i in Ye})
+            per = {k: f"{np.mean([kind(p) == k for p, q in zip(pr, Ye) if kind(q) == k]):.3f}" for k in ks}
+            return f"| {a.holdout} kind {np.mean([kind(p) == kind(q) for p, q in zip(pr, Ye)]):.4f} {per}"
+        train(X, Y, a.epochs, log)
     else:
-        net = train(np.concatenate([X1, X2, X3, X6]), np.concatenate([Y1, Y2, Y3, Y6]), a.epochs)
-        _dst = os.path.join(r"C:\dev\rdom\data", "gear_type_cnn.pt")
+        net = train(X, Y, a.epochs)
+        _dst = os.path.join(D, "..", "gear_type_cnn.pt")
         torch.save(net.state_dict(), _dst + ".tmp"); os.replace(_dst + ".tmp", _dst)   # atomic: the bot hot-reloads
+        print("saved", _dst)

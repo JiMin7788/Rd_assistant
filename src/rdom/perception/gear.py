@@ -50,7 +50,9 @@ def reload_if_changed():
     """Drop cached models whose file changed on disk (hot swap between games while
     the training loop writes new weights). Returns the list of reloaded names."""
     out = []
-    for key, fn in (("pipnet", "gear_pip_cnn.pt"), ("pipnet", "gear_pip_pat.pt"), ("typenet", "gear_type_cnn.pt")):
+    files = [("pipnet", "gear_pip_cnn.pt"), ("pipnet", "gear_pip_pat.pt"), ("typenet", "gear_type_cnn.pt")]
+    files += [("pipnet", f) for f in PIP_ENSEMBLE]
+    for key, fn in files:
         path = os.path.join(_DATA, fn)
         m = os.path.getmtime(path) if os.path.exists(path) else None
         if _models.get("mtime_" + fn) != m:
@@ -153,15 +155,27 @@ def __getattr__(name):            # lazy: importing gear.py must not require tor
     raise AttributeError(name)
 
 
+PIP_ENSEMBLE = ("gear_pip_pat_e1.pt", "gear_pip_pat_e2.pt", "gear_pip_pat_e3.pt")
+
+
 def _pipnet():
+    """List of pip nets. Preferred: the 3-seed dot-position ensemble (logits are
+    averaged -- cut run-to-run variance on bubbles, 2026-10-09); else the single
+    dot-position model; else the old class model."""
     if "pipnet" not in _models:
         import torch
-        net = _pipnet_cls()()
-        pat = os.path.join(_DATA, "gear_pip_pat.pt")          # dot-position model preferred
-        path = pat if os.path.exists(pat) else os.path.join(_DATA, "gear_pip_cnn.pt")
-        net.load_state_dict(torch.load(path))
-        _models["pip_mode"] = "pattern" if path == pat else "class"
-        net.eval(); _models["pipnet"] = net
+        ens = [os.path.join(_DATA, f) for f in PIP_ENSEMBLE]
+        pat = os.path.join(_DATA, "gear_pip_pat.pt")
+        if all(os.path.exists(f) for f in ens):
+            paths, mode = ens, "pattern"
+        elif os.path.exists(pat):
+            paths, mode = [pat], "pattern"
+        else:
+            paths, mode = [os.path.join(_DATA, "gear_pip_cnn.pt")], "class"
+        nets = []
+        for path in paths:
+            net = _pipnet_cls()(); net.load_state_dict(torch.load(path)); net.eval(); nets.append(net)
+        _models["pip_mode"] = mode; _models["pipnet"] = nets
     return _models["pipnet"]
 
 
@@ -219,7 +233,7 @@ def predict_pips(crops, types):
     x = torch.from_numpy(x.transpose(0, 3, 1, 2))
     t = torch.zeros(len(crops), dtype=torch.long)   # type-blind: see train_gear_pip_cnn.py
     with torch.no_grad():
-        out = _pipnet()(x, t).numpy()
+        out = np.mean([net(x, t).numpy() for net in _pipnet()], 0)
     if _models.get("pip_mode") == "pattern":
         return decode_pattern(out).tolist()
     return (out.argmax(1) + 1).tolist()
