@@ -205,7 +205,24 @@ def predict_types(crops):
     x = torch.from_numpy(x.transpose(0, 3, 1, 2))
     with torch.no_grad():
         P = torch.softmax(_typenet()(x, torch.zeros(len(crops), dtype=torch.long)), 1).numpy()
-    return [_models["type_classes"][i] for i in P.argmax(1)], list(P.max(1))
+    labs, conf = [_models["type_classes"][i] for i in P.argmax(1)], list(P.max(1))
+    for i, c in enumerate(crops):
+        if is_bomb(c):
+            labs[i], conf[i] = "Bomb", 1.0
+        elif labs[i] == "Bomb":                    # the CNN learned bombs from synthetic art only
+            labs[i] = "junk"
+    return labs, conf
+
+
+def is_bomb(rgb):
+    """Real bombs: a dark grey, pip-less tile with an orange spark. The type CNN
+    (trained on synthetic bombs) read a live bomb as Bubble 0.35 (2026-10-10).
+    On 30k labelled crops this rule fired only on bombs (4 real + 2 synthetic)."""
+    h = cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV); n = rgb.shape[0]; m = n // 6
+    c = h[m:n - m, m:n - m]
+    dark = ((c[..., 1] < 60) & (c[..., 2] > 20) & (c[..., 2] < 95)).mean()
+    orange = ((c[..., 0] >= 5) & (c[..., 0] <= 25) & (c[..., 1] > 140) & (c[..., 2] > 170)).mean()
+    return dark > 0.6 and 0.01 < orange < 0.3
 
 
 # dot positions TL TR ML C MR BL BR -> which are lit for each pip count (die faces)

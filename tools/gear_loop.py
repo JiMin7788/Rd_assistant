@@ -12,6 +12,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 from rdom.capture.live import LiveGrabber
 from rdom.input.inject import Injector, SPEED_UV
 from rdom.input.friend_coop import open_room_and_wait
+from rdom.notify.room_state import write_room
 from rdom.perception.board import (is_battle, is_game_over, is_lobby, read_speed,
                                    has_popup_close, has_modal_x, is_exit_dialog, is_coop_room)
 from rdom.input.inject import CLOSE_X_UV, CANCEL_UV
@@ -108,11 +109,13 @@ try:
         t_start = time.perf_counter()
         res = play(g, inj, minutes=40)
         t_end = time.perf_counter()
+        st = getattr(play, "stats", {})
         with open(LOG, "a") as fh:
             fh.write(json.dumps({"round": rnd, "t_start": t_start, "t_end": t_end, "result": res,
-                                 "wall_end": datetime.datetime.now().isoformat()}) + "\n")
+                                 "wall_end": datetime.datetime.now().isoformat(),
+                                 "stats": {k: st.get(k) for k in ("merges", "fails", "support", "complete")}}) + "\n")
         print("battle result:", res, flush=True)
-        st = getattr(play, "stats", {})
+        write_room(None, "closed")                      # reservation turn is over
         send_status(f"🏁 {rnd}판 종료 · {(t_end - t_start)/60:.1f}분\n합성 {st.get('merges', 0)}회 · "
                     f"실패 {st.get('fails', 0)}회 · 서포터 {st.get('support', 0)}회 · "
                     f"필드 완성 {'O' if st.get('complete') else 'X'}")

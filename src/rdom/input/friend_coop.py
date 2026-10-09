@@ -270,6 +270,7 @@ def open_room_and_wait(grab, inj, timeout=1800.0, nav_wait=1.5):
     try:
         from rdom.perception.gear import read_room_code
         from rdom.notify.discord import send_room_code
+        from rdom.notify.room_state import write_room, bot_alive
         # send only a code read identically on 3 consecutive frames: a wrong code is worse than none
         code = None; prev = None; streak = 0
         for _ in range(12):
@@ -279,7 +280,10 @@ def open_room_and_wait(grab, inj, timeout=1800.0, nav_wait=1.5):
                 code = c; break
             time.sleep(0.3)
         print("room code:", code, flush=True)
-        if code and code != getattr(open_room_and_wait, "_last_code", None):
+        write_room(code, "waiting")
+        # the Discord bot hands the code out (public card or reservation DM) while it
+        # runs; post it ourselves only as a fallback when the bot is down
+        if code and not bot_alive() and code != getattr(open_room_and_wait, "_last_code", None):
             send_room_code(code)
             open_room_and_wait._last_code = code
     except Exception as e:
@@ -289,10 +293,12 @@ def open_room_and_wait(grab, inj, timeout=1800.0, nav_wait=1.5):
         f = grab.grab()
         if is_battle(f):
             print("battle started", flush=True)
+            _room_state("playing")
             return True
         if start_ready(f):
             print(f"someone joined after {time.monotonic()-t0:.0f}s -- 협동 시작", flush=True)
             inj.tap(*START_COOP_UV)
+            _room_state("playing")
             return True
         # one unrecognised frame (joiner animation, toast) aborted a 19-min wait
         # (2026-10-08): only give up after ~5 s off the room
@@ -305,3 +311,11 @@ def open_room_and_wait(grab, inj, timeout=1800.0, nav_wait=1.5):
         time.sleep(1.0)
     print("nobody joined", flush=True)
     return False
+
+
+def _room_state(state):
+    try:
+        from rdom.notify.room_state import read_room, write_room
+        write_room(read_room().get("code"), state)
+    except Exception as e:
+        print("room state failed:", e, flush=True)
