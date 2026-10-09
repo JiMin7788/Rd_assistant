@@ -113,9 +113,9 @@ try:
                                  "wall_end": datetime.datetime.now().isoformat()}) + "\n")
         print("battle result:", res, flush=True)
         st = getattr(play, "stats", {})
-        send_status(f"🏁 {rnd}판 종료 ({(t_end - t_start)/60:.1f}분) — 합성 {st.get('merges', 0)}회, "
-                    f"실패 {st.get('fails', 0)}회, 서포터 {st.get('support', 0)}회, "
-                    f"완성 {'O' if st.get('complete') else 'X'}")
+        send_status(f"🏁 {rnd}판 종료 · {(t_end - t_start)/60:.1f}분\n합성 {st.get('merges', 0)}회 · "
+                    f"실패 {st.get('fails', 0)}회 · 서포터 {st.get('support', 0)}회 · "
+                    f"필드 완성 {'O' if st.get('complete') else 'X'}")
         if res == "moved": break
         if res == "game_over":
             time.sleep(3.0); print("로비로 가기:", exit_to_lobby(g, inj), flush=True); time.sleep(3.0)

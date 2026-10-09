@@ -269,7 +269,7 @@ def open_room_and_wait(grab, inj, timeout=1800.0, nav_wait=1.5):
     print(f"room open -- waiting up to {timeout/60:.0f} min for someone to join", flush=True)
     try:
         from rdom.perception.gear import read_room_code
-        from rdom.notify.discord import send_code
+        from rdom.notify.discord import send_room_code
         # send only a code read identically on 3 consecutive frames: a wrong code is worse than none
         code = None; prev = None; streak = 0
         for _ in range(12):
@@ -280,7 +280,7 @@ def open_room_and_wait(grab, inj, timeout=1800.0, nav_wait=1.5):
             time.sleep(0.3)
         print("room code:", code, flush=True)
         if code and code != getattr(open_room_and_wait, "_last_code", None):
-            send_code(f"방 코드: **{code}**  ({time.strftime('%H:%M')})")
+            send_room_code(code)
             open_room_and_wait._last_code = code
     except Exception as e:
         print("room code notify failed:", e, flush=True)

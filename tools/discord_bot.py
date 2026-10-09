@@ -83,7 +83,10 @@ admin = app_commands.default_permissions(manage_guild=True)
 @admin
 @tree.command(name="상태", description="봇 상태와 최근 로그")
 async def cmd_status(it: discord.Interaction):
-    await it.response.send_message(status_text())
+    head, _, rest = status_text().partition("\n")
+    e = discord.Embed(title=head, description=rest or None,
+                      colour=0x2ECC71 if running() and not os.path.exists(PAUSE) else 0xF1C40F if running() else 0x95A5A6)
+    await it.response.send_message(embed=e)
 
 
 @admin
@@ -156,8 +159,30 @@ async def on_message(msg: discord.Message):
                 print("delete failed:", e, flush=True)
 
 
+async def presence_loop():
+    """Member-list line under the bot: what it is doing right now."""
+    while True:
+        try:
+            n = 0
+            today = datetime.date.today().isoformat()
+            for l in open(os.path.join(DATA, "gear_rounds.jsonl"), encoding="utf-8"):
+                n += today in l
+            if not running():
+                act, st = "꺼짐", discord.Status.idle
+            elif os.path.exists(PAUSE):
+                act, st = f"일시정지 · 오늘 {n}판", discord.Status.idle
+            else:
+                act, st = f"랜다2 협동 · 오늘 {n}판", discord.Status.online
+            await client.change_presence(status=st, activity=discord.Game(act))
+        except Exception as e:
+            print("presence:", e, flush=True)
+        await asyncio.sleep(60)
+
+
 @client.event
 async def on_ready():
+    if not getattr(client, "_presence", None):
+        client._presence = asyncio.create_task(presence_loop())
     for g in client.guilds:                       # guild sync: commands appear immediately
         tree.copy_global_to(guild=g)
         await tree.sync(guild=g)
