@@ -62,10 +62,18 @@ def test_phase_a_does_not_merge_gears():
     assert plan_next(b, transcended=False)["op"] == "wait"
 
 
-def test_bubbles_kept_at_three():
+def test_three_bubbles_are_fodder():
+    # safe zone 1-3, best 2: a 3rd bubble is not hoarded (user 2026-10-10)
     b = board("B1 B1 B1 G1 G1  G1 G1 G1 G1 G1  G1 G1 G1 G1 G1")
     a = plan_next(b, transcended=False)
-    assert a["op"] == "wait", a          # 3 bubbles: none is surplus
+    assert a["op"] == "merge", a
+    assert {b[a["from"] - 1]["type"], b[a["to"] - 1]["type"]} == {"Bubble"}
+
+
+def test_bubble_pair_never_risks_zero():
+    # 2 bubbles: merging both could leave 0 (result is random) -> not allowed
+    b = board("B1 B1 G1 G1 G1  G1 G1 G1 G1 G1  G1 G1 G1 G1 G1")
+    assert plan_next(b, transcended=False)["op"] == "wait"
 
 
 def test_phase_b_merges_low_gears_when_average_short():

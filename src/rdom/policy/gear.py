@@ -25,7 +25,8 @@ Actions: {"op": "summon"} | {"op": "merge", "from": c, "to": c}
 from __future__ import annotations
 
 ROWS_N, COLS_N = 3, 5
-MIN_BUBBLES, MAX_BUBBLES = 1, 3   # user 2026-10-08
+MIN_BUBBLES, MAX_BUBBLES = 1, 3   # user 2026-10-08: safe zone 1-3 ...
+BEST_BUBBLES = 2                  # ... best is 2 -- do not hoard a 3rd (user 2026-10-10)
 TARGET_AVG = 2.2   # user 2026-10-08 (was 2.0)
 
 
@@ -126,7 +127,7 @@ def _fodder_ok(d, n_bub, allow_gear):
     if t == "Growth":
         return False
     if t == "Bubble":
-        return n_bub > MAX_BUBBLES
+        return n_bub > MIN_BUBBLES                 # the pair check keeps >= MIN after the merge
     if t == "Gear":
         return allow_gear
     return True                                  # Doom, Adjust
@@ -141,6 +142,10 @@ def _merge_candidates(board, allow_gear, banned):
             if (a["cell"], b["cell"]) in banned or not can_merge(a, b):
                 continue
             if not (_fodder_ok(a, n_bub, allow_gear) and _fodder_ok(b, n_bub, allow_gear)):
+                continue
+            # bubbles are fodder like any die as long as MIN stays even if the result
+            # is not a bubble (was: only above 3, so the bot hoarded 3 -- user 2026-10-10)
+            if n_bub - ((a["type"] == "Bubble") + (b["type"] == "Bubble")) < MIN_BUBBLES:
                 continue
             out.append((a, b))
     return bc, out
@@ -356,7 +361,7 @@ def plan_next(board, transcended=False, support_ready=False, banned=frozenset(),
         bc = _bc(board)
         n_bub = ev["bubbles"]
         pool = [d for d in board if d["type"] in ("Doom", "Adjust")
-                or (d["type"] == "Bubble" and n_bub > MAX_BUBBLES)]
+                or (d["type"] == "Bubble" and n_bub > BEST_BUBBLES)]
         if pool:
             d = max(pool, key=lambda d: (_gear_adj(bc, d["cell"]), d["pip"]))
             return {"op": "support", "from": d["cell"]}
