@@ -66,8 +66,11 @@ try:
             exit_to_lobby(g, inj); time.sleep(3); f = g.grab()
         # shop/event popups open by themselves on the lobby after a game (재설계 패키지,
         # 2026-10-08): close them with their X before starting a room
+        unknown = 0
         for _ in range(30):
-            if is_battle(f) or is_lobby(f) or is_coop_room(f):
+            # popups first: a shop popup's green buy button sits where the lobby's 협동
+            # button is (스텝업 패키지, 2026-10-10), so never decide "lobby" under a popup
+            if is_battle(f) or is_coop_room(f) or (is_lobby(f) and not has_popup_close(f)):
                 break
             if network_error(f):
                 # "네트워크 에러가 발생하여 게임을 재시작합니다." -- its only button is 확인;
@@ -80,6 +83,12 @@ try:
                 print("팝업 -- X 닫기", flush=True); inj.tap(*CLOSE_X_UV)
             elif is_game_over(f):
                 exit_to_lobby(g, inj)
+            elif unknown < 3:
+                # some other popup / screen without the bottom X: Android BACK closes
+                # game popups (on the lobby it opens the exit dialog, cancelled above).
+                # Never tap blind -- a popup is full of buy buttons.
+                unknown += 1
+                print(f"unknown screen -- BACK ({unknown}/3)", flush=True); inj.back()
             else:
                 break
             time.sleep(1.5); f = g.grab()

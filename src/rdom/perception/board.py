@@ -359,7 +359,10 @@ def is_lobby(frame_rgb):
     p = frame_rgb[int(0.715*H):int(0.765*H), int(0.42*W):int(0.58*W)]
     hsv = cv2.cvtColor(p, cv2.COLOR_RGB2HSV)
     h, s, v = hsv[..., 0], hsv[..., 1], hsv[..., 2]
-    return ((h >= 55) & (h <= 95) & (s > 90) & (v > 120)).mean() > 0.30
+    green = ((h >= 55) & (h <= 95) & (s > 90) & (v > 120)).mean() > 0.30
+    # a shop popup (스텝업 패키지, 2026-10-10) has its green buy button right on this
+    # patch: the bot took it for the lobby and tapped 친구와 하기 through the popup
+    return green and not has_popup_close(frame_rgb)
 
 
 def has_popup_close(frame_rgb):
