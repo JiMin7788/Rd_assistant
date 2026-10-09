@@ -267,6 +267,20 @@ def open_room_and_wait(grab, inj, timeout=1800.0, nav_wait=1.5):
             print("coop room did not open -- abort round", flush=True)
             return None
     print(f"room open -- waiting up to {timeout/60:.0f} min for someone to join", flush=True)
+    try:
+        from rdom.perception.gear import read_room_code
+        from rdom.notify.discord import send_code
+        code = None
+        for _ in range(4):
+            code = read_room_code(grab.grab())
+            if code: break
+            time.sleep(0.5)
+        print("room code:", code, flush=True)
+        if code and code != getattr(open_room_and_wait, "_last_code", None):
+            send_code(f"방 코드: **{code}**  ({time.strftime('%H:%M')})")
+            open_room_and_wait._last_code = code
+    except Exception as e:
+        print("room code notify failed:", e, flush=True)
     t0 = time.monotonic(); last = t0; away = 0
     while time.monotonic() - t0 < timeout:
         f = grab.grab()

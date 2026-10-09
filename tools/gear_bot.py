@@ -40,7 +40,8 @@ def fmt(b):
 
 def play(g, inj, minutes=30, tick=0.6):
     """Play the battle on screen until game over / window move / timeout.
-    Returns "game_over", "moved" or "timeout"."""
+    Returns "game_over", "moved" or "timeout". Per-game counters in play.stats."""
+    play.stats = stats = {"merges": 0, "fails": 0, "support": 0, "complete": False}
     tap = lambda k: inj.tap(*UI[k])
     transcended = False
     support_last = -1e9; power_last = -1e9; summon_last = -1e9; hunt_last = -1e9
@@ -48,8 +49,8 @@ def play(g, inj, minutes=30, tick=0.6):
     pending = None                    # (from, to, before-board) of the last merge
     prev_sig = None; post_hits = 0
     acted_at = -1e9
-    hpsp_last = -1e9; hpsp_est = 999
-    doom_pin = {}                      # cell -> pip of a Doom whose odd guess failed
+    doom_mem = {}                      # cell -> [corner base, centre seen] (2026-10-09)
+    hpsp_last = -1e9; hpsp_est = 999; hp_seen = None
     ocr_last = -1e9; clone_until = -1e9; hold_power_until = -1e9; bonus_until = -1e9
     t_end = time.monotonic() + minutes * 60
     print(f"gear bot {'EXECUTE' if inj.execute else 'DRY-RUN'}", flush=True)
@@ -74,7 +75,9 @@ def play(g, inj, minutes=30, tick=0.6):
         if ui["hunt_popup"]:
             print("hunt popup -> 사냥"); tap("hunt_popup_ok"); continue
         if ui["transcend"]:
-            print("초월!"); tap("transcend"); transcended = True; continue
+            from rdom.perception.gear import transcend_tap
+            uv = transcend_tap(f)
+            print(f"초월! tap {uv[0]:.3f},{uv[1]:.3f}"); inj.tap(*uv); transcended = True; continue
         if ui["power_panel"]:
             from rdom.perception.gear import power_buttons
             btn = power_buttons(f)[0]                  # leftmost = gear
@@ -93,6 +96,11 @@ def play(g, inj, minutes=30, tick=0.6):
             # took HP to 10 (2026-10-08). Gap the taps and trust our own -20 estimate.
             from rdom.perception.gear import read_hp
             hp = read_hp(f)
+            # OCR can drop a digit ("150" read as "50", 2026-10-09): only trust a value
+            # read twice in a row
+            hp_prev, hp_seen = hp_seen, hp
+            if hp is None or hp != hp_prev:
+                hp = None
             if hp is not None and now - hpsp_last < 15.0:
                 hp = min(hp, hpsp_est)
             if hp is not None and hp - 20 >= 30 and now - hpsp_last >= 3.0:
@@ -125,6 +133,22 @@ def play(g, inj, minutes=30, tick=0.6):
         if post_hits >= 2 and not transcended:
             print("transcended (gear colours changed)"); transcended = True
         bc = {d["cell"]: d for d in b}
+        # Doom: the centre pip is only drawn in some countdown phases, so remember it
+        # for the die's lifetime (same cell, same corner pattern) once it was seen
+        for d in b:
+            c = d["cell"]
+            if d["type"] != "Doom":
+                if d["type"] != "junk":
+                    doom_mem.pop(c, None)
+                continue
+            base = 1 if d["pip"] <= 1 else (d["pip"] // 2) * 2
+            m = doom_mem.get(c)
+            if m is None or m[0] != base:
+                m = doom_mem[c] = [base, False]
+            if d.get("doom_centre", 0) > 0.8 and base > 1:
+                m[1] = True
+            if m[1]:
+                d["pip"] = base + 1
         # type only: a flickering pip read cleared a pip-keyed ban and the same misread
         # Adjust-4 pair was retried 26x (2026-10-08); cap at 90 s for real changes
         cellsig = lambda c: bc[c]["type"]
@@ -136,18 +160,13 @@ def play(g, inj, minutes=30, tick=0.6):
                 # misread Adjust-3 pair 11x in the 2026-10-07 bot game
                 banned[(fr, to)] = (cellsig(fr), cellsig(to), now + 90.0)
                 print(f"   merge {fr}->{to} had no effect -> banned until those dice change")
-                # an "odd Doom" guess (read 2, tried as 3) that failed: the Doom really is
-                # even -- pin it so other partners stop guessing (Adjust3+Doom2 failed 7x, 2026-10-08)
-                for c, o in ((fr, to), (to, fr)):
-                    if before[c]["type"] == "Doom" and before[c]["pip"] != before[o]["pip"]:
-                        doom_pin[c] = before[c]["pip"]
+                stats["fails"] += 1
         banned = {k: v for k, v in banned.items()
                   if v[:2] == (cellsig(k[0]), cellsig(k[1])) and now < v[2]}
-        doom_pin = {c: p for c, p in doom_pin.items() if bc[c]["type"] == "Doom" and bc[c]["pip"] == p}
-        for c in doom_pin:
-            bc[c]["pinned"] = True
 
         ev = evaluate(b)
+        if ev["complete"]:
+            stats["complete"] = True
         if not stable and not ev["empty"]:
             continue                                   # wait for a confirming read
         if ev["unknown"] > 3:
@@ -169,7 +188,7 @@ def play(g, inj, minutes=30, tick=0.6):
             print(f"{fmt(b)} | G{ev['gears']} B{ev['bubbles']} clu{ev['largest_cluster']} "
                   f"avg{ev['gear_avg']} -> merge {act['from']}->{act['to']}", flush=True)
             inj.swipe(*cell_uv(act["from"]), *cell_uv(act["to"]))
-            pending = (act["from"], act["to"], bc); acted_at = now
+            pending = (act["from"], act["to"], bc); acted_at = now; stats["merges"] += 1
         elif act["op"] == "wait" and now - power_last > POWER_EVERY and now > hold_power_until:
             # nothing to do on the board -> spend SP on gears (user also powers up
             # before the field is complete; a stuck board sat on 168k SP 2026-10-07)
@@ -177,7 +196,7 @@ def play(g, inj, minutes=30, tick=0.6):
         elif act["op"] == "support":
             print(f"{fmt(b)} -> supporter <- {act['from']}", flush=True)
             inj.swipe(*cell_uv(act["from"]), *UI["support"], dur_ms=400)
-            support_last = now; acted_at = now
+            support_last = now; acted_at = now; stats["support"] += 1
     return "timeout"
 
 

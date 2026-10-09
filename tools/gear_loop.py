@@ -15,11 +15,23 @@ from rdom.input.friend_coop import open_room_and_wait
 from rdom.perception.board import (is_battle, is_game_over, is_lobby, read_speed,
                                    has_popup_close, has_modal_x, is_exit_dialog, is_coop_room)
 from rdom.input.inject import CLOSE_X_UV, CANCEL_UV
+
+
+def network_error(f):
+    """The 알림 dialog with a single yellow 확인 at v~0.627 over a dark panel."""
+    import cv2
+    h, w = f.shape[:2]; W = round(h * 9 / 16)
+    btn = cv2.cvtColor(f[int(0.605*h):int(0.650*h), int(0.30*W):int(0.70*W)], cv2.COLOR_RGB2HSV)
+    yellow = ((btn[..., 0] >= 18) & (btn[..., 0] <= 35) & (btn[..., 1] > 120) & (btn[..., 2] > 150)).mean()
+    panel = cv2.cvtColor(f[int(0.40*h):int(0.55*h), int(0.10*W):int(0.90*W)], cv2.COLOR_RGB2HSV)
+    dark = (panel[..., 2] < 60).mean()
+    return yellow > 0.5 and dark > 0.6
 from rdom.perception import gear
 from tools.bot_live import exit_to_lobby
 from tools.gear_bot import play
+from rdom.notify.discord import send_status
 
-ap = argparse.ArgumentParser(); ap.add_argument("--until", required=True, help="HH:MM local")
+ap = argparse.ArgumentParser(); ap.add_argument("--until", default="23:59", help="HH:MM local (default: run all day)")
 a = ap.parse_args()
 hh, mm = map(int, a.until.split(":"))
 now = datetime.datetime.now(); deadline = now.replace(hour=hh, minute=mm, second=0)
@@ -28,20 +40,26 @@ LOG = r"C:\dev\rdom\data\gear_rounds.jsonl"
 
 g = LiveGrabber(); inj = Injector(execute=True)
 fails = 0; rnd = 0
+send_status(f"▶ 봇 시작 (종료 예정 {deadline:%H:%M})")
 try:
     while datetime.datetime.now() < deadline:
         rnd += 1
         print(f"=== round {rnd} ({datetime.datetime.now():%H:%M}) ===", flush=True)
         if g.window_moved():
-            print("window moved -- stop"); break
+            print("window moved -- stop"); send_status("⛔ 에뮬레이터 창이 움직여서 정지", g.grab()); break
         f = g.grab()
         if is_game_over(f):
             exit_to_lobby(g, inj); time.sleep(3); f = g.grab()
         # shop/event popups open by themselves on the lobby after a game (재설계 패키지,
         # 2026-10-08): close them with their X before starting a room
-        for _ in range(6):
+        for _ in range(30):
             if is_battle(f) or is_lobby(f) or is_coop_room(f):
                 break
+            if network_error(f):
+                # "네트워크 에러가 발생하여 게임을 재시작합니다." -- its only button is 확인;
+                # the game then reloads (shop popups follow), 2026-10-09
+                print("네트워크 에러 -- 확인, waiting for reload", flush=True)
+                inj.tap(0.50, 0.627); time.sleep(8.0); f = g.grab(); continue
             if is_exit_dialog(f):
                 print("종료 확인창 -- 취소", flush=True); inj.tap(*CANCEL_UV)
             elif has_popup_close(f):
@@ -59,7 +77,8 @@ try:
             if not ok:
                 fails += 1; print(f"round did not start ({ok}); fails={fails}", flush=True)
                 if fails >= 3:
-                    print("!! 3 failed rounds in a row -- stopping"); break
+                    print("!! 3 failed rounds in a row -- stopping")
+                    send_status("⛔ 방 만들기 3회 연속 실패 -- 정지. 화면 확인 필요", g.grab()); break
                 time.sleep(5); continue
             t0 = time.monotonic()
             while not is_battle(g.grab()):
@@ -69,6 +88,7 @@ try:
                 if read_speed(g.grab()) is not None: break
                 time.sleep(0.5)
             print("배속 tap (once)", flush=True); inj.tap(*SPEED_UV)
+            send_status(f"🎮 {rnd}판 시작")
         fails = 0
         rl = gear.reload_if_changed()
         if rl: print("models reloaded:", rl, flush=True)
@@ -79,9 +99,14 @@ try:
             fh.write(json.dumps({"round": rnd, "t_start": t_start, "t_end": t_end, "result": res,
                                  "wall_end": datetime.datetime.now().isoformat()}) + "\n")
         print("battle result:", res, flush=True)
+        st = getattr(play, "stats", {})
+        send_status(f"🏁 {rnd}판 종료 ({(t_end - t_start)/60:.1f}분) — 합성 {st.get('merges', 0)}회, "
+                    f"실패 {st.get('fails', 0)}회, 서포터 {st.get('support', 0)}회, "
+                    f"완성 {'O' if st.get('complete') else 'X'}")
         if res == "moved": break
         if res == "game_over":
             time.sleep(3.0); print("로비로 가기:", exit_to_lobby(g, inj), flush=True); time.sleep(3.0)
 finally:
     g.close()
 print("loop done", flush=True)
+send_status("■ 봇 종료 (예정 시간 도달)")

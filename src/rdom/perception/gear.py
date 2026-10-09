@@ -51,7 +51,7 @@ def reload_if_changed():
     the training loop writes new weights). Returns the list of reloaded names."""
     out = []
     files = [("pipnet", "gear_pip_cnn.pt"), ("pipnet", "gear_pip_pat.pt"), ("typenet", "gear_type_cnn.pt")]
-    files += [("pipnet", f) for f in PIP_ENSEMBLE]
+    files += [("pipnet", f) for f in PIP_ENSEMBLE] + [("doomnet", f) for f in DOOM_CENTRE]
     for key, fn in files:
         path = os.path.join(_DATA, fn)
         m = os.path.getmtime(path) if os.path.exists(path) else None
@@ -179,14 +179,17 @@ def _pipnet():
     return _models["pipnet"]
 
 
-TYPE_CLASSES = TYPES + ("empty", "junk", "Crystal")   # Crystal: board obstacle, HP 700 (2026-10-08)
+TYPE_CLASSES = TYPES + ("empty", "junk", "Crystal", "Bomb")   # Crystal: obstacle HP 700; Bomb: field-effect die (2026-10-09)
 
 
 def _typenet():
     if "typenet" not in _models:
         import torch
-        net = _pipnet_cls()(n_out=len(TYPE_CLASSES))
-        net.load_state_dict(torch.load(os.path.join(_DATA, "gear_type_cnn.pt")))
+        sd = torch.load(os.path.join(_DATA, "gear_type_cnn.pt"))
+        n_out = sd[[k for k in sd if k.endswith(".weight")][-1]].shape[0]   # a model trained
+        net = _pipnet_cls()(n_out=n_out)                               # before a class was
+        net.load_state_dict(sd)                                        # added keeps working
+        _models["type_classes"] = TYPE_CLASSES[:n_out]
         net.eval(); _models["typenet"] = net
     return _models["typenet"]
 
@@ -202,7 +205,7 @@ def predict_types(crops):
     x = torch.from_numpy(x.transpose(0, 3, 1, 2))
     with torch.no_grad():
         P = torch.softmax(_typenet()(x, torch.zeros(len(crops), dtype=torch.long)), 1).numpy()
-    return [TYPE_CLASSES[i] for i in P.argmax(1)], list(P.max(1))
+    return [_models["type_classes"][i] for i in P.argmax(1)], list(P.max(1))
 
 
 # dot positions TL TR ML C MR BL BR -> which are lit for each pip count (die faces)
@@ -217,9 +220,15 @@ PIP_PATTERNS = np.array([
 ], np.float32)
 
 
-def decode_pattern(logits):
-    """Per-position dot logits (N,7) -> pip 1..7 by best pattern log-likelihood."""
+def decode_pattern(logits, hide_centre=None):
+    """Per-position dot logits (N,7) -> pip 1..7 by best pattern log-likelihood.
+    hide_centre: bool mask (N,) of crops whose centre is covered (Doom's countdown
+    number) -- the centre is ignored there, so 2/3, 4/5, 6/7 tie and argmax returns
+    the lower one; policy.gear.DoomTracker resolves the rest by elimination."""
     lp = -np.logaddexp(0, -logits); ln = -np.logaddexp(0, logits)      # log sigmoid / log(1-sigmoid)
+    if hide_centre is not None and np.any(hide_centre):
+        lp = lp.copy(); ln = ln.copy()
+        lp[hide_centre, 3] = 0.0; ln[hide_centre, 3] = 0.0
     ll = lp @ PIP_PATTERNS.T + ln @ (1 - PIP_PATTERNS).T                # (N,7)
     return ll.argmax(1) + 1
 
@@ -235,7 +244,7 @@ def predict_pips(crops, types):
     with torch.no_grad():
         out = np.mean([net(x, t).numpy() for net in _pipnet()], 0)
     if _models.get("pip_mode") == "pattern":
-        return decode_pattern(out).tolist()
+        return decode_pattern(out, np.array([t == "Doom" for t in types])).tolist()
     return (out.argmax(1) + 1).tolist()
 
 
@@ -244,15 +253,55 @@ def kind(t):
     return "Gear" if t in GEAR_VARIANTS else t
 
 
+def hires_cell(frame_rgb, cell, size=128):
+    """Native-resolution crop of one cell resized to `size` (same as the _hires
+    training crops of tools/collect_gear_crops.py)."""
+    h = frame_rgb.shape[0]; W = _content_w(frame_rgb)
+    r, c = ROWS[(cell - 1) // 5], COLS[(cell - 1) % 5]
+    cx, cy, hw, hh = c * W, r * h, HALF_W * W, HALF_H * h
+    crop = frame_rgb[int(cy - hh):int(cy + hh), int(cx - hw):int(cx + hw)]
+    return cv2.resize(crop, (size, size), interpolation=cv2.INTER_AREA)
+
+
+DOOM_CENTRE = ("gear_doom_centre_e1.pt", "gear_doom_centre_e2.pt", "gear_doom_centre_e3.pt")
+
+
+def doom_centre_prob(hires_crops):
+    """P(centre pip visible) for Doom cells, from the native-res centre window.
+    None when the models are missing."""
+    if not hires_crops or not all(os.path.exists(os.path.join(_DATA, f)) for f in DOOM_CENTRE):
+        return None
+    import torch
+    if "doomnet" not in _models:
+        nets = []
+        for f in DOOM_CENTRE:
+            n = _pipnet_cls()(n_out=1); n.load_state_dict(torch.load(os.path.join(_DATA, f))); n.eval(); nets.append(n)
+        _models["doomnet"] = nets
+    x = np.stack([c[24:88, 32:96] for c in hires_crops]).astype(np.float32) / 255.0
+    x = torch.from_numpy(x.transpose(0, 3, 1, 2)); t = torch.zeros(len(x), dtype=torch.long)
+    with torch.no_grad():
+        return np.mean([torch.sigmoid(n(x, t)[:, 0]).numpy() for n in _models["doomnet"]], 0)
+
+
 def read_board(frame_rgb):
     """15 dicts {cell, type, variant, pip, conf}. type in Gear/Bubble/Adjust/Growth/
-    Doom/empty/junk ('junk' = cell hidden by a popup/banner: unknown, not empty)."""
+    Doom/empty/junk ('junk' = cell hidden by a popup/banner: unknown, not empty).
+    Doom cells also get "doom_centre" (P centre pip visible): the countdown number
+    sits on the centre, so the pip = corner pattern (2/4/6) + centre."""
     crops = cell_crops(frame_rgb)
     labs, conf = predict_types(crops)
     dice = [i for i, lab in enumerate(labs) if lab in TYPES]
     pips = dict(zip(dice, predict_pips([crops[i] for i in dice], [labs[i] for i in dice])))
-    return [{"cell": i + 1, "type": kind(lab), "variant": lab, "pip": pips.get(i, 0),
-             "conf": float(c)} for i, (lab, c) in enumerate(zip(labs, conf))]
+    out = [{"cell": i + 1, "type": kind(lab), "variant": lab, "pip": pips.get(i, 0),
+            "conf": float(c)} for i, (lab, c) in enumerate(zip(labs, conf))]
+    dooms = [i for i in dice if labs[i] == "Doom"]
+    pc = doom_centre_prob([hires_cell(frame_rgb, i + 1) for i in dooms]) if dooms else None
+    if pc is not None:
+        for i, p in zip(dooms, pc):
+            d = out[i]; base = 1 if d["pip"] <= 1 else (d["pip"] // 2) * 2
+            d["doom_centre"] = float(p)
+            d["pip"] = base + 1 if (p > 0.5 and base > 1) else base
+    return out
 
 
 # ---- UI buttons ----
@@ -277,6 +326,23 @@ def _match(f, name, u0, v0, u1, v1):
         if roi.shape[0] < t.shape[0] or roi.shape[1] < t.shape[1]:
             return 0.0
     return float(cv2.matchTemplate(roi, t, cv2.TM_CCOEFF_NORMED).max())
+
+
+def transcend_tap(frame_rgb):
+    """Where to tap 다이스 초월: the matched button's horizontal centre, 80% down its
+    height. The fixed (0.875, 0.278) sat on the button's upper half, which overlaps
+    the partner's 축복 totem -- tapping it opened the partner-info popup (user
+    2026-10-09). Falls back to below the old point when the match is weak."""
+    f = normalize(frame_rgb); h, W = f.shape[0], _content_w(f)
+    u0, v0, u1, v1 = _UI_BOX["transcend"][0]
+    x0, y0 = int(u0 * W), int(v0 * h); x1, y1 = min(int(u1 * W), f.shape[1]), int(v1 * h)
+    t = _tpl("transcend"); roi = f[y0:y1, x0:x1]
+    if roi.shape[0] < t.shape[0] or roi.shape[1] < t.shape[1]:
+        return (0.875, 0.300)
+    r = cv2.matchTemplate(roi, t, cv2.TM_CCOEFF_NORMED); _, sc, _, (mx, my) = cv2.minMaxLoc(r)
+    if sc < _UI_BOX["transcend"][1]:
+        return (0.875, 0.300)
+    return ((x0 + mx + t.shape[1] / 2) / W, (y0 + my + t.shape[0] * 0.8) / h)
 
 
 # search boxes (true u,v) and accept thresholds -- see tools/verify_gear_ui.py
@@ -420,4 +486,35 @@ def tactic_sp1000_card(frame_rgb):
         t = txt.replace(" ", "").upper()
         if "1000" in t or "풍요" in t:
             return (0.60, v)
+    # OCR missed (SP1000 is always one of the three, user 2026-10-09): fall back to the
+    # card whose left icon is the most gold/orange (the coin stack)
+    best = None
+    for v in TACTIC_CARD_V:
+        icon = frame_rgb[int((v - 0.03) * h):int((v + 0.03) * h), int(0.08 * W):int(0.28 * W)]
+        hsv = cv2.cvtColor(icon, cv2.COLOR_RGB2HSV)
+        gold = float(((hsv[..., 0] >= 12) & (hsv[..., 0] <= 30) & (hsv[..., 1] > 120) & (hsv[..., 2] > 150)).mean())
+        if best is None or gold > best[0]:
+            best = (gold, v)
+    return (0.60, best[1]) if best and best[0] > 0.08 else None
+
+
+ROOM_CODE_BOX = (0.36, 0.535, 0.74, 0.578)    # the digits bar in the 협동 같이하기 room
+
+
+def read_room_code(frame_rgb):
+    """5-digit room code shown in the coop room, as a string, or None."""
+    import re, pytesseract
+    pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+    h = frame_rgb.shape[0]; W = _content_w(frame_rgb); u0, v0, u1, v1 = ROOM_CODE_BOX
+    g = cv2.cvtColor(frame_rgb[int(v0*h):int(v1*h), int(u0*W):int(u1*W)], cv2.COLOR_RGB2GRAY)
+    g = cv2.resize(g, None, fx=3, fy=3, interpolation=cv2.INTER_CUBIC)
+    for th in (160, 120, 200):
+        _, b = cv2.threshold(g, th, 255, cv2.THRESH_BINARY_INV)
+        try:
+            txt = pytesseract.image_to_string(b, config="--psm 7 -c tessedit_char_whitelist=0123456789")
+        except Exception:
+            return None
+        m = re.search(r"\d{5}", txt.replace(" ", ""))
+        if m:
+            return m.group()
     return None

@@ -16,3 +16,4 @@ _gear/
 /_*.txt
 /*.png
 /*.mp4
+config/discord.toml

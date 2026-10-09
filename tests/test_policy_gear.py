@@ -126,26 +126,6 @@ def test_clone_alert_blocks_merges_that_could_top_the_gears():
     assert not (a["op"] == "merge" and {a["from"], a["to"]} == {1, 2}), a
 
 
-def test_doom_read_even_may_be_odd():
-    from rdom.policy.gear import can_merge
-    doom2 = {"cell": 1, "type": "Doom", "pip": 2}
-    assert can_merge(doom2, {"cell": 2, "type": "Adjust", "pip": 2})
-    assert can_merge(doom2, {"cell": 2, "type": "Adjust", "pip": 3})   # hidden centre pip
-    assert can_merge(doom2, {"cell": 2, "type": "Doom", "pip": 3})
-    assert not can_merge(doom2, {"cell": 2, "type": "Adjust", "pip": 4})
-    assert not can_merge({"cell": 1, "type": "Bubble", "pip": 2}, {"cell": 2, "type": "Bubble", "pip": 3})
-
-
-def test_failed_doom_guess_falls_back_to_other_pip():
-    # Adjust2+Doom(2?) refused -> banned -> next try pairs the Doom with the Adjust 3
-    b = board("G1 G1 G1 G1 B1  G1 G1 D2 G1 B1  G1 A2 A3 G1 G1")
-    first = plan_next(b, transcended=False)
-    assert first["op"] == "merge" and 8 in (first["from"], first["to"])
-    other = 12 if 13 in (first["from"], first["to"]) else 13
-    second = plan_next(b, transcended=False, banned={(first["from"], first["to"]), (first["to"], first["from"])})
-    assert second["op"] == "merge" and {second["from"], second["to"]} == {8, other}, second
-
-
 def _with_crystal(b, *cells):
     for c in cells:
         b[c - 1] = {"cell": c, "type": "Crystal", "pip": 0}
@@ -202,8 +182,20 @@ def test_joker_without_matching_gear_waits():
     assert not (a["op"] == "merge" and 7 in (a["from"], a["to"])), a   # no pip-3 target
 
 
-def test_pinned_doom_is_not_guessed_odd():
+def test_doom_pip_is_exact():
     from rdom.policy.gear import can_merge
-    d = {"cell": 1, "type": "Doom", "pip": 2, "pinned": True}
-    assert not can_merge(d, {"cell": 2, "type": "Adjust", "pip": 3})
-    assert can_merge(d, {"cell": 2, "type": "Adjust", "pip": 2})
+    doom3 = {"cell": 1, "type": "Doom", "pip": 3}
+    assert can_merge(doom3, {"cell": 2, "type": "Adjust", "pip": 3})
+    assert not can_merge(doom3, {"cell": 2, "type": "Adjust", "pip": 2})
+
+
+def test_bomb_order_pair_then_adjust1_then_supporter():
+    b = _with(_with(board("G1 G1 G1 G1 B1  G1 G1 G1 G1 B1  G1 A1 A2 G1 G1"), 3, "Bomb", 0), 9, "Bomb", 0)
+    a = plan_next(b, transcended=False)
+    assert a["op"] == "merge" and {a["from"], a["to"]} == {3, 9}, a          # 1. bomb+bomb
+    b = _with(board("G1 G1 G1 G1 B1  G1 G1 G1 G1 B1  G1 A2 A1 G1 G1"), 3, "Bomb", 0)
+    a = plan_next(b, transcended=False)
+    assert a == {"op": "merge", "from": 3, "to": 13}, a                       # 2. bomb+Adjust pip1
+    b = _with(board("G1 G1 G1 G1 B1  G1 G1 G1 G1 B1  G1 A2 A2 G1 G1"), 3, "Bomb", 0)
+    assert plan_next(b, transcended=False, support_ready=True) == {"op": "support", "from": 3}   # 3.
+    assert not evaluate(b)["complete"]

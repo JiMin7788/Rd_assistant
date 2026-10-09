@@ -75,36 +75,38 @@ def evaluate(board):
     comps = gear_components(board)
     n_bub = types.count("Bubble")
     others = [d["cell"] for d in board if d["type"] not in ("Gear", "Bubble", "Crystal")]
+    bombs = [d["cell"] for d in board if d["type"] == "Bomb"]
     crystals = [d["cell"] for d in board if d["type"] == "Crystal"]
     avg = sum(d["pip"] for d in gears) / len(gears) if gears else 0.0
     ev = {
-        "gears": len(gears), "bubbles": n_bub, "others": others, "crystals": crystals,
+        "gears": len(gears), "bubbles": n_bub, "others": others, "crystals": crystals, "bombs": bombs,
         "empty": types.count("empty"), "unknown": types.count("junk"),
         "largest_cluster": len(comps[0]) if comps else 0,
         "connected": len(comps) <= 1, "gear_avg": round(avg, 2),
     }
-    ev["complete"] = (ev["unknown"] == 0 and not others and not crystals
+    ev["complete"] = (ev["unknown"] == 0 and not others and not crystals and not bombs
                       and MIN_BUBBLES <= n_bub <= MAX_BUBBLES
                       and ev["connected"] and avg >= TARGET_AVG)
     return ev
 
 
 def pip_options(d):
-    """Pips a die may really have. Doom's countdown number covers the die centre,
-    so the centre pip of an odd Doom is invisible: a Doom read as 2 may be 2 or 3,
-    read as 4 may be 4 or 5 (2026-10-08: a Growth-2 turned into a "Doom 2" that
-    refused five Adjust-2 merges -- Growth changes by +-1, so it was a Doom 3).
-    The merge-failure ban sorts out which guess was wrong."""
-    p = d["pip"]
-    if d["type"] == "Doom" and p >= 2 and p % 2 == 0 and not d.get("pinned"):
-        return (p, p + 1)
-    return (p,)
+    """Pips a die may really have. Doom used to be hedged (read 2 -> 2 or 3) on the
+    belief that its countdown number hides the centre pip; it does not -- the centre
+    pip is drawn ON TOP of the number (2026-10-09), so every die reads exactly."""
+    return (d["pip"],)
 
 
 def can_merge(a, b):
     """Merge legality: same type and pip, or an Adjust with any die of equal pip.
-    Growth is excluded by policy (user), not by the game."""
-    if a["cell"] == b["cell"] or a["pip"] <= 0 or b["pip"] <= 0:
+    Bombs merge with bombs and with a pip-1 Adjust (user 2026-10-09; bombs carry no
+    readable pip). Growth is excluded by policy (user), not by the game."""
+    if a["cell"] == b["cell"]:
+        return False
+    if "Bomb" in (a["type"], b["type"]):
+        o = b if a["type"] == "Bomb" else a
+        return o["type"] == "Bomb" or (o["type"] == "Adjust" and o["pip"] == 1)
+    if a["pip"] <= 0 or b["pip"] <= 0:
         return False
     if not set(pip_options(a)) & set(pip_options(b)):
         return False
@@ -244,6 +246,23 @@ def _joker_copy(board, ev, banned):
     return None if best is None else {"op": "merge", "from": best[1], "to": best[2]}
 
 
+def _bomb_action(board, ev, banned, support_ready):
+    """Bombs (field effect, at game start or on a merge) are cleared first, in the
+    user's order (2026-10-09): 1. bomb+bomb  2. bomb+Adjust(pip 1)  3. supporter."""
+    bombs = [d for d in board if d["type"] == "Bomb"]
+    if not bombs:
+        return None
+    for partner_type in ("Bomb", "Adjust"):
+        for a in bombs:
+            for b in board:
+                if (b["cell"] != a["cell"] and b["type"] == partner_type
+                        and (partner_type == "Bomb" or b["pip"] == 1) and (a["cell"], b["cell"]) not in banned):
+                    return {"op": "merge", "from": a["cell"], "to": b["cell"]}
+    if support_ready:
+        return {"op": "support", "from": bombs[0]["cell"]}
+    return None
+
+
 def _crystal_merge(board, ev, transcended, banned):
     """Crystal (수정, HP 700): every merge in one of its 4 neighbours takes 100 off
     (user 2026-10-08). The merge counts at its LANDING cell (`to`, user confirmed),
@@ -284,6 +303,9 @@ def plan_next(board, transcended=False, support_ready=False, banned=frozenset(),
         return {"op": "wait", "why": "complete"}
     if ev["empty"]:
         return {"op": "summon"}
+    act = _bomb_action(board, ev, banned, support_ready)
+    if act:
+        return act
     act = _joker_copy(board, ev, banned)
     if act:
         return act
@@ -329,3 +351,4 @@ def plan_next(board, transcended=False, support_ready=False, banned=frozenset(),
             d = max(pool, key=lambda d: (_gear_adj(bc, d["cell"]), d["pip"]))
             return {"op": "support", "from": d["cell"]}
     return {"op": "wait", "why": "no move"}
+

@@ -66,7 +66,7 @@ if __name__ == "__main__":
     ap.add_argument("--epochs", type=int, default=8)
     a = ap.parse_args(); torch.set_num_threads(int(os.environ.get("TRAIN_THREADS", os.cpu_count() or 4)))
     CAPS = {"s1": 4000, "s2": 4000, "s3": 100000, "s6": 100000, "s7": 100000,
-            "s4": 6000, "s5": 6000, "s8": 6000, "s9": 6000}
+            "s4": 6000, "s5": 6000, "s8": 6000, "s9": 6000, "bomb": 100000}   # bomb = synthetic
     data = {t: load(t, cap=c) for t, c in CAPS.items() if os.path.exists(os.path.join(D, f"y_{t}.npy")) or t == "s1"}
     kind = lambda i: "Gear" if TYPE_CLASSES[i].startswith("Gear") else TYPE_CLASSES[i]
     tr = [t for t in data if t != a.holdout]
