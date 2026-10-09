@@ -18,6 +18,9 @@ ap = argparse.ArgumentParser(); ap.add_argument("--until", default="23:59"); a =
 PY = os.path.join(ROOT, ".venv", "Scripts", "python.exe")
 LOGD = os.path.join(ROOT, "data", "bot_logs"); os.makedirs(LOGD, exist_ok=True)
 crashes = collections.deque()
+PID = os.path.join(ROOT, "data", "supervisor.pid")     # lets the Discord bot see whether we run
+open(PID, "w").write(str(os.getpid()))
+import atexit; atexit.register(lambda: os.path.exists(PID) and os.remove(PID))
 
 
 def screenshot():
