@@ -267,15 +267,25 @@ def _crystal_merge(board, ev, transcended, banned):
     """Crystal (수정, HP 700): every merge in one of its 4 neighbours takes 100 off
     (user 2026-10-08). The merge counts at its LANDING cell (`to`, user confirmed),
     so only merges landing next to a crystal are chosen here.
-    Before 초월 gears are still not merged; after it any legal pair may be used."""
+
+    User rule 2026-10-10 (crystal field effect at game start): break the crystals
+    even with gears, before 초월 too (only Growth is never merged).
+      pip 1-2: merge so it LANDS next to a crystal (cheap, many pairs) -> chip it
+      pip 3+ : merge it from a crystal-adjacent cell to a cell AWAY from the crystals;
+               the freed cell is refilled with a new pip-1 die = more chip pairs."""
     near = {n for c in ev["crystals"] for n in neighbors(c)}
-    bc, cands = _merge_candidates(board, allow_gear=transcended, banned=banned)
     scored = []
-    for a, b in cands:
-        if b["cell"] in near:
-            hits = sum(b["cell"] in neighbors(c) for c in ev["crystals"])   # touches 2 crystals?
-            pen = 3 * (a["type"] == "Gear") + 3 * (b["type"] == "Gear") + 0.5 * a["pip"]
-            scored.append((hits * 10 - pen, a, b))
+    for a in board:
+        for b in board:
+            if ((a["cell"], b["cell"]) in banned or not can_merge(a, b)
+                    or "Growth" in (a["type"], b["type"])):
+                continue
+            gears = (a["type"] == "Gear") + (b["type"] == "Gear")
+            if a["pip"] <= 2 and b["cell"] in near:
+                hits = sum(b["cell"] in neighbors(c) for c in ev["crystals"])   # touches 2 crystals?
+                scored.append((100 + hits * 10 - gears - 0.5 * a["pip"], a, b))
+            elif a["pip"] >= 3 and a["cell"] in near and b["cell"] not in near:
+                scored.append((50 - gears + a["pip"], a, b))      # clear a high die out of the ring
     if not scored:
         return None
     _, a, b = max(scored, key=lambda x: x[0])
