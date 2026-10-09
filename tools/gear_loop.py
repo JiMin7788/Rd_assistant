@@ -37,12 +37,20 @@ hh, mm = map(int, a.until.split(":"))
 now = datetime.datetime.now(); deadline = now.replace(hour=hh, minute=mm, second=0)
 if deadline < now: deadline += datetime.timedelta(days=1)
 LOG = r"C:\dev\rdom\data\gear_rounds.jsonl"
+PAUSE = r"C:\dev\rdom\data\PAUSE"
 
 g = LiveGrabber(); inj = Injector(execute=True)
 fails = 0; rnd = 0
 send_status(f"▶ 봇 시작 (종료 예정 {deadline:%H:%M})")
 try:
     while datetime.datetime.now() < deadline:
+        # pause switch: "봇 일시정지.bat" creates data/PAUSE, "봇 재개.bat" removes it.
+        # Checked only between games, so the game in progress is always finished.
+        if os.path.exists(PAUSE):
+            send_status("⏸ 일시정지 -- 판 사이에서 대기 중 (봇 재개.bat 로 재개)")
+            while os.path.exists(PAUSE) and datetime.datetime.now() < deadline:
+                time.sleep(2)
+            send_status("▶ 재개")
         rnd += 1
         print(f"=== round {rnd} ({datetime.datetime.now():%H:%M}) ===", flush=True)
         if g.window_moved():

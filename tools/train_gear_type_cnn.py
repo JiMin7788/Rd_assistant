@@ -23,7 +23,7 @@ def load(tag, cap=4000, seed=0):
     else:
         names = np.load(os.path.join(D, f"feats_{tag}.npz"))["names"]
         y = np.load(os.path.join(D, f"y_{tag}.npy"), allow_pickle=True)
-    t = np.array([float(n.split("_")[-2]) for n in names])
+    t = np.array([float(n.split("_")[-2]) if n.split("_")[-2].replace(".", "").isdigit() else -1.0 for n in names])  # synthetic: no time
     rng = np.random.RandomState(seed); sel = []
     for c in TYPE_CLASSES:                       # cap per class: s1 has 11k red gears
         ii = np.where(y == c)[0]

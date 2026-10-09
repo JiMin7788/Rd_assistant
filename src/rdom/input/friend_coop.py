@@ -270,11 +270,14 @@ def open_room_and_wait(grab, inj, timeout=1800.0, nav_wait=1.5):
     try:
         from rdom.perception.gear import read_room_code
         from rdom.notify.discord import send_code
-        code = None
-        for _ in range(4):
-            code = read_room_code(grab.grab())
-            if code: break
-            time.sleep(0.5)
+        # send only a code read identically on 3 consecutive frames: a wrong code is worse than none
+        code = None; prev = None; streak = 0
+        for _ in range(12):
+            c = read_room_code(grab.grab())
+            streak = streak + 1 if c and c == prev else (1 if c else 0); prev = c
+            if streak >= 3:
+                code = c; break
+            time.sleep(0.3)
         print("room code:", code, flush=True)
         if code and code != getattr(open_room_and_wait, "_last_code", None):
             send_code(f"방 코드: **{code}**  ({time.strftime('%H:%M')})")

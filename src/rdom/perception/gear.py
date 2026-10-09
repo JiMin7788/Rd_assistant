@@ -436,22 +436,17 @@ def read_hp(frame_rgb):
     """Shared base HP (the number under the purple tank), int or None if unreadable.
     Needed for the HP->SP token: user 2026-10-08 -- spend HP only down to 30,
     because at HP <= 20 a field effect can appear that turns dice into random
-    dice with pip +1."""
-    import re, pytesseract
-    pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+    dice with pip +1. Exact or nothing (perception.digits); multiples of 10 only."""
+    from rdom.perception.digits import read_number, hp_mask
     h = frame_rgb.shape[0]; W = _content_w(frame_rgb); u0, v0, u1, v1 = HP_BOX
     crop = frame_rgb[int(v0 * h):int(v1 * h), int(u0 * W):int(u1 * W)]
-    g = cv2.resize(cv2.cvtColor(crop, cv2.COLOR_RGB2GRAY), None, fx=4, fy=4, interpolation=cv2.INTER_CUBIC)
-    for th in (170, 140):
-        _, b = cv2.threshold(g, th, 255, cv2.THRESH_BINARY_INV)
-        try:
-            txt = pytesseract.image_to_string(b, config="--psm 7 -c tessedit_char_whitelist=0123456789")
-        except Exception:
-            return None
-        m = re.search(r"\d{1,3}", txt)
-        if m:
-            return int(m.group())
-    return None
+    m = hp_mask(cv2.cvtColor(crop, cv2.COLOR_RGB2BGR))
+    if m is None:
+        return None
+    r = read_number(m, "hp", thr=127)
+    if r is None or len(r) > 3 or int(r) % 10:
+        return None
+    return int(r)
 
 
 # ---- 전술효과 선택 (start-of-game tactic pick) ----
@@ -502,19 +497,10 @@ ROOM_CODE_BOX = (0.36, 0.535, 0.74, 0.578)    # the digits bar in the 협동 같
 
 
 def read_room_code(frame_rgb):
-    """5-digit room code shown in the coop room, as a string, or None."""
-    import re, pytesseract
-    pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+    """5-digit room code shown in the coop room, as a string, or None (exact or
+    nothing: perception.digits refuses ambiguous glyphs). Callers should still
+    require the same code on consecutive frames before sending it anywhere."""
+    from rdom.perception.digits import read_number
     h = frame_rgb.shape[0]; W = _content_w(frame_rgb); u0, v0, u1, v1 = ROOM_CODE_BOX
     g = cv2.cvtColor(frame_rgb[int(v0*h):int(v1*h), int(u0*W):int(u1*W)], cv2.COLOR_RGB2GRAY)
-    g = cv2.resize(g, None, fx=3, fy=3, interpolation=cv2.INTER_CUBIC)
-    for th in (160, 120, 200):
-        _, b = cv2.threshold(g, th, 255, cv2.THRESH_BINARY_INV)
-        try:
-            txt = pytesseract.image_to_string(b, config="--psm 7 -c tessedit_char_whitelist=0123456789")
-        except Exception:
-            return None
-        m = re.search(r"\d{5}", txt.replace(" ", ""))
-        if m:
-            return m.group()
-    return None
+    return read_number(g, "room", n_digits=5)
