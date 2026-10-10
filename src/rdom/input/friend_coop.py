@@ -252,6 +252,14 @@ def open_room_and_wait(grab, inj, timeout=1800.0, nav_wait=1.5):
     f0 = grab.grab()
     if is_coop_room(f0):
         print("already in an open coop room -- waiting there", flush=True)
+    elif is_friend_menu(f0):
+        # 협동 같이하기 menu left open (친구와 하기 tapped, 방 생성 not) -- BACK does
+        # not close it, so the round used to fail 3x and stop (2026-10-10)
+        print("친구와 하기 menu already open -- 방 생성", flush=True)
+        inj.tap(*CREATE_ROOM_UV)
+        if _wait_for(grab, is_coop_room) is None:
+            print("coop room did not open -- abort round", flush=True)
+            return None
     elif not is_lobby(f0):
         print("not on the lobby -- abort round", flush=True)
         return None

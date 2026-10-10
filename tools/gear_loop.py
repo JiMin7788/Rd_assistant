@@ -14,8 +14,9 @@ from rdom.input.inject import Injector, SPEED_UV
 from rdom.input.friend_coop import open_room_and_wait
 from rdom.notify.room_state import write_room
 from rdom.perception.board import (is_battle, is_game_over, is_lobby, read_speed,
-                                   has_popup_close, has_modal_x, is_exit_dialog, is_coop_room)
-from rdom.input.inject import CLOSE_X_UV, CANCEL_UV
+                                   has_popup_close, has_modal_x, is_exit_dialog, is_coop_room,
+                                   is_friend_menu)
+from rdom.input.inject import CLOSE_X_UV, CANCEL_UV, MODAL_X_UV
 
 
 def network_error(f):
@@ -70,7 +71,9 @@ try:
         for _ in range(30):
             # popups first: a shop popup's green buy button sits where the lobby's 협동
             # button is (스텝업 패키지, 2026-10-10), so never decide "lobby" under a popup
-            if is_battle(f) or is_coop_room(f) or (is_lobby(f) and not has_popup_close(f)):
+            # the 친구와 하기 menu is a fine start too: open_room_and_wait taps 방 생성 there
+            if (is_battle(f) or is_coop_room(f) or is_friend_menu(f)
+                    or (is_lobby(f) and not has_popup_close(f))):
                 break
             if network_error(f):
                 # "네트워크 에러가 발생하여 게임을 재시작합니다." -- its only button is 확인;
@@ -83,6 +86,9 @@ try:
                 print("팝업 -- X 닫기", flush=True); inj.tap(*CLOSE_X_UV)
             elif is_game_over(f):
                 exit_to_lobby(g, inj)
+            elif has_modal_x(f) and unknown < 3:
+                unknown += 1                         # BACK does not close these modals
+                print(f"modal -- X 닫기 ({unknown}/3)", flush=True); inj.tap(*MODAL_X_UV)
             elif unknown < 3:
                 # some other popup / screen without the bottom X: Android BACK closes
                 # game popups (on the lobby it opens the exit dialog, cancelled above).
