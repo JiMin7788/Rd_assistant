@@ -22,6 +22,8 @@ RES_W, RES_H = 1440, 2560
 SUMMON_UV = (0.50, 0.855)
 CHEONG_UV = (0.19, 0.867)
 UPGRADE_UV = (0.20, 0.94)
+GAME_PACKAGE = "com.percent.aos.randomdice2"
+GAME_ACTIVITY = "com.unity3d.player.UnityPlayerActivity"   # cmd package resolve-activity
 LOBBY_UV = (0.50, 0.869)     # "로비로 가기" on the game-over screen
 COOP_UV = (0.497, 0.823)     # "협동" (coop) on the lobby
 FRIEND_UV = (0.155, 0.747)   # "친구와 하기" (play with a friend) on the lobby
@@ -118,6 +120,35 @@ class Injector:
         (invite popup left open, room created but the friend never accepted)
         so the next round can start from a known screen."""
         self._run("input", "keyevent", "4")
+
+    def _out(self, *args):
+        """adb shell output via a temp FILE (a pipe deadlocks, see _run). '' on failure."""
+        import tempfile
+        with tempfile.TemporaryFile() as fh:
+            try:
+                subprocess.run([self.adb, "-s", self.device, "shell", *map(str, args)],
+                               stdout=fh, stderr=subprocess.DEVNULL, timeout=10)
+            except subprocess.TimeoutExpired:
+                return ""
+            fh.seek(0)
+            return fh.read().decode("utf-8", "replace")
+
+    def game_in_front(self):
+        """True if Random Dice 2 is the focused app. None if it cannot be told
+        (dry run / adb failure) -- callers must not relaunch on None."""
+        if not self.execute:
+            return None
+        out = self._out("dumpsys", "window")
+        focus = [l for l in out.splitlines() if "mCurrentFocus" in l]
+        if not focus:
+            return None
+        return GAME_PACKAGE in focus[0]
+
+    def launch_game(self):
+        """Start (or bring back) Random Dice 2 -- e.g. the emulator sits on the
+        launcher home screen after the game closed (2026-10-11)."""
+        # `monkey` is missing on LDPlayer 14 -> start the launcher activity directly
+        self._run("am", "start", "-n", f"{GAME_PACKAGE}/{GAME_ACTIVITY}")
 
     def cheong_ready(self):
         return (time.monotonic() - self._cheong_last) >= CHEONG_CD
