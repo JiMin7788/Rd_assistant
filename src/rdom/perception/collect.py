@@ -42,3 +42,21 @@ def maybe_save(frame_rgb, board, stable):
                 f.write(json.dumps(r) + "\n")
     except Exception as e:
         print("collect failed:", e, flush=True)
+
+
+FAILS = os.path.join(_ROOT, "data", "merge_fail")
+
+
+def save_fail(frame_rgb, a, b):
+    """A merge the game refused: save both dice at native resolution side by side,
+    named with what the bot read, e.g. 1824_120.5__GearTeal1-GearRed1.png."""
+    try:
+        import numpy as np
+        from rdom.perception.gear import hires_cell
+        os.makedirs(FAILS, exist_ok=True)
+        im = np.hstack([hires_cell(frame_rgb, a["cell"], 160), hires_cell(frame_rgb, b["cell"], 160)])
+        name = (f"{time.strftime('%m%d_%H%M%S')}__c{a['cell']}{a.get('variant', a['type'])}{a['pip']}"
+                f"-c{b['cell']}{b.get('variant', b['type'])}{b['pip']}.png")
+        cv2.imwrite(os.path.join(FAILS, name), cv2.cvtColor(im, cv2.COLOR_RGB2BGR))
+    except Exception as e:
+        print("save_fail failed:", e, flush=True)

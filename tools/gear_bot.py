@@ -170,6 +170,7 @@ def play(g, inj, minutes=30, tick=0.6):
                 # misread Adjust-3 pair 11x in the 2026-10-07 bot game
                 banned[(fr, to)] = (cellsig(fr), cellsig(to), now + 90.0)
                 print(f"   merge {fr}->{to} had no effect -> banned until those dice change")
+                collect.save_fail(f, bc[fr], bc[to])   # hi-res pair for review (why did it fail?)
                 stats["fails"] += 1
         banned = {k: v for k, v in banned.items()
                   if v[:2] == (cellsig(k[0]), cellsig(k[1])) and now < v[2]}

@@ -208,8 +208,14 @@ def predict_types(crops):
     labs, conf = [_models["type_classes"][i] for i in P.argmax(1)], list(P.max(1))
     deck = deck_dice()
     for i, c in enumerate(crops):
-        if "Decay" in deck and labs[i] in ("Growth", "Doom") and (is_decay(c) or "Doom" not in deck):
-            labs[i] = "Decay"                     # pink 부패 die: never trained, read as Growth
+        if "Decay" in deck and labs[i] in ("Growth", "Doom"):
+            # pink 부패 die: never trained, read as Growth or Doom. Only pink is Decay --
+            # a purple Growth read as Doom was turned into Decay and the bot kept
+            # trying to merge it (2026-10-11); with no Doom in the deck it is Growth.
+            if is_decay(c):
+                labs[i] = "Decay"
+            elif labs[i] == "Doom" and "Doom" not in deck:
+                labs[i] = "Growth"
         if is_bomb(c):
             labs[i], conf[i] = "Bomb", 1.0
         elif labs[i] == "Bomb":                    # the CNN learned bombs from synthetic art only
