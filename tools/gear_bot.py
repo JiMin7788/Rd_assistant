@@ -25,6 +25,8 @@ from rdom.capture.live import LiveGrabber
 from rdom.input.inject import Injector, cell_uv
 from rdom.perception.board import is_battle, is_game_over
 from rdom.perception import collect
+from rdom.perception.gear import buffed_cells
+BUFF_STEADY = 4                                    # ticks (~2.4 s) a buffed cell must read the same
 from rdom.perception.gear import (read_board, ui_state, UI, GEAR_VARIANTS,
                                   banner_present, banner_text, effect_kind)
 from rdom.policy.gear import evaluate, plan_next
@@ -53,6 +55,7 @@ def play(g, inj, minutes=30, tick=0.6):
     print("deck keep:", _pg.load_deck(os.path.join(os.path.dirname(__file__), "..", "config", "deck.toml")), flush=True)
     tap = lambda k: inj.tap(*UI[k])
     transcended = False
+    hist = {}                                          # cell -> last BUFF_STEADY reads
     support_last = -1e9; power_last = -1e9; summon_last = -1e9; hunt_last = -1e9
     banned = {}                       # (from, to) -> (from die, to die) when it failed
     pending = None                    # (from, to, before-board) of the last merge
@@ -138,6 +141,12 @@ def play(g, inj, minutes=30, tick=0.6):
         sig = tuple((d["type"], d["pip"]) for d in b)
         stable = sig == prev_sig; prev_sig = sig
         collect.maybe_save(f, b, stable)              # training data (부패 etc.), every 15 s
+        # partner's yellow column buff: reads under it are shakier -> a cell under the
+        # buff is only acted on once its read held for BUFF_STEADY ticks (2026-10-11)
+        for d in b:
+            hist.setdefault(d["cell"], []).append((d["type"], d["pip"]))
+            del hist[d["cell"]][:-BUFF_STEADY]
+        buffed = buffed_cells(f)
         post = sum(d["variant"] in GEAR_VARIANTS[1:] for d in b)
         post_hits = post_hits + 1 if post >= 3 else 0
         if post_hits >= 2 and not transcended:
@@ -192,6 +201,10 @@ def play(g, inj, minutes=30, tick=0.6):
         act = plan_next(b, transcended=transcended,
                         support_ready=now - support_last >= SUPPORT_CD, banned=set(banned),
                         clone_alert=now < clone_until)
+        shaky = [c for c in (act.get("from"), act.get("to")) if c in buffed
+                 and (len(hist[c]) < BUFF_STEADY or len(set(hist[c])) > 1)]
+        if act["op"] in ("merge", "support") and shaky:
+            continue                                   # buffed cell not steady yet
         if act["op"] == "summon":
             if now - summon_last >= SUMMON_GAP:
                 tap("summon"); summon_last = now; acted_at = now

@@ -247,6 +247,18 @@ def is_decay(rgb):
     return len(c) >= 20 and np.median(c[:, 0]) >= 142
 
 
+def buffed_cells(frame_rgb):
+    """Cells under the partner's yellow column buff (a translucent yellow sheet over
+    a whole column, 2026-10-11). Yellow-pixel share 0.12-0.15 on buffed cells vs
+    <= 0.06 elsewhere (rainbow Adjust included). Reads there are less reliable."""
+    out = set()
+    for c in range(1, 16):
+        h = cv2.cvtColor(hires_cell(frame_rgb, c, 96), cv2.COLOR_RGB2HSV)
+        if ((h[..., 0] >= 18) & (h[..., 0] <= 35) & (h[..., 1] > 60) & (h[..., 2] > 150)).mean() > 0.09:
+            out.add(c)
+    return out
+
+
 def is_bomb(rgb):
     """Real bombs: a dark grey, pip-less tile with an orange spark. The type CNN
     (trained on synthetic bombs) read a live bomb as Bubble 0.35 (2026-10-10).

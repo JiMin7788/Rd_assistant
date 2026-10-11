@@ -53,6 +53,7 @@ def load(tag, cap=8000, seed=0):
 
 
 PATTERN = False
+_YELLOW = (255, 225, 70)                      # yellow column-buff sheet colour
 _SPLASH = [(60.0, 120.0, 230.0), (120.0, 60.0, 200.0), (30.0, 30.0, 30.0), (240.0, 240.0, 240.0)]
 
 
@@ -75,6 +76,8 @@ def augment(xb, rng, hue=True):
             im = np.repeat(im.mean(2, keepdims=True), 3, 2)
         if rng.rand() < 0.4:                                              # bubble-glow-like wash
             im = im * (1 - (w := rng.uniform(0.2, 0.55))) + 255 * w
+        if rng.rand() < 0.2:                                              # partner's yellow column
+            im = im * (1 - (w := rng.uniform(0.15, 0.45))) + np.array(_YELLOW) * w   # buff (2026-10-11)
         if rng.rand() < 0.5:                                              # particle/splash erase
             for _ in range(rng.randint(1, 4)):
                 r = rng.randint(3, 9); cx, cy = rng.randint(0, 72, 2)
