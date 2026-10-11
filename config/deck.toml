@@ -2,8 +2,9 @@
 # Gear Doom Bubble Adjust Growth Decay(부패, pink)
 dice = ["Gear", "Decay", "Bubble", "Adjust", "Growth"]
 
-# Finished field: these non-gear dice in [lo, hi] (optional 3rd value = best count),
+# Finished field: these non-gear dice [lo, hi, target]; complete when every count is in lo..hi,
 # everything else connected gears with average pip >= 2.2 (policy TARGET_AVG)
 [keep]
-Bubble = [1, 2]
-Decay = [1, 2]
+Bubble = [1, 2, 1]
+Decay = [1, 2, 1]
+# 파멸기어덱 (Doom deck): dice = ["Gear", "Doom", "Bubble", "Adjust", "Growth"], [keep] Bubble = [1, 3, 1]

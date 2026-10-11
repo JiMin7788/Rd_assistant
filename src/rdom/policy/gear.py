@@ -26,7 +26,7 @@ from __future__ import annotations
 
 ROWS_N, COLS_N = 3, 5
 MIN_BUBBLES, MAX_BUBBLES = 1, 3   # user 2026-10-08: safe zone 1-3 ...
-BEST_BUBBLES = 2                  # ... best is 2 -- do not hoard a 3rd (user 2026-10-10)
+BEST_BUBBLES = 1                  # ... target 1 (user 2026-10-11; was 2)
 # Non-gear dice the finished field keeps, with their allowed count (lo, hi, best).
 # Everything else must be a connected gear. Set per deck from config/deck.toml [keep]
 # by load_deck(); the default is the 기어/파멸 deck rule above.
@@ -187,7 +187,14 @@ def _score_phase_a(bc, a, b):
         s += 3.0                                   # Doom decays anyway: use it first
     if a["type"] == "Gear" or b["type"] == "Gear":
         s -= 10.0
-    return s
+    return s + _over_target(bc, a, b)
+
+
+def _over_target(bc, a, b):
+    """+2 per consumed kept die whose type is above its target count (target 1:
+    a 2nd bubble / decay is preferred fodder -- user 2026-10-11)."""
+    cnt = {t: sum(1 for d in bc.values() if d["type"] == t) for t in KEEP}
+    return 2.0 * sum(1 for d in (a, b) if d["type"] in KEEP and cnt[d["type"]] > KEEP[d["type"]][2])
 
 
 def _phase_b_allowed(a, b, avg):
@@ -208,7 +215,7 @@ def _score_phase_b(bc, a, b, avg):
         s += 2.0
     # keep the cluster connected: prefer freeing a cell that touches gears
     s += 0.5 * _gear_adj(bc, a["cell"])
-    return s
+    return s + _over_target(bc, a, b)
 
 
 def _bridge_bubble(board, ev):
@@ -275,6 +282,22 @@ def _joker_copy(board, ev, banned):
             if best is None or sc > best[0]:
                 best = (sc, j["cell"], d["cell"])
     return None if best is None else {"op": "merge", "from": best[1], "to": best[2]}
+
+
+def _surplus_merge(board, ev, banned):
+    """More kept dice than allowed (3 decay with 1-2 allowed): merge one away now.
+    It used to wait for the supporter as "near-complete" (user 2026-10-11: merging
+    them is fine). Gears are never touched, so the gear layout stays as it is."""
+    over = {t for t, n in ev["kept"].items() if n > KEEP[t][1]}
+    if not over:
+        return None
+    _, cands = _merge_candidates(board, allow_gear=False, banned=banned)
+    cands = [(a, b) for a, b in cands if a["type"] in over or b["type"] in over]
+    if not cands:
+        return None
+    # both dice surplus types first (removes 2), then low pips (cheap)
+    a, b = max(cands, key=lambda p: ((p[0]["type"] in over) + (p[1]["type"] in over), -p[0]["pip"]))
+    return {"op": "merge", "from": a["cell"], "to": b["cell"]}
 
 
 def _bomb_action(board, ev, banned, support_ready):
@@ -354,6 +377,9 @@ def plan_next(board, transcended=False, support_ready=False, banned=frozenset(),
         act = _crystal_merge(board, ev, transcended, banned)
         if act:
             return act
+    act = _surplus_merge(board, ev, banned)
+    if act:
+        return act
 
     if not transcended:
         bc, cands = _merge_candidates(board, allow_gear=False, banned=banned)

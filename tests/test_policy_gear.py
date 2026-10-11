@@ -251,3 +251,21 @@ def test_decay_deck_keeps_one_decay():
         assert not (a["op"] == "merge" and {b[a["from"] - 1]["type"], b[a["to"] - 1]["type"]} == {"Decay"}), a
     finally:
         pg.KEEP = old
+
+
+def test_surplus_decay_merged_not_waited():
+    # 3 decay with 1-2 allowed, field otherwise done, after 초월: merge decay away
+    # instead of "near-complete: supporter cooldown" (user 2026-10-11)
+    old = _decay_deck()
+    try:
+        b = _with_decay("G2 G2 G3 B1 G2  G3 X1 G2 X1 G2  G2 X2 G3 G2 G2")
+        a = plan_next(b, transcended=True, support_ready=False)
+        assert a["op"] == "merge", a
+        assert {b[a["from"] - 1]["type"], b[a["to"] - 1]["type"]} == {"Decay"}, a
+    finally:
+        pg.KEEP = old
+
+
+def test_doom_deck_bubbles_one_to_three_complete():
+    b = board("G2 G2 G3 B1 G2  G3 B2 G2 G2 G2  G2 G2 G3 B2 G2")    # 3 bubbles: still complete
+    assert evaluate(b)["complete"]
