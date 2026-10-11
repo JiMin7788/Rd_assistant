@@ -38,10 +38,18 @@ def fmt(b):
     return " ".join("..." if d["type"] == "empty" else f"{d['type'][:2]}{d['pip']}" for d in b)
 
 
+def _keepfmt(ev):
+    """B2 De1 -- counts of the kept non-gear dice."""
+    return " ".join(f"{t[:2] if t != 'Bubble' else 'B'}{n}" for t, n in ev["kept"].items())
+
+
 def play(g, inj, minutes=30, tick=0.6):
     """Play the battle on screen until game over / window move / timeout.
     Returns "game_over", "moved" or "timeout". Per-game counters in play.stats."""
     play.stats = stats = {"merges": 0, "fails": 0, "support": 0, "complete": False}
+    # completion rule of the deck in play (config/deck.toml [keep]), re-read every game
+    import rdom.policy.gear as _pg
+    print("deck keep:", _pg.load_deck(os.path.join(os.path.dirname(__file__), "..", "config", "deck.toml")), flush=True)
     tap = lambda k: inj.tap(*UI[k])
     transcended = False
     support_last = -1e9; power_last = -1e9; summon_last = -1e9; hunt_last = -1e9
@@ -174,7 +182,7 @@ def play(g, inj, minutes=30, tick=0.6):
         if ((transcended or ev["complete"]) and now - power_last > POWER_EVERY
                 and now > hold_power_until):
             # aggressive merging never idles -> power up on a timer, not only when idle
-            print(f"power-up (G{ev['gears']} B{ev['bubbles']} avg{ev['gear_avg']} "
+            print(f"power-up (G{ev['gears']} {_keepfmt(ev)} avg{ev['gear_avg']} "
                   f"{'complete' if ev['complete'] else ''})"); tap("power_open"); power_last = now
             continue
 
@@ -185,7 +193,7 @@ def play(g, inj, minutes=30, tick=0.6):
             if now - summon_last >= SUMMON_GAP:
                 tap("summon"); summon_last = now; acted_at = now
         elif act["op"] == "merge":
-            print(f"{fmt(b)} | G{ev['gears']} B{ev['bubbles']} clu{ev['largest_cluster']} "
+            print(f"{fmt(b)} | G{ev['gears']} {_keepfmt(ev)} clu{ev['largest_cluster']} "
                   f"avg{ev['gear_avg']} -> merge {act['from']}->{act['to']}", flush=True)
             inj.swipe(*cell_uv(act["from"]), *cell_uv(act["to"]))
             pending = (act["from"], act["to"], bc); acted_at = now; stats["merges"] += 1

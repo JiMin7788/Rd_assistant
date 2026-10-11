@@ -27,6 +27,29 @@ from __future__ import annotations
 ROWS_N, COLS_N = 3, 5
 MIN_BUBBLES, MAX_BUBBLES = 1, 3   # user 2026-10-08: safe zone 1-3 ...
 BEST_BUBBLES = 2                  # ... best is 2 -- do not hoard a 3rd (user 2026-10-10)
+# Non-gear dice the finished field keeps, with their allowed count (lo, hi, best).
+# Everything else must be a connected gear. Set per deck from config/deck.toml [keep]
+# by load_deck(); the default is the 기어/파멸 deck rule above.
+KEEP = {"Bubble": (MIN_BUBBLES, MAX_BUBBLES, BEST_BUBBLES)}
+
+
+def load_deck(path):
+    """Read [keep] from the deck file: Type = [lo, hi] or [lo, hi, best]. Missing file
+    or table -> the default. Returns the active KEEP."""
+    global KEEP
+    import tomllib
+    try:
+        with open(path, "rb") as f:
+            keep = tomllib.load(f).get("keep")
+    except (OSError, ValueError):
+        keep = None
+    if keep:
+        KEEP = {t: (int(v[0]), int(v[1]), int(v[2] if len(v) > 2 else v[1])) for t, v in keep.items()}
+    return KEEP
+
+
+def _counts(board):
+    return {t: sum(1 for d in board if d["type"] == t) for t in KEEP}
 TARGET_AVG = 2.2   # user 2026-10-08 (was 2.0)
 
 
@@ -75,18 +98,19 @@ def evaluate(board):
     gears = [d for d in board if d["type"] == "Gear"]
     comps = gear_components(board)
     n_bub = types.count("Bubble")
-    others = [d["cell"] for d in board if d["type"] not in ("Gear", "Bubble", "Crystal")]
+    kept = _counts(board)
+    others = [d["cell"] for d in board if d["type"] not in ("Gear", "Crystal") and d["type"] not in KEEP]
     bombs = [d["cell"] for d in board if d["type"] == "Bomb"]
     crystals = [d["cell"] for d in board if d["type"] == "Crystal"]
     avg = sum(d["pip"] for d in gears) / len(gears) if gears else 0.0
     ev = {
-        "gears": len(gears), "bubbles": n_bub, "others": others, "crystals": crystals, "bombs": bombs,
+        "gears": len(gears), "bubbles": n_bub, "kept": kept, "others": others, "crystals": crystals, "bombs": bombs,
         "empty": types.count("empty"), "unknown": types.count("junk"),
         "largest_cluster": len(comps[0]) if comps else 0,
         "connected": len(comps) <= 1, "gear_avg": round(avg, 2),
     }
     ev["complete"] = (ev["unknown"] == 0 and not others and not crystals and not bombs
-                      and MIN_BUBBLES <= n_bub <= MAX_BUBBLES
+                      and all(KEEP[t][0] <= n <= KEEP[t][1] for t, n in kept.items())
                       and ev["connected"] and avg >= TARGET_AVG)
     return ev
 
@@ -121,13 +145,13 @@ def _gear_adj(bc, cell):
     return sum(1 for n in neighbors(cell) if bc[n]["type"] == "Gear")
 
 
-def _fodder_ok(d, n_bub, allow_gear):
+def _fodder_ok(d, kept, allow_gear):
     """May this die be consumed by a merge?"""
     t = d["type"]
     if t == "Growth":
         return False
-    if t == "Bubble":
-        return n_bub > MIN_BUBBLES                 # the pair check keeps >= MIN after the merge
+    if t in KEEP:
+        return kept[t] > KEEP[t][0]               # the pair check keeps >= lo after the merge
     if t == "Gear":
         return allow_gear
     return True                                  # Doom, Adjust
@@ -135,17 +159,18 @@ def _fodder_ok(d, n_bub, allow_gear):
 
 def _merge_candidates(board, allow_gear, banned):
     bc = _bc(board)
-    n_bub = sum(1 for d in board if d["type"] == "Bubble")
+    kept = _counts(board)
     out = []
     for a in board:
         for b in board:
             if (a["cell"], b["cell"]) in banned or not can_merge(a, b):
                 continue
-            if not (_fodder_ok(a, n_bub, allow_gear) and _fodder_ok(b, n_bub, allow_gear)):
+            if not (_fodder_ok(a, kept, allow_gear) and _fodder_ok(b, kept, allow_gear)):
                 continue
-            # bubbles are fodder like any die as long as MIN stays even if the result
-            # is not a bubble (was: only above 3, so the bot hoarded 3 -- user 2026-10-10)
-            if n_bub - ((a["type"] == "Bubble") + (b["type"] == "Bubble")) < MIN_BUBBLES:
+            # kept dice (bubbles, ...) are fodder like any die as long as their minimum
+            # stays even if the result is another type (was: bubbles only above 3, so the
+            # bot hoarded 3 -- user 2026-10-10)
+            if any(kept[t] - ((a["type"] == t) + (b["type"] == t)) < KEEP[t][0] for t in KEEP):
                 continue
             out.append((a, b))
     return bc, out
@@ -190,12 +215,12 @@ def _bridge_bubble(board, ev):
     """A gear group is cut off (2026-10-07 live: a gear walled in by two bubbles,
     bot idled for minutes). The bubble touching the most separate gear groups --
     the one standing between them -- to reroll with the supporter, or None."""
-    if ev["connected"] or ev["bubbles"] <= MIN_BUBBLES:
+    if ev["connected"]:
         return None
     comp_of = {c: i for i, comp in enumerate(gear_components(board)) for c in comp}
     best = None
     for d in board:
-        if d["type"] != "Bubble":
+        if d["type"] not in KEEP or ev["kept"][d["type"]] <= KEEP[d["type"]][0]:
             continue
         groups = {comp_of[n] for n in neighbors(d["cell"]) if n in comp_of}
         if len(groups) >= 2 and (best is None or len(groups) > best[0]):
@@ -209,10 +234,11 @@ def defects(board, ev=None):
     _bridge_bubble.)"""
     ev = ev or evaluate(board)
     out = list(ev["others"])
-    bub = [d["cell"] for d in board if d["type"] == "Bubble"]
-    if len(bub) > MAX_BUBBLES:
-        out += sorted(bub, key=lambda c: next(d["pip"] for d in board if d["cell"] == c))[
-            :len(bub) - MAX_BUBBLES]
+    for t, (lo, hi, _) in KEEP.items():
+        cells = [d["cell"] for d in board if d["type"] == t]
+        if len(cells) > hi:
+            out += sorted(cells, key=lambda c: next(d["pip"] for d in board if d["cell"] == c))[
+                :len(cells) - hi]
     return out
 
 
@@ -242,7 +268,7 @@ def _joker_copy(board, ev, banned):
                 continue
             if d["type"] == "Gear":
                 sc = 10 + sum(n["type"] == "Gear" for n in [_bc(board)[c] for c in neighbors(j["cell"])])
-            elif d["type"] == "Bubble" and ev["bubbles"] < MIN_BUBBLES:
+            elif d["type"] in KEEP and ev["kept"][d["type"]] < KEEP[d["type"]][0]:
                 sc = 5
             else:
                 continue
@@ -361,7 +387,7 @@ def plan_next(board, transcended=False, support_ready=False, banned=frozenset(),
         bc = _bc(board)
         n_bub = ev["bubbles"]
         pool = [d for d in board if d["type"] in ("Doom", "Adjust")
-                or (d["type"] == "Bubble" and n_bub > BEST_BUBBLES)]
+                or (d["type"] in KEEP and ev["kept"][d["type"]] > KEEP[d["type"]][2])]
         if pool:
             d = max(pool, key=lambda d: (_gear_adj(bc, d["cell"]), d["pip"]))
             return {"op": "support", "from": d["cell"]}

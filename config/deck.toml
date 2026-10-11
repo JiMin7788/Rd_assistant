@@ -1,3 +1,9 @@
 # Dice in the deck the bot is playing (perception uses it to tell look-alike dice apart)
 # Gear Doom Bubble Adjust Growth Decay(부패, pink)
 dice = ["Gear", "Decay", "Bubble", "Adjust", "Growth"]
+
+# Finished field: these non-gear dice in [lo, hi] (optional 3rd value = best count),
+# everything else connected gears with average pip >= 2.2 (policy TARGET_AVG)
+[keep]
+Bubble = [1, 2]
+Decay = [1, 2]

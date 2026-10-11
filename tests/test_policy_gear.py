@@ -207,3 +207,47 @@ def test_bomb_order_pair_then_adjust1_then_supporter():
     b = _with(board("G1 G1 G1 G1 B1  G1 G1 G1 G1 B1  G1 A2 A2 G1 G1"), 3, "Bomb", 0)
     assert plan_next(b, transcended=False, support_ready=True) == {"op": "support", "from": 3}   # 3.
     assert not evaluate(b)["complete"]
+
+
+# ---- deck rule from config/deck.toml [keep] (부패 deck, user 2026-10-11) ----
+import os, tempfile
+import rdom.policy.gear as pg
+
+
+def _decay_deck():
+    f = tempfile.NamedTemporaryFile("w", suffix=".toml", delete=False)
+    f.write("[keep]\nBubble = [1, 2]\nDecay = [1, 2]\n"); f.close()
+    old = pg.KEEP
+    pg.load_deck(f.name); os.unlink(f.name)
+    return old
+
+
+def _with_decay(spec):
+    b = board(spec.replace("X", "D"))
+    for d in b:
+        if d["type"] == "Doom":
+            d["type"] = "Decay"
+    return b
+
+
+def test_decay_deck_complete():
+    old = _decay_deck()
+    try:
+        ok = _with_decay("G2 G2 G3 B1 G2  G3 X2 G2 G2 G2  G2 G2 G3 G2 G2")      # 1 bubble, 1 decay
+        assert evaluate(ok)["complete"]
+        no_decay = board("G2 G2 G3 B1 G2  G3 B2 G2 G2 G2  G2 G2 G3 G2 G2")     # decay 0 -> not done
+        assert not evaluate(no_decay)["complete"]
+        three_bub = _with_decay("G2 G2 G3 B1 G2  G3 X2 B2 G2 G2  G2 B3 G3 G2 G2")  # 3 bubbles > 2
+        assert not evaluate(three_bub)["complete"]
+    finally:
+        pg.KEEP = old
+
+
+def test_decay_deck_keeps_one_decay():
+    old = _decay_deck()
+    try:
+        b = _with_decay("X1 X1 G1 G1 G1  G1 B1 G1 G1 G1  G1 G1 G1 G1 B2")      # 2 decay, both pip 1
+        a = plan_next(b, transcended=False)
+        assert not (a["op"] == "merge" and {b[a["from"] - 1]["type"], b[a["to"] - 1]["type"]} == {"Decay"}), a
+    finally:
+        pg.KEEP = old
