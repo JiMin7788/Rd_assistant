@@ -179,7 +179,7 @@ def _pipnet():
     return _models["pipnet"]
 
 
-TYPE_CLASSES = TYPES + ("empty", "junk", "Crystal", "Bomb")   # Crystal: obstacle HP 700; Bomb: field-effect die (2026-10-09)
+TYPE_CLASSES = TYPES + ("empty", "junk", "Crystal", "Bomb", "Decay")   # Crystal: obstacle HP 700; Bomb: field-effect die (2026-10-09)
 
 
 def _typenet():
@@ -206,12 +206,39 @@ def predict_types(crops):
     with torch.no_grad():
         P = torch.softmax(_typenet()(x, torch.zeros(len(crops), dtype=torch.long)), 1).numpy()
     labs, conf = [_models["type_classes"][i] for i in P.argmax(1)], list(P.max(1))
+    deck = deck_dice()
     for i, c in enumerate(crops):
+        if "Decay" in deck and labs[i] in ("Growth", "Doom") and (is_decay(c) or "Doom" not in deck):
+            labs[i] = "Decay"                     # pink 부패 die: never trained, read as Growth
         if is_bomb(c):
             labs[i], conf[i] = "Bomb", 1.0
         elif labs[i] == "Bomb":                    # the CNN learned bombs from synthetic art only
             labs[i] = "junk"
     return labs, conf
+
+
+def deck_dice():
+    """Die types in the current deck (config/deck.toml `dice`), cached per mtime."""
+    path = os.path.join(_DATA, "..", "config", "deck.toml")
+    try:
+        mt = os.path.getmtime(path)
+    except OSError:
+        return ("Gear", "Doom", "Bubble", "Adjust", "Growth")
+    if _models.get("deck_mtime") != mt:
+        import tomllib
+        with open(path, "rb") as f:
+            _models["deck"] = tuple(tomllib.load(f).get("dice", ()))
+        _models["deck_mtime"] = mt
+    return _models["deck"]
+
+
+def is_decay(rgb):
+    """부패 (decay) die, pink-magenta: median hue of its saturated pixels 147-149
+    (live 2026-10-11) vs Growth <= 133 (99th pct of 300 labelled crops)."""
+    h = cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV); n = rgb.shape[0]; m = n // 5
+    c = h[m:n - m, m:n - m].reshape(-1, 3)
+    c = c[(c[:, 1] > 80) & (c[:, 2] > 90)]
+    return len(c) >= 20 and np.median(c[:, 0]) >= 142
 
 
 def is_bomb(rgb):
@@ -307,7 +334,7 @@ def read_board(frame_rgb):
     sits on the centre, so the pip = corner pattern (2/4/6) + centre."""
     crops = cell_crops(frame_rgb)
     labs, conf = predict_types(crops)
-    dice = [i for i, lab in enumerate(labs) if lab in TYPES]
+    dice = [i for i, lab in enumerate(labs) if lab in TYPES or lab == "Decay"]
     pips = dict(zip(dice, predict_pips([crops[i] for i in dice], [labs[i] for i in dice])))
     out = [{"cell": i + 1, "type": kind(lab), "variant": lab, "pip": pips.get(i, 0),
             "conf": float(c)} for i, (lab, c) in enumerate(zip(labs, conf))]

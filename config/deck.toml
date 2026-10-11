@@ -1,0 +1,3 @@
+# Dice in the deck the bot is playing (perception uses it to tell look-alike dice apart)
+# Gear Doom Bubble Adjust Growth Decay(부패, pink)
+dice = ["Gear", "Decay", "Bubble", "Adjust", "Growth"]
