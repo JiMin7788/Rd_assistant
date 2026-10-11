@@ -24,6 +24,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 from rdom.capture.live import LiveGrabber
 from rdom.input.inject import Injector, cell_uv
 from rdom.perception.board import is_battle, is_game_over
+from rdom.perception import collect
 from rdom.perception.gear import (read_board, ui_state, UI, GEAR_VARIANTS,
                                   banner_present, banner_text, effect_kind)
 from rdom.policy.gear import evaluate, plan_next
@@ -136,6 +137,7 @@ def play(g, inj, minutes=30, tick=0.6):
         b = read_board(f)
         sig = tuple((d["type"], d["pip"]) for d in b)
         stable = sig == prev_sig; prev_sig = sig
+        collect.maybe_save(f, b, stable)              # training data (부패 etc.), every 15 s
         post = sum(d["variant"] in GEAR_VARIANTS[1:] for d in b)
         post_hits = post_hits + 1 if post >= 3 else 0
         if post_hits >= 2 and not transcended:

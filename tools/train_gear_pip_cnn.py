@@ -16,7 +16,8 @@ import torch.nn as nn
 import torch.nn.functional as Fn
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-from rdom.perception.gear import TYPES, PipNet, PIP_IN, PIP_PATTERNS, decode_pattern
+from rdom.perception.gear import TYPES as _T, PipNet, PIP_IN, PIP_PATTERNS, decode_pattern
+TYPES = _T + ("Decay",)                  # pip net is type-blind; Decay (부패) crops from live collection
 
 D = r"C:\dev\rdom\data\crops_gear"
 

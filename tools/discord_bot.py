@@ -459,8 +459,10 @@ async def cmd_start(it: discord.Interaction, until: str = "23:59"):
     for f in (PAUSE, STOP):
         if os.path.exists(f):
             os.remove(f)
-    subprocess.Popen(["cmd", "/c", os.path.join(ROOT, "봇 시작.bat"), "--until", until],
-                     cwd=ROOT, creationflags=subprocess.CREATE_NEW_CONSOLE)
+    # same console as run_all.py (no new window); output goes to a log file
+    log = open(os.path.join(DATA, "bot_logs", "supervisor.log"), "a", encoding="utf-8")
+    subprocess.Popen([sys.executable, "-u", "-W", "ignore", os.path.join(ROOT, "tools", "supervisor.py"),
+                      "--until", until], cwd=ROOT, stdout=log, stderr=subprocess.STDOUT)
     await it.response.send_message(f"▶ 봇을 켭니다 (종료 {until}).")
 
 
