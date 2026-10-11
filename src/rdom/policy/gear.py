@@ -33,14 +33,18 @@ BEST_BUBBLES = 1                  # ... target 1 (user 2026-10-11; was 2)
 KEEP = {"Bubble": (MIN_BUBBLES, MAX_BUBBLES, BEST_BUBBLES)}
 
 
-def load_deck(path):
-    """Read [keep] from the deck file: Type = [lo, hi] or [lo, hi, best]. Missing file
-    or table -> the default. Returns the active KEEP."""
+def load_deck(path, name=None):
+    """Read the keep rule of deck `name` (default: `active`) from the deck file:
+    Type = [lo, hi] or [lo, hi, target]. A flat [keep] table also works. Missing
+    file or table -> the default. Returns the active KEEP."""
     global KEEP
     import tomllib
     try:
         with open(path, "rb") as f:
-            keep = tomllib.load(f).get("keep")
+            cfg = tomllib.load(f)
+        decks = cfg.get("decks", {})
+        name = name or cfg.get("active")
+        keep = decks[name].get("keep") if name in decks else cfg.get("keep")
     except (OSError, ValueError):
         keep = None
     if keep:
@@ -170,7 +174,9 @@ def _merge_candidates(board, allow_gear, banned):
             # kept dice (bubbles, ...) are fodder like any die as long as their minimum
             # stays even if the result is another type (was: bubbles only above 3, so the
             # bot hoarded 3 -- user 2026-10-10)
-            if any(kept[t] - ((a["type"] == t) + (b["type"] == t)) < KEEP[t][0] for t in KEEP):
+            # only types this pair consumes: a type already below its minimum (0 decay)
+            # blocked EVERY merge and the bot idled (2026-10-11)
+            if any((u := (a["type"] == t) + (b["type"] == t)) and kept[t] - u < KEEP[t][0] for t in KEEP):
                 continue
             out.append((a, b))
     return bc, out

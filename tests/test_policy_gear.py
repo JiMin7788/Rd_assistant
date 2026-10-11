@@ -269,3 +269,13 @@ def test_surplus_decay_merged_not_waited():
 def test_doom_deck_bubbles_one_to_three_complete():
     b = board("G2 G2 G3 B1 G2  G3 B2 G2 G2 G2  G2 G2 G3 B2 G2")    # 3 bubbles: still complete
     assert evaluate(b)["complete"]
+
+
+def test_missing_kept_type_does_not_block_other_merges():
+    # decay deck with 0 decay on the field: adjust pairs must still merge (bot idled 2026-10-11)
+    old = _decay_deck()
+    try:
+        b = board("R1 B1 A1 A1 B1  A1 G1 R1 A1 A1  G1 A1 R1 B1 G1")
+        assert plan_next(b, transcended=False)["op"] == "merge"
+    finally:
+        pg.KEEP = old

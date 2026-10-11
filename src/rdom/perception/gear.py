@@ -223,19 +223,58 @@ def predict_types(crops):
     return labs, conf
 
 
-def deck_dice():
-    """Die types in the current deck (config/deck.toml `dice`), cached per mtime."""
-    path = os.path.join(_DATA, "..", "config", "deck.toml")
+DECK_FILE = os.path.join(_DATA, "..", "config", "deck.toml")
+
+
+def deck_config():
+    """config/deck.toml: {"active": name, "decks": {name: {"dice": [...], "keep": {...}}}}."""
     try:
-        mt = os.path.getmtime(path)
+        mt = os.path.getmtime(DECK_FILE)
     except OSError:
-        return ("Gear", "Doom", "Bubble", "Adjust", "Growth")
+        return {"active": "doom", "decks": {"doom": {"dice": ["Gear", "Doom", "Bubble", "Adjust", "Growth"],
+                                                       "keep": {"Bubble": [1, 3, 1]}}}}
     if _models.get("deck_mtime") != mt:
         import tomllib
-        with open(path, "rb") as f:
-            _models["deck"] = tuple(tomllib.load(f).get("dice", ()))
+        with open(DECK_FILE, "rb") as f:
+            _models["deck_cfg"] = tomllib.load(f)
         _models["deck_mtime"] = mt
-    return _models["deck"]
+    return _models["deck_cfg"]
+
+
+def set_deck(name):
+    """Deck detected on screen (see detect_deck) -- overrides `active` in the file."""
+    _models["deck_name"] = name
+
+
+def deck_name():
+    cfg = deck_config()
+    n = _models.get("deck_name") or cfg.get("active", "doom")
+    return n if n in cfg.get("decks", {}) else next(iter(cfg["decks"]))
+
+
+def deck_dice():
+    """Die types of the deck in play."""
+    return tuple(deck_config()["decks"][deck_name()]["dice"])
+
+
+def detect_deck(frame_rgb):
+    """'decay' / 'doom' from the deck bar at the bottom of the battle screen, or None
+    when the bar is hidden (power panel open). The pink 부패 slot is 36-38 % pink,
+    the 파멸 deck's slots <= 3 % (2026-10-11 screens)."""
+    H, W = frame_rgb.shape[:2]; Wc = _content_w(frame_rgb)
+    hsv = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2HSV)
+    pink, dark = [], []
+    for u in (0.604, 0.674, 0.743, 0.804, 0.872):
+        c = hsv[int(0.948 * H):int(0.975 * H), int((u - 0.022) * Wc):int((u + 0.022) * Wc)].reshape(-1, 3)
+        pink.append(((c[:, 0] >= 140) & (c[:, 0] <= 165) & (c[:, 1] > 70) & (c[:, 2] > 120)).mean())
+        dark.append((c[:, 2] < 60).mean())
+    if sum(dark) / 5 > 0.15:
+        return None
+    if max(pink) > 0.2:
+        return "decay"
+    if max(pink) < 0.08:
+        return "doom"
+    return None
 
 
 def is_decay(rgb):

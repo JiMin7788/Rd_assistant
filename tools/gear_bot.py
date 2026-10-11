@@ -52,7 +52,14 @@ def play(g, inj, minutes=30, tick=0.6):
     play.stats = stats = {"merges": 0, "fails": 0, "support": 0, "complete": False}
     # completion rule of the deck in play (config/deck.toml [keep]), re-read every game
     import rdom.policy.gear as _pg
-    print("deck keep:", _pg.load_deck(os.path.join(os.path.dirname(__file__), "..", "config", "deck.toml")), flush=True)
+    import rdom.perception.gear as _gp
+    deck_seen = None                               # deck read from the deck bar (per game)
+    deck_check = -1e9
+
+    def use_deck(name):
+        _gp.set_deck(name)
+        print(f"deck: {name} keep: {_pg.load_deck(_gp.DECK_FILE, name)}", flush=True)
+    use_deck(_gp.deck_name())
     tap = lambda k: inj.tap(*UI[k])
     transcended = False
     hist = {}                                          # cell -> last BUFF_STEADY reads
@@ -137,6 +144,15 @@ def play(g, inj, minutes=30, tick=0.6):
                 # cells already collect the bonus.
                 print("EFFECT: summon bonus when short (no action)"); bonus_until = now + 60
 
+        # which deck is in play: read from the deck bar, re-checked every 30 s (the user
+        # switched 부패 -> 파멸 between games and the bot idled on the wrong rules)
+        if now - deck_check > 30 or deck_seen is None and now - deck_check > 2:
+            deck_check = now
+            dk = _gp.detect_deck(f)
+            if dk and dk != deck_seen:
+                deck_seen = dk
+                if dk != _gp.deck_name() or not getattr(play, "_deck_logged", False):
+                    use_deck(dk); play._deck_logged = True
         b = read_board(f)
         sig = tuple((d["type"], d["pip"]) for d in b)
         stable = sig == prev_sig; prev_sig = sig
