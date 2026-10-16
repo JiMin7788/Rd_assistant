@@ -17,6 +17,17 @@ bottom = 0
 # y 2272-4390 = 1184x2118 (~9:16; the render child is 1188x2126, its last 4/8 px
 # fall under the window edge). LDPlayer 14 was: left 0, top 40, right 39.
 
+# Where the bot puts the game window on start (window rect incl. its 8px
+# right/bottom border, screen px). Delete this table to leave the window alone.
+# 2026-10-16: top-right corner of DISPLAY2 (x 436-4276, y 2160-4560; dxcam
+# output 1): x = 4276 + 8 (border) - 1384 so the client's right edge is the
+# monitor's right edge. Content 1244x2224.
+[target.place]
+x      = 2900
+y      = 2160
+width  = 1384
+height = 2304
+
 [capture]
 backend       = "dxcam"
 target_fps    = 30

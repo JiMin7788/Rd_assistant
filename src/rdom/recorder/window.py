@@ -24,6 +24,7 @@ __all__ = [
     "dpi_scale",
     "is_minimized",
     "monitor_info",
+    "place_window",
     "WindowState",
 ]
 
@@ -136,6 +137,23 @@ def monitor_info(hwnd: int) -> dict:
         "res": [r.right - r.left, r.bottom - r.top],
         "primary": bool(mi.dwFlags & 1),
     }
+
+
+def place_window(hwnd: int, x: int, y: int, width: int, height: int) -> bool:
+    """Restore if minimized and move/resize the window rect to (x, y, w, h).
+    Returns True if the window had to be moved."""
+    rc = wintypes.RECT()
+    _user32.GetWindowRect(hwnd, ctypes.byref(rc))
+    if not is_minimized(hwnd) and (rc.left, rc.top, rc.right - rc.left,
+                                   rc.bottom - rc.top) == (x, y, width, height):
+        return False
+    if is_minimized(hwnd):
+        _user32.ShowWindow(hwnd, 9)                      # SW_RESTORE
+    SWP_NOZORDER, SWP_NOACTIVATE = 0x0004, 0x0010
+    if not _user32.SetWindowPos(hwnd, None, x, y, width, height,
+                                SWP_NOZORDER | SWP_NOACTIVATE):
+        raise ctypes.WinError(ctypes.get_last_error())
+    return True
 
 
 @dataclass(frozen=True)

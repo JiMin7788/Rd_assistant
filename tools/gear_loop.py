@@ -9,7 +9,7 @@ Stops after 3 failed rounds in a row (fix the cause, don't loop blindly).
 import datetime, json, os, sys, time
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))
-from rdom.capture.live import LiveGrabber
+from rdom.capture.live import LiveGrabber, place_game_window
 from rdom.input.inject import Injector, SPEED_UV
 from rdom.input.friend_coop import open_room_and_wait
 from rdom.notify.room_state import write_room
@@ -37,6 +37,8 @@ LOG = r"C:\dev\rdom\data\gear_rounds.jsonl"
 PAUSE = r"C:\dev\rdom\data\PAUSE"
 STOP = r"C:\dev\rdom\data\STOP"                    # /종료 (Discord): end cleanly between games
 
+if place_game_window():                              # [target.place] in recorder.toml
+    print("game window moved to its set place", flush=True)
 g = LiveGrabber(); inj = Injector(execute=True)
 fails = 0; rnd = 0
 send_status("▶ 봇 시작")

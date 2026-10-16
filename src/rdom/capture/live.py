@@ -13,8 +13,22 @@ import numpy as np
 from rdom.recorder.config import load_config
 from rdom.recorder.geometry import Viewport, fit_chrome
 from rdom.recorder.window import (
-    WindowState, find_window, monitor_info, set_dpi_awareness,
+    WindowState, find_window, monitor_info, place_window, set_dpi_awareness,
 )
+
+
+def place_game_window(config="config/recorder.toml"):
+    """Move the game window to [target.place] (bot start). Returns True if it
+    was moved; the caller should give the game a moment to redraw."""
+    import time
+    cfg = load_config(config)
+    if cfg.target.place is None:
+        return False
+    set_dpi_awareness()
+    moved = place_window(find_window(cfg.target.window_title_re), *cfg.target.place)
+    if moved:
+        time.sleep(1.0)
+    return moved
 
 
 class LiveGrabber:

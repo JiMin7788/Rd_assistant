@@ -17,6 +17,9 @@ class TargetCfg:
     #: Emulator window furniture, measured once with tools/verify/g2b_chrome.py.
     #: Not auto-detectable -- it is not black, so the letterbox scan misses it.
     chrome: Insets = Insets(left=0, top=0, right=0, bottom=0)
+    #: Window rect (x, y, width, height) the bot moves the game window to on
+    #: start; None = leave it where it is.
+    place: tuple[int, int, int, int] | None = None
 
 
 @dataclass(frozen=True)
@@ -102,11 +105,14 @@ def load_config(path: str | Path) -> RecorderConfig:
         raw = tomllib.load(fh)
     target_raw = dict(raw.get("target", {}))
     chrome_raw = target_raw.pop("chrome", {})
+    place_raw = target_raw.pop("place", None)
     target = _pick(TargetCfg, target_raw)
     target = TargetCfg(
         window_title_re=target.window_title_re,
         chrome=Insets(**{k: int(v) for k, v in chrome_raw.items()
                          if k in ("left", "top", "right", "bottom")}),
+        place=(tuple(int(place_raw[k]) for k in ("x", "y", "width", "height"))
+               if place_raw else None),
     )
     return RecorderConfig(
         target=target,
