@@ -38,6 +38,10 @@ class LiveGrabber:
         return self._cam
 
     def content_rect(self):
+        import ctypes
+        if not ctypes.windll.user32.IsWindow(self.hwnd):   # game restarted (new window)
+            self.hwnd = find_window(self.cfg.target.window_title_re)
+            self._baseline = WindowState.read(self.hwnd)
         state = WindowState.read(self.hwnd)
         vp = Viewport(client=state.client,
                       chrome=fit_chrome(state.client, self.cfg.target.chrome))

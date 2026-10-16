@@ -8,7 +8,7 @@ Everyone:
 Admins ("서버 관리" permission):
   /스샷          current emulator screen
   /정지 /재개    pause after the current game / resume   (data/PAUSE)
-  /시작 [until]  start the supervisor if it is not running
+  /시작          start the supervisor if it is not running
   /종료          end the bot after the current game      (data/STOP)
 
 Room codes: the game loop writes data/room.json (code + waiting/playing/closed).
@@ -28,7 +28,6 @@ import psutil
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "src"))
-from rdom.input.inject import ADB, resolve_device
 from rdom.notify.room_state import read_room, ALIVE
 
 DATA = os.path.join(ROOT, "data")
@@ -409,12 +408,19 @@ async def cmd_notice(it: discord.Interaction, title: str, text: str):
 
 
 def screencap():
-    dev = resolve_device()
-    png = subprocess.run([ADB, "-s", dev, "exec-out", "screencap", "-p"], capture_output=True, timeout=20).stdout
-    import numpy as np, cv2                       # shrink: a full 1080x1920 png is ~3 MB
-    im = cv2.imdecode(np.frombuffer(png, np.uint8), cv2.IMREAD_COLOR)
-    ok, buf = cv2.imencode(".jpg", cv2.resize(im, None, fx=0.5, fy=0.5), [cv2.IMWRITE_JPEG_QUALITY, 85])
-    return buf.tobytes()
+    """The game content area of the Google Play Games window (no adb on GPG)."""
+    from PIL import ImageGrab
+    from rdom.recorder.config import load_config
+    from rdom.recorder.geometry import Viewport, fit_chrome
+    from rdom.recorder.window import WindowState, find_window, set_dpi_awareness
+    set_dpi_awareness()
+    cfg = load_config(os.path.join(ROOT, "config", "recorder.toml"))
+    client = WindowState.read(find_window(cfg.target.window_title_re)).client
+    c = Viewport(client=client, chrome=fit_chrome(client, cfg.target.chrome)).content
+    im = ImageGrab.grab(bbox=c.as_tuple(), all_screens=True)
+    im = im.resize((im.width // 2, im.height // 2))   # a full-size png is ~3 MB
+    buf = io.BytesIO(); im.convert("RGB").save(buf, "JPEG", quality=85)
+    return buf.getvalue()
 
 
 @admin
@@ -446,24 +452,18 @@ async def cmd_resume(it: discord.Interaction):
 
 @admin
 @tree.command(name="시작", description="[관리자] 봇 켜기 (꺼져 있을 때)")
-@app_commands.describe(until="종료 시각 HH:MM (기본 23:59)")
-async def cmd_start(it: discord.Interaction, until: str = "23:59"):
+async def cmd_start(it: discord.Interaction):
     if running():
         await it.response.send_message("이미 실행 중입니다.")
-        return
-    try:
-        datetime.datetime.strptime(until, "%H:%M")
-    except ValueError:
-        await it.response.send_message("시각은 HH:MM 형식으로 (예: 23:30)")
         return
     for f in (PAUSE, STOP):
         if os.path.exists(f):
             os.remove(f)
     # same console as run_all.py (no new window); output goes to a log file
     log = open(os.path.join(DATA, "bot_logs", "supervisor.log"), "a", encoding="utf-8")
-    subprocess.Popen([sys.executable, "-u", "-W", "ignore", os.path.join(ROOT, "tools", "supervisor.py"),
-                      "--until", until], cwd=ROOT, stdout=log, stderr=subprocess.STDOUT)
-    await it.response.send_message(f"▶ 봇을 켭니다 (종료 {until}).")
+    subprocess.Popen([sys.executable, "-u", "-W", "ignore", os.path.join(ROOT, "tools", "supervisor.py")],
+                     cwd=ROOT, stdout=log, stderr=subprocess.STDOUT)
+    await it.response.send_message("▶ 봇을 켭니다.")
 
 
 @admin
@@ -527,4 +527,5 @@ async def on_guild_join(g):
     print("joined", g.name, flush=True)
 
 
-client.run(CFG["bot_token"], log_handler=None)
+if __name__ == "__main__":
+    client.run(CFG["bot_token"], log_handler=None)

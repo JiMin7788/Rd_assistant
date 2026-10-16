@@ -4,17 +4,16 @@ Starts tools/gear_loop.py; if it crashes it is restarted (with a status message
 and a screenshot to Discord). Five crashes within 30 minutes -> give up and
 report, because something is systematically wrong (new screen, game update)
 and blind restarts would only make it worse (user rule: anomaly -> stop, fix).
-A normal exit (deadline reached) ends the supervisor too.
+A normal exit (/종료 = data/STOP) ends the supervisor too.
 
-  python tools/supervisor.py [--until HH:MM]
+  python tools/supervisor.py
 Logs: data/bot_logs/YYYYMMDD_HHMM.log
 """
-import argparse, collections, datetime, os, subprocess, sys, time
+import collections, datetime, os, subprocess, sys, time
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "src"))
 from rdom.notify.discord import send_status
 
-ap = argparse.ArgumentParser(); ap.add_argument("--until", default="23:59"); a = ap.parse_args()
 PY = os.path.join(ROOT, ".venv", "Scripts", "python.exe")
 LOGD = os.path.join(ROOT, "data", "bot_logs"); os.makedirs(LOGD, exist_ok=True)
 crashes = collections.deque()
@@ -34,10 +33,10 @@ def screenshot():
 while True:
     log = os.path.join(LOGD, datetime.datetime.now().strftime("%Y%m%d_%H%M") + ".log")
     with open(log, "w", encoding="utf-8") as fh:
-        p = subprocess.run([PY, "-u", "-W", "ignore", os.path.join(ROOT, "tools", "gear_loop.py"), "--until", a.until],
+        p = subprocess.run([PY, "-u", "-W", "ignore", os.path.join(ROOT, "tools", "gear_loop.py")],
                            cwd=ROOT, stdout=fh, stderr=subprocess.STDOUT)
     if p.returncode == 0:
-        break                                         # deadline reached / clean stop
+        break                                         # clean stop (/종료)
     tail = open(log, encoding="utf-8", errors="replace").read().strip().splitlines()[-6:]
     now = time.time(); crashes.append(now)
     while crashes and now - crashes[0] > 1800:

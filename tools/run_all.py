@@ -1,6 +1,6 @@
 """One console for everything: the Discord bot + the game-bot supervisor.
 
-  python tools/run_all.py [--until HH:MM] [--no-game]
+  python tools/run_all.py [--no-game]
 
 - Discord bot: always running; restarted 10 s after it dies.
 - Supervisor (game loop): started now unless --no-game, or later with Discord /시작.
@@ -21,7 +21,6 @@ SHOW = ("===", "room code", "someone joined", "battle result", "game over", "로
         "stopping", "loop done", "초월", "discord bot ready", "tick:", "dm failed")
 
 ap = argparse.ArgumentParser()
-ap.add_argument("--until", default="23:59")
 ap.add_argument("--no-game", action="store_true")
 a = ap.parse_args()
 
@@ -82,8 +81,8 @@ if not a.no_game:
         for f in ("PAUSE", "STOP"):
             if os.path.exists(os.path.join(DATA, f)):
                 os.remove(os.path.join(DATA, f))
-        start("supervisor.py", "--until", a.until, log=os.path.join(DATA, "bot_logs", "supervisor.log"))
-        print(f"게임봇 시작 (종료 {a.until})")
+        start("supervisor.py", log=os.path.join(DATA, "bot_logs", "supervisor.log"))
+        print("게임봇 시작")
 
 game, dlog = Tail(os.path.join(DATA, "bot_logs", "2*.log")), Tail(os.path.join(DATA, "discord_bot.log"))
 try:

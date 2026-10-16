@@ -13,7 +13,7 @@ __all__ = ["RecorderConfig", "load_config"]
 
 @dataclass(frozen=True)
 class TargetCfg:
-    window_title_re: str = "^LDPlayer"
+    window_title_re: str = "^랜덤 다이스 2"
     #: Emulator window furniture, measured once with tools/verify/g2b_chrome.py.
     #: Not auto-detectable -- it is not black, so the letterbox scan misses it.
     chrome: Insets = Insets(left=0, top=0, right=0, bottom=0)

@@ -1,12 +1,12 @@
-"""Repeat gear-deck coop rounds until a deadline: lobby -> 방 생성 (no invite) ->
+"""Repeat gear-deck coop rounds (no end time; stop with /종료 or data/STOP): lobby -> 방 생성 (no invite) ->
 wait for a joiner -> 협동 시작 -> 배속 once -> bot plays -> 로비로 가기 -> repeat.
 Models are hot-reloaded before every round (training runs alongside). Each round's
 start/end (perf_counter, same clock as the recorder) goes to data/gear_rounds.jsonl.
 Stops after 3 failed rounds in a row (fix the cause, don't loop blindly).
 
-  python tools/gear_loop.py --until 13:23
+  python tools/gear_loop.py
 """
-import argparse, datetime, json, os, sys, time
+import datetime, json, os, sys, time
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))
 from rdom.capture.live import LiveGrabber
@@ -33,27 +33,22 @@ from tools.bot_live import exit_to_lobby
 from tools.gear_bot import play
 from rdom.notify.discord import send_status
 
-ap = argparse.ArgumentParser(); ap.add_argument("--until", default="23:59", help="HH:MM local (default: run all day)")
-a = ap.parse_args()
-hh, mm = map(int, a.until.split(":"))
-now = datetime.datetime.now(); deadline = now.replace(hour=hh, minute=mm, second=0)
-if deadline < now: deadline += datetime.timedelta(days=1)
 LOG = r"C:\dev\rdom\data\gear_rounds.jsonl"
 PAUSE = r"C:\dev\rdom\data\PAUSE"
 STOP = r"C:\dev\rdom\data\STOP"                    # /종료 (Discord): end cleanly between games
 
 g = LiveGrabber(); inj = Injector(execute=True)
 fails = 0; rnd = 0
-send_status(f"▶ 봇 시작 (종료 예정 {deadline:%H:%M})")
+send_status("▶ 봇 시작")
 try:
-    while datetime.datetime.now() < deadline:
+    while True:
         # pause switch: "봇 일시정지.bat" creates data/PAUSE, "봇 재개.bat" removes it.
         # Checked only between games, so the game in progress is always finished.
         if os.path.exists(STOP):
             os.remove(STOP); send_status("⏹ 종료 요청 -- 봇 종료"); break
         if os.path.exists(PAUSE):
             send_status("⏸ 일시정지 -- 판 사이에서 대기 중 (봇 재개.bat 로 재개)")
-            while os.path.exists(PAUSE) and not os.path.exists(STOP) and datetime.datetime.now() < deadline:
+            while os.path.exists(PAUSE) and not os.path.exists(STOP):
                 time.sleep(2)
             if os.path.exists(STOP):
                 continue
@@ -124,8 +119,7 @@ try:
                 break
             time.sleep(1.5); f = g.grab()
         if not is_battle(f):
-            left = (deadline - datetime.datetime.now()).total_seconds()
-            ok = open_room_and_wait(g, inj, timeout=max(60, min(1800, left)))
+            ok = open_room_and_wait(g, inj, timeout=1800)
             if ok is False:                         # nobody joined: keep waiting, not a fault
                 print("nobody joined -- waiting again", flush=True); continue
             if not ok:

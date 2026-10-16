@@ -415,6 +415,27 @@ def _tpl(name):
     return _models[key]
 
 
+# UI templates were cut from LDPlayer frames (1440x2560, 640dpi). Google Play
+# Games renders 1208x2160 with the UI ~0.85x as tall relative to the screen (the
+# board itself is unchanged), so a 1.0x-only match scored 0.42 on a visible 다이스
+# 초월 and the bot never tapped it (2026-10-16; 0.85x scored 0.89). The window
+# size does not change this -- GPG scales a fixed render. Search a few scales.
+UI_SCALES = (1.0, 0.95, 0.9, 0.85, 0.8)
+
+
+def _best(roi, t):
+    """(score, (x, y), (tw, th)) of the best match of `t` in `roi` over UI_SCALES."""
+    best = (0.0, (0, 0), t.shape[1::-1])
+    for s in UI_SCALES:
+        tt = t if s == 1.0 else cv2.resize(t, None, fx=s, fy=s, interpolation=cv2.INTER_AREA)
+        if roi.shape[0] < tt.shape[0] or roi.shape[1] < tt.shape[1]:
+            continue
+        _, sc, _, loc = cv2.minMaxLoc(cv2.matchTemplate(roi, tt, cv2.TM_CCOEFF_NORMED))
+        if sc > best[0]:
+            best = (float(sc), loc, tt.shape[1::-1])
+    return best
+
+
 def _match(f, name, u0, v0, u1, v1):
     """Best normalised cross-correlation of template `name` inside a search box."""
     h, W = f.shape[0], _content_w(f)
@@ -426,7 +447,7 @@ def _match(f, name, u0, v0, u1, v1):
         t = t[:, :max(1, roi.shape[1] - 2)]
         if roi.shape[0] < t.shape[0] or roi.shape[1] < t.shape[1]:
             return 0.0
-    return float(cv2.matchTemplate(roi, t, cv2.TM_CCOEFF_NORMED).max())
+    return _best(roi, t)[0]
 
 
 def transcend_tap(frame_rgb):
@@ -440,10 +461,10 @@ def transcend_tap(frame_rgb):
     t = _tpl("transcend"); roi = f[y0:y1, x0:x1]
     if roi.shape[0] < t.shape[0] or roi.shape[1] < t.shape[1]:
         return (0.875, 0.300)
-    r = cv2.matchTemplate(roi, t, cv2.TM_CCOEFF_NORMED); _, sc, _, (mx, my) = cv2.minMaxLoc(r)
+    sc, (mx, my), (tw, th) = _best(roi, t)
     if sc < _UI_BOX["transcend"][1]:
         return (0.875, 0.300)
-    return ((x0 + mx + t.shape[1] / 2) / W, (y0 + my + t.shape[0] * 0.8) / h)
+    return ((x0 + mx + tw / 2) / W, (y0 + my + th * 0.8) / h)
 
 
 # search boxes (true u,v) and accept thresholds -- see tools/verify_gear_ui.py

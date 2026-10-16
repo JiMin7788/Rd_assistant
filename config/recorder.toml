@@ -2,19 +2,20 @@
 # Anything that affects env_fingerprint must not change mid-session.
 
 [target]
-window_title_re = "^LDPlayer"    # must match exactly one visible window
+window_title_re = "^랜덤 다이스 2"  # Google Play Games window "랜덤 다이스 2 - <account>"; must match exactly one
 
-# Emulator window furniture, excluded from the content area. NOT auto-detected
+# Window furniture, excluded from the content area. NOT auto-detected
 # (it is not black, so the letterbox scan misses it). Measure once with
 # tools/verify/g2b_chrome.py; changing it invalidates the env fingerprint.
-# Values below: LDPlayer 14, 100% display scaling, 2026-09-15 measurement.
+# Values below: Google Play Games, 100% display scaling, 2026-10-16 measurement.
 [target.chrome]
-left   = 0                       # left border falls outside the client here
-top    = 40                      # title bar + tab bar
-right  = 39                      # icon sidebar
+left   = 132                     # GPG left icon sidebar (128) + 4px black seam
+top    = 72                      # title bar
+right  = 0
 bottom = 0
-# Measured 2026-09-16 with g2b_chrome.py, battle screen, client 1200x2104,
-# 100% scaling. Content = 1161x2064 (exactly 9:16, matches wm size 1440x2560).
+# Measured 2026-10-16 on the lobby, client 1316x2190: content = screen x 3090-4274,
+# y 2272-4390 = 1184x2118 (~9:16; the render child is 1188x2126, its last 4/8 px
+# fall under the window edge). LDPlayer 14 was: left 0, top 40, right 39.
 
 [capture]
 backend       = "dxcam"
@@ -24,7 +25,7 @@ codec         = "h264_nvenc"     # auto-falls back to libx264 if unavailable
 crf           = 23
 segment_sec   = 600
 queue_frames  = 120              # ~4s buffer; absorbs ffmpeg process rotation
-monitor_index = 0                # dxcam output index
+monitor_index = 1                # dxcam output index: 1 = DISPLAY2 (3840x2400), where the GPG window sits
 
 [input]
 tap_radius_n            = 0.012  # normalized distance; tap/drag boundary

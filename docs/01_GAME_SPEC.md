@@ -5,9 +5,11 @@
 
 ## 에뮬레이터
 
-- LDPlayer 14.0.25.2, `D:\LDPlayer\LDPlayer14\dnplayer.exe`, 창 제목 `LDPlayer` (`^LDPlayer` 매칭)
-- **Android 실해상도 (adb 교차검증 완료, H1)**: `wm size` = **Physical size: 1440x2560**, `wm density` = **640**
-- adb: LDPlayer 설정에서 "로컬 연결 열기" 필요. `adb connect 127.0.0.1:5555`
+- **2026-10-16부터 Google Play Games (PC)** — 창 제목 `랜덤 다이스 2 - <계정>` (`^랜덤 다이스 2` 매칭), 2번 모니터(dxcam output 1)
+- 크롬(창 장식): 왼쪽 사이드바 132px, 타이틀바 72px. 게임 화면 = 렌더 자식창 `CROSVM_1`
+- adb 없음 → 입력은 `CROSVM_1`에 PostMessage(마우스/Esc=BACK). 커서 안 움직이고 포커스 불필요
+- 게임 재실행: `googleplaygames://launch/?id=com.percent.aos.randomdice2&lid=2&pid=1` (바탕화면 바로가기와 동일)
+- (이전) LDPlayer 14.0.25.2, adb `127.0.0.1:5555`, `wm size` 1440x2560
 
 ## 게임
 
