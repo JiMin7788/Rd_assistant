@@ -45,3 +45,7 @@
 ## 2026-10-29 · rdf01-t9 · support bot core
 - Added tools/support_bot.py: route_deck (2 consecutive deck-bar hits in 20 frames), per-call unobscured Saver, R4 choose_mode, R14 build_record/append_round, run_battle with wrong_deck hand-over and call-time support_play lookup.
 - pages: components/support-bot-core.md (new)
+
+## 2026-10-29 · rdf01-t10 · support players
+- Added tools/support_players.py: Perception wrappers, BasePlayer (fixed tick priority, 15 s cells / 30 s frame cadence via Saver), CollectPlayer (summon, one power-panel snapshot at 120 s, never buys).
+- pages: components/support-players.md (new), components/support-bot-core.md (updated)

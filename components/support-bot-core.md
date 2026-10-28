@@ -6,7 +6,7 @@ sources: [rdf01-t9]
 ---
 # Support bot core (routing, saver, mode, round record)
 
-`tools/support_bot.py` holds the small, unit-testable blocks of the support player: deck routing, the R6-guarded saver, the R4 mode choice, the R14 round record and `run_battle`. The per-tick players and `play()`/`main()` are not in it yet (later tasks), and `gear_loop` is not yet changed to call `run_battle`.
+`tools/support_bot.py` holds the small, unit-testable blocks of the support player: deck routing, the R6-guarded saver, the R4 mode choice, the R14 round record and `run_battle`. The per-tick players live in [support-players](support-players.md); `play()`/`main()` are not in it yet (later tasks), and `gear_loop` is not yet changed to call `run_battle`.
 
 ## Contents
 - `route_deck(g, detect, force, sleep)` -> `"support"` or `"gear"`. `force()` == `"support"` returns at once, printing `deck route: support (forced by deck.toml)`, without grabbing. Otherwise up to 20 frames, 0.5 s apart (`sleep` between frames only), and 2 consecutive `detect(frame)` hits give `deck route: support (deck bar)`; a miss resets the run, so hits on frames 3 and 5 only still end in `deck route: gear`.
