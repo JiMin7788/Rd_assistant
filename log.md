@@ -12,3 +12,7 @@
 ## 2026-10-29 · rdf01-t1 · support-deck rule engine
 - Added pure engine policy/support.py (plan_support etc.) plus config/deck.toml `force` and [decks.support] (after decay so deck_name() fallback stays doom).
 - pages: components/policy-support.md (new), components/policy.md (updated)
+
+## 2026-10-29 · rdf01-t2 · power-up order policy
+- Added pure policy/power.py (next_card, plan_visit, PowerTracker with 2-strike maxed detection) and power_* keys in [decks.support].
+- pages: components/policy-power.md (new)

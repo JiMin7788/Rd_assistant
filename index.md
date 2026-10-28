@@ -7,6 +7,7 @@
 - [Gear-deck perception](components/perception-gear.md) — CNN type/pip models, deck detection, UI templates, OCR banners (2026-10-23)
 - [Rule-based policy engines (M3)](components/policy.md) — target.py (Predator) and gear.py (current) rule engines (2026-10-23)
 - [Support-deck rule engine](components/policy-support.md) — policy/support.py: merge/supporter rules, [decks.support] config, not yet wired (2026-10-29)
+- [Power-up order policy](components/policy-power.md) — policy/power.py: Growth to 7, Alignment:Resonance 3:1, Growth 8 later, maxed detection (2026-10-29)
 - [Safety guards and stop switches](components/safety-guards.md) — dry-run, battle/window guards, failure limits, PAUSE/STOP (2026-10-23)
 
 ## Decisions
