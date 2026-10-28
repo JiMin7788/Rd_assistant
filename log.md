@@ -25,3 +25,7 @@
 - Added perception/score.py (read_score exact-or-None, ScoreTracker 2-read confirm); SCORE_BOX is None and digits_score.npz absent until measured later.
 - build_digit_templates.py gained build_kind and a kind-name CLI; room/hp moved into main() unchanged.
 - pages: components/perception-score.md (new)
+
+## 2026-10-29 · rdf01-t5 · support-deck perception
+- Added perception/support.py with its own support_*.pt models (gear TYPES untouched), pip_source auto/gear, star-based pip 7, sha256-verified gate_state (unlisted support model also turns the gate off), deck bar, power cards, card level (LV_BOX None until measured).
+- pages: components/perception-support.md (new)
