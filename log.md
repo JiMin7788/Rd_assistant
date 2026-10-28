@@ -29,3 +29,7 @@
 ## 2026-10-29 · rdf01-t5 · support-deck perception
 - Added perception/support.py with its own support_*.pt models (gear TYPES untouched), pip_source auto/gear, star-based pip 7, sha256-verified gate_state (unlisted support model also turns the gate off), deck bar, power cards, card level (LV_BOX None until measured).
 - pages: components/perception-support.md (new)
+
+## 2026-10-29 · rdf01-t6 · capture safety and support writers
+- Added LiveGrabber.unobscured() (z-order overlap check, fail closed) and collect.save_support_cells/save_frame that write nothing when covered; tools/save_frame.py. Not yet called by any bot loop.
+- pages: components/capture-live.md (updated)
