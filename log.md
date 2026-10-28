@@ -61,3 +61,7 @@
 ## 2026-10-29 · rdf01-t12 · offline support dry run
 - Added tools/support_dryrun.py (frame PNG -> board rows, evaluate, planned action with support_ready=True, score); no input, no inject import. Without models: 15 junk cells, op wait, score None.
 - pages: howto/run-bot.md (updated)
+
+## 2026-10-29 · rdf01-t13 · integration into gear_loop and gear_bot
+- gear_loop now calls support_bot.run_battle (keyword args, gear_play=play) and reloads support models; gear_bot hands over with "wrong_deck" when the support deck bar is seen (first tick, then every 10 s, before all other rules); run_all SHOW and deck.toml comments extended; H1-H3 runbook added to CLAUDE_CODE_TODO.md.
+- pages: components/support-bot-core.md (updated), howto/run-bot.md (updated)

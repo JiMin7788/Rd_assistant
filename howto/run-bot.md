@@ -2,7 +2,7 @@
 title: Run the bot (launchers, dry-run, live)
 type: howto
 updated: 2026-10-29
-sources: [seed, rdf01-t12]
+sources: [seed, rdf01-t12, rdf01-t13]
 ---
 # Run the bot (launchers, dry-run, live)
 
@@ -16,6 +16,9 @@ Everything else is a manual / dry-run entry point. Run from `C:\dev\rdom` with `
 - Clean stop: Discord `/종료` (writes `data\STOP`).
 - Logs: `data/bot_logs/YYYYMMDD_HHMM.log`, `data/bot_logs/supervisor.log`, `data/discord_bot.log`;
   per-round results `data/gear_rounds.jsonl`.
+- Each round goes through `support_bot.run_battle`, so the loop plays either the gear or the support deck
+  ([support-bot-core](../components/support-bot-core.md)). `config/deck.toml` `force = "support"` forces the support
+  player (H1 data collection); the manual steps are in `CLAUDE_CODE_TODO.md` ("rdF01 서포팅덱").
 - Needs `config/discord.toml` (gitignored, holds the bot token / webhooks — never commit or print it).
 
 ## Gear bot on the current battle
@@ -42,4 +45,5 @@ Everything else is a manual / dry-run entry point. Run from `C:\dev\rdom` with `
 - `tools/discord_bot.py` — slash commands, token from `config/discord.toml`
 - `tools/gear_bot.py`, `tools/bot_live.py`, `tools/play.py`, `tools/bot_dryrun.py` — argparse/usage
 - `.gitignore` — `config/discord.toml`
+- `tools/gear_loop.py`, `config/deck.toml`, `CLAUDE_CODE_TODO.md` — run_battle call, `force` comment, H1-H3 runbook (commit `e3cf60a`)
 - commit `4aa774e` — adds tools/support_dryrun.py (dryrun/main, output lines, support_ready=True, imports) and tests/test_support_dryrun.py (empty-data-dir expectations junk 0 / wait / score None, no-inject check); not yet merged into the main checkout
