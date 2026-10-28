@@ -116,6 +116,12 @@ class FakePerception:
     def banner_present(self, f):
         return self.show_banner
 
+    def read_score(self, f):
+        return None
+
+    def power_cards(self, f):
+        return {}                    # no card found: the visit only closes
+
     def banner_text(self, f):
         self.banner_texts += 1
         return self.text

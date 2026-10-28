@@ -16,6 +16,8 @@ import time
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 from rdom.input.inject import cell_uv
 from rdom.perception import board, collect, gear, score, support
+from rdom.policy.milestones import MilestoneTracker
+from rdom.policy.power import PowerTracker, load_power_config, plan_visit
 from rdom.policy.support import evaluate_support, load_support_deck, plan_support
 
 CELLS_EVERY = 15.0
@@ -32,6 +34,9 @@ CLONE_FOR = 45.0
 POWER_HOLD_FOR = 65.0
 BAN_FOR = 90.0
 MAX_JUNK = 3
+POWER_EVERY = 20.0
+BUY_GAP = 0.15
+LEVEL_REREAD = 0.3
 
 
 class Perception:
@@ -95,6 +100,7 @@ class BasePlayer:
         self.clock, self.sleep, self.tick_s = clock, sleep, tick
         self.stats = {"merges": 0, "fails": 0, "support": 0, "complete": False}
         self.battle_start = None
+        self.last_frame = None                 # last battle frame, saved as end.png by play()
         self._hunt_last = -1e9
         self._cells_last = -1e9
         self._frame_last = -1e9
@@ -157,6 +163,7 @@ class BasePlayer:
             return None                                    # menu / banner over the summon button
         if self.battle_start is None:
             self.battle_start = now
+        self.last_frame = f
         t = self.t(now)
         if t - self._cells_last >= CELLS_EVERY:
             self._cells_last = t
@@ -214,9 +221,10 @@ def fmt_board(b):
 
 class PlayPlayer(BasePlayer):
     """Board play for trial and play mode (spec R13 steps 8, 9, 11). trial=True reads pips with the
-    gear model only. Power bar, power visit, score and milestones are added by t16."""
+    gear model only. Also the power bar (step 10), the power visit (R20) and score/milestone
+    tracking (R14)."""
 
-    def __init__(self, *a, trial=False, deck=None, **kw):
+    def __init__(self, *a, trial=False, deck=None, power_cfg=None, **kw):
         super().__init__(*a, **kw)
         self.trial = trial
         self.deck = deck or load_support_deck(gear.DECK_FILE)
@@ -226,18 +234,73 @@ class PlayPlayer(BasePlayer):
         self._ocr_last = -1e9
         self._covered_logged = -1e9
         self.clone_until = -1e9
-        self.hold_power_until = -1e9           # read by t16: no power-up before this time
+        self.hold_power_until = -1e9           # no power-up before this time (sp_double_later banner)
+        self._power_last = -1e9
+        self.power_cfg = power_cfg or load_power_config(gear.DECK_FILE)
+        self.power = PowerTracker()
+        self.score_tracker = score.ScoreTracker()
+        self.milestones = MilestoneTracker()
         self.bonus_until = -1e9
         self._prev_sig = None
         self._hist = {}                        # cell -> last BUFF_STEADY reads
         self._banned = {}                      # (from, to) -> (from type, to type, expiry)
         self._pending = None                   # (from, to, board) of the last merge swipe
 
-    # AI-NOTE: provisional until t16 replaces it with the power visit; it can only close, never buy.
-    def panel_hook(self, f, ui, now):
-        self.close_panel()
+    def on_panel(self, f, ui, now):
+        self.power_visit(f)
 
-    on_panel = panel_hook
+    def power_visit(self, f):
+        """R20 steps 1-8 on the open power panel frame f."""
+        perc, tracker = self.perc, self.power
+        now = self.clock()
+        self._power_last = now
+        self.saver.frame(f, f"data/support_frames/{self.game_id}/panel_{self.t(now):.1f}.png")
+        found = {c: uv for c, uv in perc.power_cards(f).items() if uv}
+        if not found:
+            print("power panel: cards not found -- closed", flush=True)
+            self.close_panel()
+            return
+        # AI-NOTE: levels are read only here, twice 0.3 s apart, never after a buy tap -- the number
+        # updates a beat after the tap (HP reader lesson); a level counts only if both reads agree.
+        first = {c: perc.card_level(f, uv) for c, uv in found.items()}
+        self.sleep(LEVEL_REREAD)
+        f2 = self.g.grab()
+        read = {}
+        for c, uv in found.items():
+            lv = perc.card_level(f2, uv)
+            read[c] = lv if lv is not None and lv == first[c] else None
+        levels, src, lines = tracker.start_visit(read)
+        for line in lines:
+            print(line, flush=True)
+        avail = [c for c in tracker.available() if c in found]
+        seq = plan_visit(levels, avail, self.power_cfg, 6)
+        if not seq:
+            print("power panel: nothing to buy -- closed", flush=True)
+            self.close_panel()
+            return
+        for c in seq:
+            self.inj.tap(*found[c])
+            self.sleep(BUY_GAP)
+        tracker.tapped(seq)
+        print(PowerTracker.line(seq, {c: levels[c] if c in found else None for c in levels},
+                                src), flush=True)
+        self.close_panel()
+        self._power_last = self.clock()
+
+    def _events(self, f, events):
+        """Print each milestone/crossing log line and save its screenshot (R14, R6)."""
+        for ev in events:
+            print(ev["log"], flush=True)
+            if ev["kind"] == "milestone":
+                name = f"{ev['name']}_{'na' if ev['score'] is None else ev['score']}.png"
+            else:
+                name = f"cross_{ev['limit']}_{ev['score']}.png"
+            # AI-NOTE: the Saver returns None for a covered window, so the shot is stored as null.
+            path = self.saver.frame(f, f"data/support_runs/{self.game_id}/{name}")
+            self.milestones.set_shot(ev, path)
+
+    def _power_due(self, now):
+        return now - self._power_last >= POWER_EVERY and now > self.hold_power_until
 
     def _banner(self, f, now):
         if now - self._ocr_last <= OCR_EVERY or not self.perc.banner_present(f):
@@ -265,6 +328,9 @@ class PlayPlayer(BasePlayer):
 
     def battle_tick(self, f, ui, now):
         self._banner(f, now)
+        confirmed = self.score_tracker.update(self.perc.read_score(f))
+        if confirmed is not None:
+            self._events(f, self.milestones.on_score(confirmed))
         b = self.perc.read_board_support(f, pip_source=self.pip_source)
         sig = tuple((d["type"], d["pip"]) for d in b)
         stable = sig == self._prev_sig
@@ -295,6 +361,14 @@ class PlayPlayer(BasePlayer):
             return                             # wait for a confirming read
         if ev["unknown"] > MAX_JUNK:
             return                             # popup/banner covering the board
+        if stable:
+            self._events(f, self.milestones.on_board(
+                {"res7": ev["res7"], "align7": ev["align7"], "bubbles": ev["bubbles"]}))
+        if ev["complete"] and self._power_due(now):
+            print("power-up (complete)", flush=True)
+            self.tap("power_open")
+            self._power_last = now
+            return
         act = plan_support(b, self.deck, support_ready=now - self._support_last >= SUPPORT_CD,
                            banned=set(self._banned), clone_alert=now < self.clone_until)
         op = act["op"]
@@ -317,3 +391,8 @@ class PlayPlayer(BasePlayer):
             self.inj.swipe(*cell_uv(act["from"]), *gear.UI["support"], dur_ms=400)
             self._support_last = now
             self.stats["support"] += 1
+        elif op == "wait" and self._power_due(now):
+            # nothing to do on the board -> spend SP (gear_bot wording)
+            print(f"idle ({act.get('why')}) -> power-up", flush=True)
+            self.tap("power_open")
+            self._power_last = now
