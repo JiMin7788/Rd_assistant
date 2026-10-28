@@ -5,6 +5,8 @@
 #   keep: non-gear dice the finished field keeps, [lo, hi, target]; everything else
 #         connected gears with average pip >= 2.2 (policy TARGET_AVG)
 active = "doom"
+# force = "support" plays the support player (서포팅덱) for every game without reading the deck bar.
+# Needed for H1 data collection, before the deck-bar template exists. Empty it ("") afterwards.
 # force: deck name to use regardless of the deck bar ("" = detect from the bar)
 force = ""
 
@@ -16,7 +18,7 @@ keep = { Bubble = [1, 3, 1] }
 dice = ["Gear", "Decay", "Bubble", "Adjust", "Growth"]
 keep = { Bubble = [1, 2, 1], Decay = [1, 2, 1] }
 
-[decks.support]         # support deck
+[decks.support]         # 서포팅덱 (공명·정렬·버블·적응·성장)
 # dice: die types in the deck
 dice = ["Resonance", "Alignment", "Bubble", "Adjust", "Growth"]
 # keep: Bubbles the field keeps, [lo, hi, target]
@@ -27,6 +29,8 @@ res7 = 2
 align7_min = 3
 # align_cols: columns that merges prefer to land in
 align_cols = [2, 3, 4]
+# power_* keys, buying order: Growth up to power_growth_first, then Alignment:Resonance by
+# power_ratio, then Growth up to power_growth_late once power_growth_late_after A/R purchases are done.
 # power_growth_first: Growth level bought first, before any Alignment/Resonance
 power_growth_first = 7
 # power_ratio: Alignment:Resonance purchase ratio [x, y]

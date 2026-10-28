@@ -28,9 +28,10 @@ def network_error(f):
     panel = cv2.cvtColor(f[int(0.40*h):int(0.55*h), int(0.10*W):int(0.90*W)], cv2.COLOR_RGB2HSV)
     dark = (panel[..., 2] < 60).mean()
     return yellow > 0.5 and dark > 0.6
-from rdom.perception import gear
+from rdom.perception import gear, support
 from tools.bot_live import exit_to_lobby
 from tools.gear_bot import play
+from tools import support_bot
 from rdom.notify.discord import send_status
 
 LOG = r"C:\dev\rdom\data\gear_rounds.jsonl"
@@ -142,10 +143,14 @@ try:
         fails = 0
         rl = gear.reload_if_changed()
         if rl: print("models reloaded:", rl, flush=True)
+        rl = support.reload_if_changed()
+        if rl: print("support models reloaded:", rl, flush=True)
         t_start = time.perf_counter()
-        res = play(g, inj, minutes=40)
+        # AI-NOTE: keyword args -- run_battle's 3rd positional is `minutes`; gear_play=play keeps the
+        # `player is gear_play` hand-over check true for the gear bot.
+        res, player = support_bot.run_battle(g, inj, minutes=40, gear_play=play)
         t_end = time.perf_counter()
-        st = getattr(play, "stats", {})
+        st = getattr(player, "stats", {})
         with open(LOG, "a") as fh:
             fh.write(json.dumps({"round": rnd, "t_start": t_start, "t_end": t_end, "result": res,
                                  "wall_end": datetime.datetime.now().isoformat(),
