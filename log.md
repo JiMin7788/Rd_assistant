@@ -33,3 +33,7 @@
 ## 2026-10-29 · rdf01-t6 · capture safety and support writers
 - Added LiveGrabber.unobscured() (z-order overlap check, fail closed) and collect.save_support_cells/save_frame that write nothing when covered; tools/save_frame.py. Not yet called by any bot loop.
 - pages: components/capture-live.md (updated)
+
+## 2026-10-29 · rdf01-t7 · support labelling tools
+- Added offline support_prelabel (gear model + colour rule, star candidates), support_review (50-crop sheets, stratified holdout) and build_support_tag (chk only for ticked sheets).
+- pages: components/labelling-support.md (new)
