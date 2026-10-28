@@ -41,3 +41,7 @@
 ## 2026-10-29 · rdf01-t8 · support trainers and R4 gate
 - Added train_support_type_cnn/star/pip (atomic save, games recorded in support_train_manifest.json) and support_gate.py (held-out chk-only metrics, manifest refusal, support_gate.json with model sha256).
 - pages: components/training-support.md (new)
+
+## 2026-10-29 · rdf01-t9 · support bot core
+- Added tools/support_bot.py: route_deck (2 consecutive deck-bar hits in 20 frames), per-call unobscured Saver, R4 choose_mode, R14 build_record/append_round, run_battle with wrong_deck hand-over and call-time support_play lookup.
+- pages: components/support-bot-core.md (new)
