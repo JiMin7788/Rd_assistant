@@ -55,6 +55,8 @@ def play(g, inj, minutes=30, tick=0.6):
     import rdom.perception.gear as _gp
     deck_seen = None                               # deck read from the deck bar (per game)
     deck_check = -1e9
+    from rdom.perception import support as _sup
+    support_check = -1e9                           # first tick checks at once, then every 10 s
 
     def use_deck(name):
         _gp.set_deck(name)
@@ -84,6 +86,11 @@ def play(g, inj, minutes=30, tick=0.6):
         f = g.grab(); now = time.monotonic()
         if is_game_over(f):
             print("game over"); return "game_over"
+        # AI-NOTE: before every other rule -- the support deck must never get the HP->SP rule below
+        if now - support_check >= 10.0:
+            support_check = now
+            if _sup.detect_support_deck(f):
+                print("support deck seen in gear bot -- handing over", flush=True); return "wrong_deck"
         from rdom.perception.gear import tactic_sp1000_card
         card = tactic_sp1000_card(f)                   # card order is random: read it
         if card:

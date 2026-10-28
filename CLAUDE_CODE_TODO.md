@@ -107,3 +107,37 @@ Cowork 샌드박스에서 막힌 항목을 여기 적는다. 사람이 Claude Co
 - [ ] **Layer B: 시간축 라벨 전파** — 세션 리플레이는 로컬 셸 필요 — 신규 `tools/propagate_labels.py`(data/sessions → 트래커 리플레이 → data/crops_v2/, battle_id 파일명, effect 플래그) 후 `tools/train_recognizer.py` 배틀 단위 split·CAP 제거·clean/effect 정확도 분리 출력
 - [ ] **Layer C: 오버레이 불변 모델** — torch/onnx 설치·학습은 로컬 — Python 3.14에서 torch 가용 여부 확인(`pip install torch` ), 불가 시 링/하단밴드 원형 hue 히스토그램 + HGB 폴백. APK에서 이펙트 스프라이트(Buff/Glitch/arrow) 추가 추출 → 증강
 - [ ] **하드 평가셋 게이트** — 신규 `tools/eval_hard.py`: held-out 배틀에서 effect 크롭 정확도 ≥0.9 확인 전엔 실전 투입 금지
+
+## rdF01 서포팅덱
+
+사람이 직접 해야 하는 단계(라이브 게임 필요). 명령은 `C:\dev\rdom` 에서 `.venv\Scripts\python.exe` 로 실행.
+
+### H1 — 수집 (1단계 병합 후)
+- [ ] 게임에서 서포팅덱을 세팅하고 협동은 일반(deck/일반)으로 한다
+- [ ] 덱을 바꾸기 전에 기어덱 전투 프레임을 5장 이상 저장: `python tools/save_frame.py` (≥ 5회). 계속 `not saved: game window covered` 가 나오면 중단하고 보고 (R6 필터 문제)
+- [ ] `config/deck.toml` 에 `force = "support"` 설정
+- [ ] `봇 시작.bat` 으로 일반 협동 5판 이상 진행 (수집 모드)
+- [ ] 프리라벨: `python tools/support_prelabel.py`
+- [ ] 모호 시트 검수: `python tools/support_review.py --ambiguous`
+- [ ] 층화 홀드아웃 검수: `python tools/support_review.py --holdout <game_id>[,<game_id>] --n 1000`
+- [ ] 모든 시트에 `ok` 표시 (시트마다 fixes.tsv 에 `sheet_NN<TAB>ok`)
+- [ ] 태그 빌드: `python tools/build_support_tag.py --tag sup1`
+- [ ] 타입 모델 학습: `python tools/train_support_type_cnn.py --exclude-games <holdout> --tags sup1`
+- [ ] 게이트: `python tools/support_gate.py --holdout <holdout> --tags sup1` — 타입 PASS 가 나올 때까지 반복
+- [ ] 마스터에게 알려 t14 시작
+
+### H2 — 시험판 게임으로 눈금 데이터 (t14 병합 + 타입 게이트 PASS 후)
+- [ ] `config/deck.toml` 의 `force` 를 `""` 로 비운다
+- [ ] 봇이 시험판 3판 이상 진행 — 콘솔에 `support deck: trial mode (type gate PASS, pip gate FAIL)`
+- [ ] 새 크롭 검수 (별 후보 포함): `python tools/support_review.py --ambiguous`, 새 홀드아웃 게임: `python tools/support_review.py --holdout <new_game_id> --n 1000`, 시트마다 `ok`
+- [ ] 태그 빌드 후 별 모델 학습: `python tools/train_support_star.py --seed 1 --exclude-games <holdout>`
+- [ ] Res/Align 눈금 정확도가 0.9 미만이면 눈금 모델도: `python tools/train_support_pip.py --seed 1 --exclude-games <holdout>`
+- [ ] 게이트: `python tools/support_gate.py --holdout <holdout>` — 눈금 PASS 가 나올 때까지 반복
+- [ ] `panel_*.png` 프레임은 지우지 말고 보관
+- [ ] 마스터에게 알려 t15 시작
+
+### H3 — 인수 (t15 병합 후)
+- [ ] 두 게이트가 모두 PASS 인 상태에서 플레이 모드 5판 이상 진행
+- [ ] `python tools/support_judge.py` 실행
+- [ ] 스크린샷을 사용자가 다시 확인
+- [ ] `판정: 통과` + 스크린샷 일치 = 완료. `판정: 실패` 이고 스크린샷도 일치하면 결과를 사용자에게 가져가 규칙을 다시 정한다 (기준은 완화하지 않음)
