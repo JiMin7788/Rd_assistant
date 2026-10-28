@@ -17,6 +17,66 @@ from rdom.recorder.window import (
 )
 
 
+def _tuple(r):
+    return r.as_tuple() if hasattr(r, "as_tuple") else tuple(r)
+
+
+def rects_cover(content, rects):
+    """True if any rect overlaps `content` by a positive area (edge contact is not
+    overlap). Rects are (left, top, right, bottom) tuples or Rect, screen pixels."""
+    cl, ct, cr, cb = _tuple(content)
+    for r in rects:
+        l, t, rr, b = _tuple(r)
+        if min(cr, rr) - max(cl, l) > 0 and min(cb, b) - max(ct, t) > 0:
+            return True
+    return False
+
+
+def windows_above(hwnd):
+    """Screen rects of the windows stacked above `hwnd` that can actually hide it.
+
+    AI-NOTE: walks the z-order upward (GW_HWNDPREV). Skipped: invisible, minimised,
+    DWM-cloaked (other virtual desktops, suspended UWP), zero-area, click-through
+    overlays (LAYERED+TRANSPARENT) and the taskbar -- otherwise an overlay app or
+    the taskbar would make the game look covered forever and block all saving."""
+    import ctypes
+    from ctypes import wintypes
+    u = ctypes.windll.user32
+    u.GetWindow.restype = wintypes.HWND
+    u.GetWindow.argtypes = [wintypes.HWND, wintypes.UINT]
+    u.GetWindowLongW.restype = ctypes.c_long
+    u.GetWindowLongW.argtypes = [wintypes.HWND, ctypes.c_int]
+    GW_HWNDPREV, GWL_EXSTYLE = 3, -20
+    WS_EX_LAYERED, WS_EX_TRANSPARENT = 0x80000, 0x20
+    DWMWA_CLOAKED = 14
+    out = []
+    cur = u.GetWindow(hwnd, GW_HWNDPREV)
+    while cur:
+        h = cur
+        cur = u.GetWindow(h, GW_HWNDPREV)
+        if not u.IsWindowVisible(h) or u.IsIconic(h):
+            continue
+        cloaked = ctypes.c_int(0)
+        if ctypes.windll.dwmapi.DwmGetWindowAttribute(
+                h, DWMWA_CLOAKED, ctypes.byref(cloaked), ctypes.sizeof(cloaked)) == 0 \
+                and cloaked.value:
+            continue
+        ex = u.GetWindowLongW(h, GWL_EXSTYLE)
+        if ex & WS_EX_LAYERED and ex & WS_EX_TRANSPARENT:
+            continue
+        buf = ctypes.create_unicode_buffer(256)
+        u.GetClassNameW(h, buf, 256)
+        if buf.value in ("Shell_TrayWnd", "Shell_SecondaryTrayWnd"):
+            continue
+        rc = wintypes.RECT()
+        if not u.GetWindowRect(h, ctypes.byref(rc)):
+            continue
+        if rc.right <= rc.left or rc.bottom <= rc.top:
+            continue
+        out.append((rc.left, rc.top, rc.right, rc.bottom))
+    return out
+
+
 def place_game_window(config="config/recorder.toml"):
     """Move the game window to [target.place] (bot start). Returns True if it
     was moved; the caller should give the game a moment to redraw."""
@@ -60,6 +120,15 @@ class LiveGrabber:
         vp = Viewport(client=state.client,
                       chrome=fit_chrome(state.client, self.cfg.target.chrome))
         return vp.content, state
+
+    def unobscured(self):
+        """True if no other window overlaps the game content (R5). Any error ->
+        False (fail closed: unknown means do not save)."""
+        try:
+            content, _ = self.content_rect()
+            return not rects_cover(content, windows_above(self.hwnd))
+        except Exception:
+            return False
 
     def window_moved(self):
         """True if the window drifted since construction (invalidates coords)."""

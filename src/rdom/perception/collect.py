@@ -60,3 +60,59 @@ def save_fail(frame_rgb, a, b):
         cv2.imwrite(os.path.join(FAILS, name), cv2.cvtColor(im, cv2.COLOR_RGB2BGR))
     except Exception as e:
         print("save_fail failed:", e, flush=True)
+
+
+SUPPORT_DIR = os.path.join(_ROOT, "data", "crops_support")
+COVERED_MSG = "frame not saved: game window covered"
+_covered_logged = [-1e9]
+
+
+def _covered_warn():
+    """Print the covered notice at most once per 60 s (callers poll every 15-30 s)."""
+    now = time.monotonic()
+    if now - _covered_logged[0] >= 60.0:
+        _covered_logged[0] = now
+        print(COVERED_MSG, flush=True)
+
+
+def save_support_cells(frame_rgb, game_id, t, unobscured, buffed=set(), glare=False):
+    """Save the 15 own-board cells as 72 px (_raw) and 128 px (_hires) PNGs plus one
+    crops.jsonl line each. Nothing is written when another window covers the game
+    (R5). Never raises."""
+    if not unobscured:
+        _covered_warn()
+        return
+    try:
+        from rdom.perception.gear import cell_crops, hires_cell
+        raw, hires = os.path.join(SUPPORT_DIR, "_raw"), os.path.join(SUPPORT_DIR, "_hires")
+        os.makedirs(raw, exist_ok=True)
+        os.makedirs(hires, exist_ok=True)
+        rows = []
+        for cell, crop in enumerate(cell_crops(frame_rgb), 1):
+            name = f"{game_id}_{t:.1f}_{cell:02d}"
+            cv2.imwrite(os.path.join(raw, name + ".png"), cv2.cvtColor(crop, cv2.COLOR_RGB2BGR))
+            cv2.imwrite(os.path.join(hires, name + ".png"),
+                        cv2.cvtColor(hires_cell(frame_rgb, cell, 128), cv2.COLOR_RGB2BGR))
+            rows.append({"name": name, "game": game_id, "t": t, "cell": cell,
+                         "buffed": cell in buffed, "glare": bool(glare)})
+        with open(os.path.join(SUPPORT_DIR, "crops.jsonl"), "a", encoding="utf-8") as f:
+            for r in rows:
+                f.write(json.dumps(r) + "\n")
+    except Exception as e:
+        print("save_support_cells failed:", e, flush=True)
+
+
+def save_frame(frame_rgb, path, unobscured):
+    """Write the full frame as PNG to `path` (parents created). Returns the path, or
+    None when covered or on any error. Never raises."""
+    if not unobscured:
+        _covered_warn()
+        return None
+    try:
+        os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+        if not cv2.imwrite(str(path), cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)):
+            return None
+        return path
+    except Exception as e:
+        print("save_frame failed:", e, flush=True)
+        return None
