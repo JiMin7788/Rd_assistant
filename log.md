@@ -16,3 +16,7 @@
 ## 2026-10-29 · rdf01-t2 · power-up order policy
 - Added pure policy/power.py (next_card, plan_visit, PowerTracker with 2-strike maxed detection) and power_* keys in [decks.support].
 - pages: components/policy-power.md (new)
+
+## 2026-10-29 · rdf01-t3 · milestone tracker and support judge
+- Added pure policy/milestones.py (MilestoneTracker: reached/late milestones, score crossings) and tools/support_judge.py (4-of-5 verdict from data/support_rounds.jsonl, exit 0/1/2).
+- pages: components/policy-milestones.md (new)
