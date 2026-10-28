@@ -27,3 +27,10 @@ res7 = 2
 align7_min = 3
 # align_cols: columns that merges prefer to land in
 align_cols = [2, 3, 4]
+# power_growth_first: Growth level bought first, before any Alignment/Resonance
+power_growth_first = 7
+# power_ratio: Alignment:Resonance purchase ratio [x, y]
+power_ratio = [3, 1]
+# power_growth_late: Growth level bought again after power_growth_late_after A/R purchases
+power_growth_late = 8
+power_growth_late_after = 8
