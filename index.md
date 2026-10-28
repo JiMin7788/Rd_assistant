@@ -22,7 +22,7 @@
 - [Content-normalised (u,v) coordinates; window messages instead of adb](decisions/input-coordinates.md) — one coordinate space; GPG PostMessage since 2026-10-16 (2026-10-23)
 
 ## Howto
-- [Run the bot (launchers, dry-run, live)](howto/run-bot.md) — .bat launchers, run_all/supervisor, dry-run entry points (2026-10-23)
+- [Run the bot (launchers, dry-run, live)](howto/run-bot.md) — .bat launchers, run_all/supervisor, dry-run entry points, support-deck offline frame check (2026-10-29)
 - [Run the tests](howto/run-tests.md) — pytest from the venv; unittest misses test_policy_gear (2026-10-23)
 
 ## Lessons

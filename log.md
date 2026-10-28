@@ -57,3 +57,7 @@
 ## 2026-10-29 · rdf01-t16 · PlayPlayer power-ups, milestones, play() and main()
 - PlayPlayer now has the power bar (20 s, hold deadline), the R20 power visit (two level reads 0.3 s apart) and score/milestone events with screenshots; support_bot gained play() and a dry-run-by-default main().
 - pages: components/support-players.md (updated), components/support-bot-core.md (updated)
+
+## 2026-10-29 · rdf01-t12 · offline support dry run
+- Added tools/support_dryrun.py (frame PNG -> board rows, evaluate, planned action with support_ready=True, score); no input, no inject import. Without models: 15 junk cells, op wait, score None.
+- pages: howto/run-bot.md (updated)

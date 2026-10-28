@@ -1,8 +1,8 @@
 ---
 title: Run the bot (launchers, dry-run, live)
 type: howto
-updated: 2026-10-23
-sources: [seed]
+updated: 2026-10-29
+sources: [seed, rdf01-t12]
 ---
 # Run the bot (launchers, dry-run, live)
 
@@ -27,6 +27,14 @@ Everything else is a manual / dry-run entry point. Run from `C:\dev\rdom` with `
 - User-started battles: `python tools/play.py [rounds]` (injects for real).
 - Offline frame check: `python tools/bot_dryrun.py <frame.png>` (read → evaluate → plan, no input).
 
+## Support deck offline check
+- `python tools/support_dryrun.py <frame.png>` prints 6 lines: three board rows of five `#<cell> <Type> <pip>`,
+  `evaluate: {...}`, `planned action: {...}` (planned with `support_ready=True`, so the supporter branch shows),
+  `score: <N|None>`. No game, no input; the module does not import `rdom.input.inject`.
+- Without support models in the data dir all 15 cells read `junk 0`, the plan is `op: wait` and score is `None`
+  (the test points `perception.support._DATA` at an empty tmp dir and resets `_models`).
+- `dryrun(frame_rgb)` is pure and returns the lines; `main(argv)` loads the PNG via PIL (RGB) and returns 0, or 2 on bad usage.
+
 ## Evidence
 - `봇 시작.bat`, `봇 일시정지.bat`, `봇 재개.bat` — exact commands
 - `tools/run_all.py` — docstring, `--no-game`, log paths
@@ -34,3 +42,4 @@ Everything else is a manual / dry-run entry point. Run from `C:\dev\rdom` with `
 - `tools/discord_bot.py` — slash commands, token from `config/discord.toml`
 - `tools/gear_bot.py`, `tools/bot_live.py`, `tools/play.py`, `tools/bot_dryrun.py` — argparse/usage
 - `.gitignore` — `config/discord.toml`
+- commit `4aa774e` — adds tools/support_dryrun.py (dryrun/main, output lines, support_ready=True, imports) and tests/test_support_dryrun.py (empty-data-dir expectations junk 0 / wait / score None, no-inject check); not yet merged into the main checkout
