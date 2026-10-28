@@ -49,3 +49,7 @@
 ## 2026-10-29 · rdf01-t10 · support players
 - Added tools/support_players.py: Perception wrappers, BasePlayer (fixed tick priority, 15 s cells / 30 s frame cadence via Saver), CollectPlayer (summon, one power-panel snapshot at 120 s, never buys).
 - pages: components/support-players.md (new), components/support-bot-core.md (updated)
+
+## 2026-10-29 · rdf01-t11 · PlayPlayer board play
+- Added PlayPlayer to tools/support_players.py: two-read and 4-read buffed guards, junk limit, type-keyed 90 s merge ban, 130 s supporter cooldown, banner timers (clone 45 s, power hold 65 s), trial = gear pips, provisional close-only panel_hook.
+- pages: components/support-players.md (updated)
