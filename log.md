@@ -53,3 +53,7 @@
 ## 2026-10-29 · rdf01-t11 · PlayPlayer board play
 - Added PlayPlayer to tools/support_players.py: two-read and 4-read buffed guards, junk limit, type-keyed 90 s merge ban, 130 s supporter cooldown, banner timers (clone 45 s, power hold 65 s), trial = gear pips, provisional close-only panel_hook.
 - pages: components/support-players.md (updated)
+
+## 2026-10-29 · rdf01-t16 · PlayPlayer power-ups, milestones, play() and main()
+- PlayPlayer now has the power bar (20 s, hold deadline), the R20 power visit (two level reads 0.3 s apart) and score/milestone events with screenshots; support_bot gained play() and a dry-run-by-default main().
+- pages: components/support-players.md (updated), components/support-bot-core.md (updated)
