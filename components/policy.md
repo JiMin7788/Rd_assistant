@@ -24,7 +24,11 @@ layout) and `policy/gear.py` (gear deck, current production). Strategy is data f
 - Actions: `summon`, `merge {from,to}`, `support {from}`, `wait`.
 - Driven by `tools/gear_bot.py` (per-tick rule order: hunt popup → 초월 → power panel → HP→SP → 사냥 → plan_next).
 
+## policy/support.py — support deck (2026-10-29)
+Third engine (Resonance/Alignment/Bubble/Adjust/Growth), not yet driven by a loop. See [support-deck engine](policy-support.md).
+
 ## Evidence
+- commit `0720269` — adds the support-deck engine (policy/support.py)
 - `src/rdom/policy/target.py` — `FIXED`, `NEED`, `PRED_PRIORITY`, docstring
 - `src/rdom/policy/gear.py` — docstring, `KEEP`, `TARGET_AVG`, `load_deck`
 - `tools/gear_bot.py` — docstring (tick rule order), `SUPPORT_CD = 130.0`

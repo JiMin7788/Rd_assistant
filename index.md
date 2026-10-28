@@ -6,6 +6,7 @@
 - [Board perception and cell tracker (Predator deck)](components/perception-board.md) — board.py reads + screen states, Layer A belief tracker (2026-10-23)
 - [Gear-deck perception](components/perception-gear.md) — CNN type/pip models, deck detection, UI templates, OCR banners (2026-10-23)
 - [Rule-based policy engines (M3)](components/policy.md) — target.py (Predator) and gear.py (current) rule engines (2026-10-23)
+- [Support-deck rule engine](components/policy-support.md) — policy/support.py: merge/supporter rules, [decks.support] config, not yet wired (2026-10-29)
 - [Safety guards and stop switches](components/safety-guards.md) — dry-run, battle/window guards, failure limits, PAUSE/STOP (2026-10-23)
 
 ## Decisions

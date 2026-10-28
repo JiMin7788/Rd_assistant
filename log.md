@@ -8,3 +8,7 @@
 ## 2026-10-23 · seed-review · independent review fixes
 - wiki-reviewer PASS (64 claims checked); 1 minor fixed: gear_loop failure limit counts rounds that fail to start.
 - pages: components/safety-guards.md (updated)
+
+## 2026-10-29 · rdf01-t1 · support-deck rule engine
+- Added pure engine policy/support.py (plan_support etc.) plus config/deck.toml `force` and [decks.support] (after decay so deck_name() fallback stays doom).
+- pages: components/policy-support.md (new), components/policy.md (updated)
