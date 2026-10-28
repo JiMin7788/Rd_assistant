@@ -37,3 +37,7 @@
 ## 2026-10-29 · rdf01-t7 · support labelling tools
 - Added offline support_prelabel (gear model + colour rule, star candidates), support_review (50-crop sheets, stratified holdout) and build_support_tag (chk only for ticked sheets).
 - pages: components/labelling-support.md (new)
+
+## 2026-10-29 · rdf01-t8 · support trainers and R4 gate
+- Added train_support_type_cnn/star/pip (atomic save, games recorded in support_train_manifest.json) and support_gate.py (held-out chk-only metrics, manifest refusal, support_gate.json with model sha256).
+- pages: components/training-support.md (new)

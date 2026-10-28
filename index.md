@@ -12,6 +12,7 @@
 - [Score reader and generic digit-template kinds](components/perception-score.md) — perception/score.py read_score + ScoreTracker, build_kind for digits_<kind>.npz; box/templates not yet measured (2026-10-29)
 - [Support-deck perception](components/perception-support.md) — perception/support.py: support board + pip source/star, R4 gate_state, deck bar, power cards, card level; not yet wired (2026-10-29)
 - [Support-deck labelling tools](components/labelling-support.md) — support_prelabel / support_review / build_support_tag: colour+gear pre-labels, 50-crop sheets, chk-flagged tags; offline only (2026-10-29)
+- [Support-deck trainers and R4 gate](components/training-support.md) — train_support_{type_cnn,star,pip}, train manifest, support_gate.py held-out pass flags + sha256 JSON (2026-10-29)
 - [Safety guards and stop switches](components/safety-guards.md) — dry-run, battle/window guards, failure limits, PAUSE/STOP (2026-10-23)
 
 ## Decisions
