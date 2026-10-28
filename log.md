@@ -20,3 +20,8 @@
 ## 2026-10-29 · rdf01-t3 · milestone tracker and support judge
 - Added pure policy/milestones.py (MilestoneTracker: reached/late milestones, score crossings) and tools/support_judge.py (4-of-5 verdict from data/support_rounds.jsonl, exit 0/1/2).
 - pages: components/policy-milestones.md (new)
+
+## 2026-10-29 · rdf01-t4 · score reader and generic digit kinds
+- Added perception/score.py (read_score exact-or-None, ScoreTracker 2-read confirm); SCORE_BOX is None and digits_score.npz absent until measured later.
+- build_digit_templates.py gained build_kind and a kind-name CLI; room/hp moved into main() unchanged.
+- pages: components/perception-score.md (new)

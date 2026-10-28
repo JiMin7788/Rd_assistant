@@ -9,6 +9,7 @@
 - [Support-deck rule engine](components/policy-support.md) — policy/support.py: merge/supporter rules, [decks.support] config, not yet wired (2026-10-29)
 - [Power-up order policy](components/policy-power.md) — policy/power.py: Growth to 7, Alignment:Resonance 3:1, Growth 8 later, maxed detection (2026-10-29)
 - [Support-deck milestone tracker and judge](components/policy-milestones.md) — policy/milestones.py m1/m2/m3 + crossings, tools/support_judge.py 4-of-5 verdict (2026-10-29)
+- [Score reader and generic digit-template kinds](components/perception-score.md) — perception/score.py read_score + ScoreTracker, build_kind for digits_<kind>.npz; box/templates not yet measured (2026-10-29)
 - [Safety guards and stop switches](components/safety-guards.md) — dry-run, battle/window guards, failure limits, PAUSE/STOP (2026-10-23)
 
 ## Decisions
