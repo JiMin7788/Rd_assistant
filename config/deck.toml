@@ -5,6 +5,8 @@
 #   keep: non-gear dice the finished field keeps, [lo, hi, target]; everything else
 #         connected gears with average pip >= 2.2 (policy TARGET_AVG)
 active = "doom"
+# force: deck name to use regardless of the deck bar ("" = detect from the bar)
+force = ""
 
 [decks.doom]            # 파멸기어덱
 dice = ["Gear", "Doom", "Bubble", "Adjust", "Growth"]
@@ -13,3 +15,15 @@ keep = { Bubble = [1, 3, 1] }
 [decks.decay]           # 부패기어덱
 dice = ["Gear", "Decay", "Bubble", "Adjust", "Growth"]
 keep = { Bubble = [1, 2, 1], Decay = [1, 2, 1] }
+
+[decks.support]         # support deck
+# dice: die types in the deck
+dice = ["Resonance", "Alignment", "Bubble", "Adjust", "Growth"]
+# keep: Bubbles the field keeps, [lo, hi, target]
+keep = { Bubble = [2, 3, 3] }
+# res7: Resonance pip-7 dice wanted
+res7 = 2
+# align7_min: Alignment pip-7 dice wanted
+align7_min = 3
+# align_cols: columns that merges prefer to land in
+align_cols = [2, 3, 4]
