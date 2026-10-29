@@ -2,7 +2,7 @@
 title: Support-deck milestone tracker and judge
 type: component
 updated: 2026-10-29
-sources: [rdf01-t3]
+sources: [rdf01-t3, rdT01]
 ---
 # Support-deck milestone tracker and judge
 
@@ -16,7 +16,7 @@ sources: [rdf01-t3]
 - `set_shot(event, path)` stores the screenshot path; `record()` returns `milestones`, `crossings` (keys `"2000"` etc.), `max_score`, `scores_confirmed` for the round record.
 
 ## Judge (`tools/support_judge.py`)
-- `python tools/support_judge.py [--log data/support_rounds.jsonl] [--last 5]`; exit 0 pass, 1 fail, 2 cannot judge. `judge(records, last)` returns `(lines, exit_code)`; I/O only in `main()`.
+- `python tools/support_judge.py [--log data/support_rounds.jsonl] [--last 5]`; exit 0 pass, 1 fail, 2 cannot judge. `--last < 1` is an argparse error (exit 2); `judge()` with zero judged games returns `판정 불가` exit 2, never `통과`. A record without `max_score` prints `최고 점수 ?`. `judge(records, last)` returns `(lines, exit_code)`; I/O only in `main()`.
 - Eligible records: `mode == "play"`, `gates.type` and `gates.pip` true, `result == "game_over"`. The last N eligible in file order are judged. Other records are counted in a first line `제외 N판 (수집 모드 · 게이트 미통과 · 비정상 종료)`; mode `trial` or a false gate counts as gate-failed.
 - A game passes when m1, m2 and m3 are all `reached` and `scores_confirmed > 0`; a game with no confirmed score gets ` · 점수 판독 실패` appended. Required count is `ceil(0.8 * last)` (4 of 5, 8 of 10).
 - Unknown record keys (e.g. `power`, or `power: null`) are ignored, so the round-record schema can grow without judge changes. Unparseable JSONL lines are skipped.
@@ -28,4 +28,5 @@ sources: [rdf01-t3]
 
 ## Evidence
 - commit `84141c4` — adds the milestones module (policy package, `MilestoneTracker`), the support_judge tool (`judge`) and their tests (test_support_milestones, test_support_judge); cited by commit because the files are not yet in the main checkout
+- commit `2dd0464` (task/rdT01) — tools/support_judge.py `--last` check, zero-game `판정 불가`, `?` for missing max_score; tests/test_support_judge.py
 - `C:/dev/_hub/tasks/rdf01-t3/task.json` — spec: acceptance AC1–AC13, exact log and Korean texts, eligibility and exit codes

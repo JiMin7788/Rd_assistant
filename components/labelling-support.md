@@ -2,7 +2,7 @@
 title: Support-deck labelling tools
 type: component
 updated: 2026-10-29
-sources: [rdf01-t7, rdf01-r3-s23]
+sources: [rdf01-t7, rdf01-r3-s23, rdT01]
 ---
 # Support-deck labelling tools
 
@@ -19,7 +19,8 @@ Offline pipeline that turns collected support crops (`data/crops_support`) into 
    - After cutting, `--ambiguous` prints `ambiguous: sheets N crops M`, then one line per newly cut sheet (`review/amb/sheet_NN.png`, sorted) and the `review/amb/index.tsv` path. Only sheets cut this run are listed, not kept ticked ones.
    - `--holdout g1[,g2] --n 1000` -> `review/hold_<g1>+<g2>/`, seed 0: up to 250 Resonance, 250 Alignment, 150 star candidates, then random fill to n. Refuses to overwrite an existing index/fixes unless `--force` (old fixes.tsv moved to `fixes.tsv.old`).
 3. The human writes `fixes.tsv` beside `index.tsv`: `sheet_NN:<idx>\t<Type>\t<pip>`, `sheet_NN:<idx>\tdrop`, `sheet_NN\tok`.
-4. `tools/build_support_tag.py --tag T [--games ...]` writes `feats_T.npz` (names) plus `y_ pip_ grp_ eff_ chk_` `.npy`. `chk` is true only for crops on an `ok` sheet; they take the label the sheet *showed* (from `index.tsv`, not the current prelabels) unless a fix changes it. Unchecked crops keep pre-label or fix with chk false. `?` and dropped crops are excluded. Prints `<tag> <n> {counts}` and `fix rate <Type> <fixed>/<checked>`.
+4. `tools/build_support_tag.py --tag T [--games ...]` writes `feats_T.npz` (names) plus `y_ pip_ grp_ eff_ chk_` `.npy`. `chk` is true only for crops on an `ok` sheet; they take the label the sheet *showed* (from `index.tsv`, not the current prelabels) unless a fix changes it. Unchecked crops keep pre-label or fix with chk false. `?` and dropped crops are excluded. Prints `<tag> <n> {counts}` `fix rate <Type> <fixed>/<checked>` and `fixes.tsv lines ignored: N`.
+   - Every `fixes.tsv` line is validated against that review dir's `index.tsv`: type must be in `SUPPORT_CLASSES`, pip an int 1..7 (`drop` allowed), and the sheet / `sheet:idx` must exist (also for `ok`). A bad line prints `fixes.tsv <dir>:<line>: <reason> -- ignored` and is not applied (previously a bad type raised and e.g. `Alignment 9` was accepted).
 
 ## Gotchas
 - Colour-labelled crops are pre-labels only; the gate (t8) reads chk-true crops only (spec R7).
@@ -28,4 +29,5 @@ Offline pipeline that turns collected support crops (`data/crops_support`) into 
 ## Evidence
 - commit `9cd9078` — adds tools/support_prelabel.py (thresholds, `_colour_label`, `set_deck("doom")`, star_cand rules), tools/support_review.py (sheet geometry, `_cut` grouping, `ambiguous` renumbering, `holdout` caps/seed/--force), tools/build_support_tag.py (`_review`, chk and fix-rate logic, output arrays) and tests/test_support_labels.py (synthetic-crop tests).
 - commit `738eaa2` — tools/support_review.py `main` prints sheet and index.tsv paths; tests/test_support_labels.py `test_ambiguous_prints_sheet_paths` asserts the lines.
+- commit `2dd0464` (task/rdT01) — tools/build_support_tag.py `_parse_fix`, `_read_fixes`, ignored count; tests/test_support_labels.py.
 - `wiki/lessons/recognition-pitfalls.md` — hue-band rules misread under effects.

@@ -2,7 +2,7 @@
 title: Score reader and generic digit-template kinds
 type: component
 updated: 2026-10-29
-sources: [rdf01-t4]
+sources: [rdf01-t4, rdT01]
 ---
 # Score reader and generic digit-template kinds
 
@@ -17,6 +17,7 @@ sources: [rdf01-t4]
 ## ScoreTracker
 - `update(read)` returns the score only on the read that confirms it (equal to the previous non-None read), else None; `.value` holds the last confirmed score.
 - A None read neither confirms nor resets the pending value, so `1500, None, 1500` still confirms. A different value (1600) must be read twice.
+- Plausibility (rdT01): a read below 0, above `MAX_SCORE` (99999) or lower than the last confirmed `.value` returns None like a failed read: it does not confirm and does not reset the pending value. Assumes one tracker per battle and an in-battle score that only rises (4000 then 100 keeps 4000; 4000 then 4100, 4100 confirms 4100).
 
 ## Building templates for a kind
 - `build_kind(kind, src_dir, out, thr, fallback)` reads `<src_dir>/*.png`; the value is the filename part before the first `_` (checked by eye). Non-digit names and unreadable images are skipped.
@@ -27,4 +28,5 @@ sources: [rdf01-t4]
 ## Evidence
 - `src/rdom/perception/digits.py` — `_TPL`/`_cache` (what the tests patch) and `read_number` (template load raises `OSError` when the npz is missing).
 - `tools/build_digit_templates.py` — `build(out=)`, `build_kind`, the `__main__` dispatch and `main()`.
+- commit `2dd0464` (branch task/rdT01) — `MAX_SCORE` and the implausible-read guard in `ScoreTracker.update`; tests in tests/test_support_score.py.
 - commit `29b2651` (branch task/rdf01-t4, not yet merged into this checkout when written) — adds perception/score.py (`SCORE_BOX`, `read_score` guards, `ScoreTracker.update` None handling) and tests/test_support_score.py (synthetic-glyph tests for reader, tracker and build helper).

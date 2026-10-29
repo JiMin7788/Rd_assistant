@@ -77,3 +77,7 @@
 ## 2026-10-29 · rdf01-r3-s23 · support_review --ambiguous prints paths
 - `--ambiguous` now prints each newly cut sheet PNG path and the index.tsv path after the count line (QA S23).
 - pages: components/labelling-support.md (updated)
+
+## 2026-10-29 · rdT01 · Support-deck tool hardening
+- ScoreTracker ignores negative, >99999 and lower-than-confirmed reads; judge rejects --last<1 and zero games = cannot judge; build_support_tag validates fixes.tsv lines and counts ignored; gate prints real path; missing max_score prints `?`.
+- pages: components/perception-score.md (updated), components/policy-milestones.md (updated), components/labelling-support.md (updated), components/training-support.md (updated)
