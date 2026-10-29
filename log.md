@@ -95,3 +95,7 @@
 ## 2026-10-29 · rdf02-t1 · score calibration from H1 frames
 - SCORE_BOX measured (0.36, 0.083, 0.64, 0.126) and digits_score.npz committed; read_score accepts 2-D grey input; new tools/check_support_assets.py prints the score and score-lobby lines (n=42 correct=38 none=4 wrong=0; lobby none=1/1).
 - pages: components/perception-score.md (updated)
+
+## 2026-10-29 · rdf02-t2 · deck-bar and power-card templates, LV_BOX
+- Committed deck_support.png and the Resonance/Alignment/Growth card icons (no Alignment _b look exists on the panel); LV_BOX measured on the five H1 panels; check_support_assets.py gained --out-dir and the deck bar / power cards / lv box lines (181/181, 5/5, 5/5).
+- pages: components/perception-support.md (updated), components/perception-score.md (updated)

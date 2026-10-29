@@ -2,7 +2,7 @@
 title: Support-deck perception
 type: component
 updated: 2026-10-29
-sources: [rdf01-t5]
+sources: [rdf01-t5, rdf02-t2]
 ---
 # Support-deck perception
 
@@ -25,12 +25,16 @@ sources: [rdf01-t5]
 - `force_deck()` returns `force` from `config/deck.toml` if it is a string, else `""`.
 - `detect_support_deck` matches `assets/templates/deck_support.png` in box `(0.55, 0.93, 0.92, 0.99)` with `gear._best` (multi-scale), score >= 0.70; False if the template is missing.
 - `power_cards` searches band `(0, 0.78, 1, 0.96)` for each card template (Alignment has two looks, `_a`/`_b`, best score wins), score >= 0.70, and maps the card to the `gear.power_buttons` centre nearest in u with |du| < 0.06 (slot order is the user's choice, so not deck order). Result has exactly Growth/Alignment/Resonance, None when not found. Two cards on one button: the higher score keeps it.
-- `card_level(frame, button)`: `LV_BOX` (offsets from the button centre) is None until t14 measures it; crop to grey then `digits.read_number(g, "powerlv")`; None if the box is None, the crop is empty, `digits_powerlv.npz` is missing, or the value is outside 1..30.
+- `card_level(frame, button)`: `LV_BOX = (0.0160, -0.0414, 0.0448, -0.0261)` (offsets from the button centre, measured on the five H1 panels in rdf02-t2; starts right of the 'Lv.' dot because a dot in the box makes `digits.glyphs` return None, ends at +56 px for a second digit); crop to grey then `digits.read_number(g, "powerlv")`; None if the box is None, the crop is empty, `digits_powerlv.npz` is missing, or the value is outside 1..30.
 - `reload_if_changed()` drops cached nets whose mtime changed (support and gear pip files) and returns the names; the first call reports every file once.
+
+## Templates (rdf02-t2)
+`assets/templates/` now holds `deck_support.png` and the card icons `ui_power_res_card.png`, `ui_power_align_card_a.png`, `ui_power_growth_card.png` (icon only, below the dice-count badge, above 'Lv.N'). There is no `ui_power_align_card_b.png`: only one Alignment look is on the panel, the missing `_b` is simply skipped. Card identity was fixed by matching the panel icon to board dice whose labels come from `support_type_cnn`, not by slot order (details in the `CARD_TEMPLATES` comment). `tools/check_support_assets.py` on the H1 data: deck bar support 181/181, gear-false 5/5, power cards 5/5 (see [score page](perception-score.md) for the tool).
 
 ## Tests
 `tests/test_support_perception.py` needs no `data/`: fake nets via monkeypatched `_load_net`, synthetic frames, templates and data dirs in `tmp_path` (patch `support._DATA`/`_TPL`/`DECK_FILE`, clear `support._models`).
 
 ## Evidence
 - commit `a2c2b9c` (branch task/rdf01-t5, not yet merged into this checkout when written) — adds perception/support.py (all behaviour above: `_pip_files`, `read_board_support`, `gate_state`, `power_cards`, `card_level`, `reload_if_changed`) and tests/test_support_perception.py (synthetic tests for pip source, star, gate, cards); touches no gear file.
+- commit `ee3d48d` (branch task/rdf02-t2, not yet merged into this checkout when written) — support.py `CARD_TEMPLATES` comment (card identity evidence) and `LV_BOX` value/comment; the three card PNGs and deck_support.png under assets/templates; tests/test_support_assets_ui.py (templates exist, LV_BOX is four floats, check-tool lines on synthetic frames).
 - `src/rdom/perception/gear.py` — `_pipnet_cls`, `PIP_ENSEMBLE`, `is_bomb`, `power_buttons`, `_best` reused here.
