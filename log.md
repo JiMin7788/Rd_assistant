@@ -127,3 +127,7 @@
 ## 2026-10-29 · rdf02-i2 · integration fixes round 2
 - check_support_assets.py now writes the lv box overlays to `<data-dir>/support_frames/_check` by default (spec R4), not a temp folder.
 - pages: components/perception-score.md (updated)
+
+## 2026-10-29 · rdf02-r2-s12 · read_cells_support rejects out-of-range cells
+- read_cells_support raises ValueError for any cell outside 1..15; before, cell 0 / negatives indexed the crop list from the end and returned another cell's read under the wrong label.
+- pages: components/perception-support.md (updated)
