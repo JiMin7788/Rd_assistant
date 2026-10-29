@@ -131,3 +131,7 @@
 ## 2026-10-29 · rdf02-r2-s12 · read_cells_support rejects out-of-range cells
 - read_cells_support raises ValueError for any cell outside 1..15; before, cell 0 / negatives indexed the crop list from the end and returned another cell's read under the wrong label.
 - pages: components/perception-support.md (updated)
+
+## 2026-10-29 · rdf02-m1 · QA round 3 follow-up
+- Non-finite conf is unreadable everywhere (CellMemory, burst_result, Burster.done backoff); read_cells_support rejects bool/non-int cells; `--help` no longer writes digits_--help.npz; conf_report prints one FAIL line for a missing feats tag; tests prove Joker/bomb merges drop both memories and covered-window bursts still feed the board but save nothing.
+- pages: components/support-memory.md (updated), components/support-players.md (updated), components/perception-support.md (updated), howto/run-bot.md (updated)

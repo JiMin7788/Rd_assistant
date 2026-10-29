@@ -2,7 +2,7 @@
 title: Support players (Perception, BasePlayer, CollectPlayer, PlayPlayer)
 type: component
 updated: 2026-10-29
-sources: [rdf01-t10, rdf01-t11, rdf01-t16, rdf01-i1, rdf02-t5, rdf02-t6, rdf02-i1]
+sources: [rdf01-t10, rdf01-t11, rdf01-t16, rdf01-i1, rdf02-t5, rdf02-t6, rdf02-i1, rdf02-m1]
 ---
 # Support players (Perception, BasePlayer, CollectPlayer, PlayPlayer)
 
@@ -38,9 +38,12 @@ Summons (tap `summon`, >= 1 s apart); at battle time >= 120 s (`PANEL_AT`) taps 
 `Burster(player)` holds the burst state and only grabs and reads; it never touches the injector. `PlayPlayer._burst` drives it (see above); CollectPlayer does not use it. Constants: `BURST_N` 6 (tick frame + 5 grabs), `BURST_DT` 0.08 s, `BURST_GAP` 3 s between bursts, `BURST_REFRESH` 15 s, `BURST_FAILS` 3, `BURST_SAVE_GAP` 10 s, `BURST_SAVE_MAX` 60.
 - `due(now, unreadable_cells, memory)` -> ascending cells to burst. Empty if < `BURST_GAP` since any burst or if the unreadable count is not 1..`MAX_JUNK`. A cell is due when `memory.state(c)` is `unknown` (unless it failed `BURST_FAILS` bursts in a row and its last burst is < `BURST_REFRESH` ago) or `remembered` with the last burst >= `BURST_REFRESH` ago.
 - `run(f, cells, pip_source)` -> `(kept, reads, grabs)`. The tick frame `f` is kept as is; each of the 5 grabs is dropped if it is not battle or equals the previous kept frame (the grabber repeats the last frame when dxcam sees no change, and a repeat must not count as a second read). Every kept frame is read with `read_cells_support`.
-- `done(now, cells, results, reads, conf_min)` books the burst: `fails[c]` resets to 0 if the cell has an accepted result or any non-junk read with `conf >= conf_min`, else it grows by 1.
+- `done(now, cells, results, reads, conf_min)` books the burst: `fails[c]` resets to 0 if the cell has an accepted result or any read that is not `_unreadable` (imported from support_memory: non-junk, finite conf, `conf >= conf_min`), else it grows by 1. A NaN conf therefore keeps the backoff counting.
 - `record(...)` builds the `bursts.jsonl` line (game, t, cells, grabs, kept, reads as `[type, pip, conf]`, result, memory, buffed, glare).
 - `maybe_save(game_id, t, cells, kept, record)` calls `Saver.burst` at most every `BURST_SAVE_GAP` s and `BURST_SAVE_MAX` times; a covered window (`None`) does not use up the quota or restart the gap. File layout: [capture-live](capture-live.md). Memory side: [support-memory](support-memory.md).
+
+## Covered window during a burst
+`tests/test_support_play_m1.py` pins this with a Saver whose `unobscured()` is False: the burst still runs, its accepted value enters the effective board and the plan of that tick (src `burst`), no burst file or `bursts.jsonl` line is written, and the burst does not count toward `BURST_SAVE_MAX`. This worked without a code change.
 
 ## Pitfalls
 - Levels are read only at visit start, never after a buy tap: the number updates a beat after the tap (HP-reader lesson), so a post-tap read would be stale.
@@ -62,3 +65,4 @@ Summons (tap `summon`, >= 1 s apart); at battle time >= 120 s (`PANEL_AT`) taps 
 - `C:/dev/_hub/tasks/rdf02-t6/task.json` — task spec
 - commit `be50e5f` — `PlayPlayer._burst` in tools/support_players.py blanks `ev["forgot"]` cells after `apply_burst`; test `test_burst_external_event_forgets_cell_resolved_earlier_in_burst` in tests/test_support_play_memory.py; cited by commit because the files are not yet in the main checkout
 - `C:/dev/_hub/tasks/rdf02-i1/task.json` — integration finding and AC1
+- commit `f4a6837` (branch task/rdf02-m1) — `Burster.done` uses `_unreadable` in tools/support_players.py; test `test_burster_done_non_finite_conf_does_not_reset_fail_counter` in tests/test_support_m1_inputs.py; commit `2e74942` adds `test_covered_window_burst_runs_but_saves_and_counts_nothing` in tests/test_support_play_m1.py

@@ -2,7 +2,7 @@
 title: Support-deck perception
 type: component
 updated: 2026-10-29
-sources: [rdf01-t5, rdf02-t2, rdf02-t3, rdf02-r2-s12]
+sources: [rdf01-t5, rdf02-t2, rdf02-t3, rdf02-r2-s12, rdf02-m1]
 ---
 # Support-deck perception
 
@@ -13,8 +13,8 @@ sources: [rdf01-t5, rdf02-t2, rdf02-t3, rdf02-r2-s12]
 
 ## Board (read_board_support)
 - Returns 15 dicts `{cell, type, variant, pip, conf}`, cells 1..15. `variant` equals `type`. It is `read_cells_support(frame, range(1, 16), pip_source)`.
-- `read_cells_support(frame, cells, pip_source="auto")` reads only the given cells (1..15) and returns raw dicts in the given order; each equals the same cell's entry in `read_board_support` (the star check uses the real cell number for `hires_cell`, not the batch position). Empty list gives `[]`. Any cell outside 1..15 (0, negative, 16+) raises `ValueError` before anything is read; without that check cell 0 or a negative number indexed the crop list from the end and returned another cell's read under the wrong label.
-- `READ_CONF_MIN = 0.90`: a read is unreadable when its type is junk or `conf < READ_CONF_MIN`. `read_cells_support` does not apply it; callers do. Measured with `tools/support_conf_report.py --holdout sup20261029_152652 --tags sup1`: at conf >= 0.90 kept 1003/1008 (99.5%), accuracy of kept 0.997, 3 wrong kept, 1 wrong dropped; 0.90 is the largest threshold keeping >= 95% of the checked crops. The tool prints one line per T in 0.50..0.95 and refuses a holdout game listed in the train manifest; it loads the type model from `--data-dir`.
+- `read_cells_support(frame, cells, pip_source="auto")` reads only the given cells (1..15) and returns raw dicts in the given order; each equals the same cell's entry in `read_board_support` (the star check uses the real cell number for `hires_cell`, not the batch position). Empty list gives `[]`. Any cell outside 1..15 (0, negative, 16+), a bool (`True` would read cell 1) or a non-integer (`2.5`) raises `ValueError` before anything is read; without that check cell 0 or a negative number indexed the crop list from the end and returned another cell's read under the wrong label.
+- `READ_CONF_MIN = 0.90`: a read is unreadable when its type is junk or `conf < READ_CONF_MIN`. `read_cells_support` does not apply it; callers do. Measured with `tools/support_conf_report.py --holdout sup20261029_152652 --tags sup1`: at conf >= 0.90 kept 1003/1008 (99.5%), accuracy of kept 0.997, 3 wrong kept, 1 wrong dropped; 0.90 is the largest threshold keeping >= 95% of the checked crops. The tool prints one line per T in 0.50..0.95 and refuses a holdout game listed in the train manifest; it loads the type model from `--data-dir`. A tag without `feats_<tag>.npz` prints one `FAIL: no feats file for tag ...` line and exits 1 (no traceback).
 - Without `support_type_cnn.pt` every cell is `junk`, pip 0, conf 0.
 - A CNN `Bomb` becomes `junk` unless `gear.is_bomb(crop)` (then `Bomb`, conf 1.0), as in gear's `predict_types`. Pip is 0 for empty/junk/Crystal/Bomb.
 - Pip source: `"auto"` uses `support_pip_pat_e1..e3.pt` when all three exist, else the gear ensemble (`gear.PIP_ENSEMBLE`), else the single `gear_pip_pat.pt`, else pip 0. `"gear"` (trial mode) always uses the gear files and loads no support pip or star file.
@@ -41,4 +41,5 @@ sources: [rdf01-t5, rdf02-t2, rdf02-t3, rdf02-r2-s12]
 - commit `ee3d48d` (branch task/rdf02-t2, not yet merged into this checkout when written) — support.py `CARD_TEMPLATES` comment (card identity evidence) and `LV_BOX` value/comment; the three card PNGs and deck_support.png under assets/templates; tests/test_support_assets_ui.py (templates exist, LV_BOX is four floats, check-tool lines on synthetic frames).
 - commit `bf6ad6c` (branch task/rdf02-t3, not yet merged into this checkout when written) — support.py `read_cells_support` and the `READ_CONF_MIN` comment with the measured numbers; tools/support_conf_report.py (`report`, `main`); tests/test_support_conf_report.py (cells equal board entries, per-cell star, threshold edges, holdout refusal).
 - commit `b294b48` (branch task/rdf02-r2-s12) — support.py `read_cells_support` range check (`ValueError` for cells outside 1..15, AI-NOTE explains the negative-index cause); tests/test_support_conf_report.py `test_read_cells_support_rejects_cells_outside_1_15` (0, -1, 16, mixed list raise; valid list unchanged).
+- commit `2e74942` (branch task/rdf02-m1) — bool/non-integer check in `read_cells_support` (perception/support.py) and the missing-feats `FAIL:` line in tools/support_conf_report.py; tests `test_read_cells_support_rejects_bool_and_non_int_cells`, `test_conf_report_missing_feats_tag_is_one_fail_line` in tests/test_support_m1_inputs.py.
 - `src/rdom/perception/gear.py` — `_pipnet_cls`, `PIP_ENSEMBLE`, `is_bomb`, `power_buttons`, `_best` reused here.
