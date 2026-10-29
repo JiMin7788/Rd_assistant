@@ -220,7 +220,7 @@ def test_gate_main_writes_json_and_round_trips(gate_env, capsys):
     out = capsys.readouterr().out.splitlines()
     assert out[0].startswith("type gate: PASS (") and out[0].endswith("n=140)")      # only the checked holdout crops
     assert out[1].startswith("pip gate: PASS (") and "n=120, stars=30)" in out[1]
-    assert out[2] == "written data/support_gate.json"
+    assert out[2] == f"written {d / support.GATE_FILE}"      # the real path, not a fixed data/ one
     g = json.loads((d / support.GATE_FILE).read_text())
     assert g["holdout"] == ["gH1", "gH2"] and g["created"]
     assert g["type"]["pass"] is True and g["pip"]["pass"] is True

@@ -122,8 +122,9 @@ def main(argv=None):
     out = {"created": datetime.datetime.now().isoformat(timespec="seconds"), "holdout": holdout,
            "type": {**m["type"], "pass": type_ok}, "pip": {**m["pip"], "pass": pip_ok},
            "models": {f: support._sha256(os.path.join(a.data_dir, f)) for f in support.model_files()}}
-    C._write_json(os.path.join(a.data_dir, support.GATE_FILE), out)
-    print(f"written data/{support.GATE_FILE}")
+    gate_path = os.path.join(a.data_dir, support.GATE_FILE)
+    C._write_json(gate_path, out)
+    print(f"written {gate_path}")
     return 0
 
 

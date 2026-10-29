@@ -107,6 +107,32 @@ def test_tracker_none_in_between_keeps_pending():
     assert t.update(1500) == 1500 and t.value == 1500
 
 
+def test_tracker_never_confirms_negative_or_above_99999():
+    t = ScoreTracker()
+    assert t.update(-5) is None and t.update(-5) is None and t.value is None
+    assert t.update(100000) is None and t.update(100000) is None and t.value is None
+
+
+def test_tracker_ignores_lower_than_confirmed():
+    t = ScoreTracker()
+    t.update(4000); t.update(4000)
+    assert t.update(100) is None and t.update(100) is None
+    assert t.value == 4000
+    assert t.update(4100) is None and t.update(4100) == 4100 and t.value == 4100
+
+
+def test_tracker_lower_read_keeps_pending():
+    t = ScoreTracker()
+    t.update(4000); t.update(4000)
+    assert t.update(4100) is None
+    assert t.update(100) is None                      # ignored like a failed read: pending 4100 stays
+    assert t.update(4100) == 4100
+    t2 = ScoreTracker()
+    t2.update(4000); t2.update(4000); t2.update(4100)
+    t2.update(100); t2.update(4200)                   # 4100 and 4200 are not consecutive equals
+    assert t2.value == 4000
+
+
 def test_tracker_new_value_needs_two_reads():
     t = ScoreTracker()
     t.update(1500); t.update(1500)

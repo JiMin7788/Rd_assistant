@@ -48,7 +48,7 @@ def _game_line(i, rec):
     ms = rec.get("milestones") or {}
     gid = rec.get("game_id")
     best = rec.get("max_score")
-    parts = [f"{i}. {gid}", f"최고 점수 {'-' if best is None else best}"]
+    parts = [f"{i}. {gid}", f"최고 점수 {'?' if best is None else best}"]
     parts += [f"{label} {_mark(ms.get(k))}" for k, label in LABELS]
     parts.append(f"스크린샷 data/support_runs/{gid}/")
     line = " · ".join(parts)
@@ -74,8 +74,8 @@ def judge(records, last=5):
     chosen = eligible[-last:] if last > 0 else []
     for i, rec in enumerate(chosen, 1):
         lines.append(_game_line(i, rec))
-    if len(chosen) < last:
-        lines.append(f"판정 불가: 판정 대상 판이 {len(chosen)}판뿐입니다 ({last}판 필요)")
+    if not chosen or len(chosen) < last:                 # AI-NOTE: zero judged games can never pass
+        lines.append(f"판정 불가: 판정 대상 판이 {len(chosen)}판뿐입니다 ({max(last, 1)}판 필요)")
         return lines, 2
     need = math.ceil(0.8 * last)
     got = sum(1 for rec in chosen if _passed(rec))
@@ -105,6 +105,8 @@ def main(argv=None):
     ap.add_argument("--log", default=str(DEFAULT_LOG))
     ap.add_argument("--last", type=int, default=5)
     args = ap.parse_args(argv)
+    if args.last < 1:
+        ap.error("--last must be >= 1")                  # exits with code 2
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
     try:

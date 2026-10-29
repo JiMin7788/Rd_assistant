@@ -259,7 +259,29 @@ def test_build_tag_chk_fixes_and_report(tmp_path, capsys):
     assert list(chk) == [True, True, False, False]                    # sheet_01 unticked (fix kept, chk false)
     out = capsys.readouterr().out.splitlines()
     assert out[0].startswith("t 4 {") and "'Resonance': 2" in out[0]
-    assert out[1:] == ["fix rate Resonance 2/3"]                       # 3 checked, 1 changed + 1 dropped
+    assert out[1:] == ["fix rate Resonance 2/3",                       # 3 checked, 1 changed + 1 dropped
+                       "fixes.tsv lines ignored: 0"]
+
+
+def test_build_tag_bad_fixes_lines_are_ignored_and_counted(tmp_path, capsys):
+    good = ("sheet_00:1\tAlignment\t2", "sheet_00:2\tdrop", "sheet_01:1\tBubble\t3")
+    _setup_tag(tmp_path, fixes=good)
+    bt.main(["--tag", "ref", "--dir", str(tmp_path)])
+    capsys.readouterr()
+    bad = ("sheet_00:0\tAlignment\t9", "sheet_00:0\tBanana\t2", "sheet_01:999\tBubble\t3", "sheet_99\tok")
+    with open(tmp_path / "review" / "amb" / "fixes.tsv", "a", encoding="utf-8") as f:
+        f.write("".join(l + "\n" for l in bad))
+    bt.main(["--tag", "bad", "--dir", str(tmp_path)])
+    out = capsys.readouterr().out.splitlines()
+    for k in ("y", "pip", "chk"):
+        a = np.load(tmp_path / f"{k}_ref.npy", allow_pickle=True)
+        b = np.load(tmp_path / f"{k}_bad.npy", allow_pickle=True)
+        assert list(a) == list(b)
+    warn = [l for l in out if l.startswith("fixes.tsv amb:")]
+    assert len(warn) == 4 and all(l.endswith(" -- ignored") for l in warn)
+    assert "pip must be an int 1..7" in warn[0] and "unknown type 'Banana'" in warn[1]
+    assert "no such crop sheet_01:999" in warn[2] and "no such sheet sheet_99" in warn[3]
+    assert out[-1] == "fixes.tsv lines ignored: 4"
 
 
 def test_build_tag_games_filter(tmp_path):
