@@ -122,6 +122,25 @@ def test_line_and_record():
     assert t.record() == {"levels": lv(2, 1, 1), "src": "read", "maxed": []}
 
 
+def test_not_found_card_is_none_and_not_unread():
+    t = PowerTracker()
+    t.tapped([G])
+    levels, src, _ = t.start_visit({G: 3, A: None, R: 2}, found={G, R})
+    assert levels == {G: 3, A: None, R: 2} and src == "read"
+    assert plan_visit(levels, (G, R)) == plan_visit(lv(3, 1, 2), (G, R))
+    levels, src, _ = t.start_visit({G: None, A: None, R: 2}, found={G, R})
+    assert src == "count" and levels[A] is None
+
+
+def test_record_levels_null_for_never_found_card():
+    t = PowerTracker()
+    t.start_visit({G: 2, R: 1}, found={G, R})
+    assert t.record()["levels"] == {G: 2, A: None, R: 1}
+    t.start_visit({G: 2, A: 3, R: 1}, found={G, A, R})
+    t.start_visit({G: 2, R: 1}, found={G, R})
+    assert t.record()["levels"] == {G: 2, A: 3, R: 1}      # found earlier in the game: kept
+
+
 def test_imports_stdlib_only():
     tree = ast.parse((ROOT / "src" / "rdom" / "policy" / "power.py").read_text(encoding="utf-8"))
     mods = set()

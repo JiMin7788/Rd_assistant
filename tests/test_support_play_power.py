@@ -186,6 +186,18 @@ def test_power_visit_unread_card_is_counted(capsys):
     assert p.power.start_visit({"Growth": 7, "Alignment": None, "Resonance": 1})[0]["Alignment"] == 6      # 1 + 5 A taps
 
 
+def test_power_visit_missing_card_does_not_make_src_count(capsys):
+    p, g, inj, perc, saver, clock = make()
+    perc.cards = {"Growth": CARDS["Growth"], "Alignment": None, "Resonance": CARDS["Resonance"]}
+    perc.levels = {"Growth": [7], "Alignment": [1], "Resonance": [1]}
+    perc.panel = True
+    ticks(p, 1)
+    rec = p.power.record()
+    assert rec["src"] == "read"
+    assert rec["levels"] == {"Growth": 7, "Alignment": None, "Resonance": 1}
+    assert "(Lv G7 A- R1, read)" in capsys.readouterr().out
+
+
 def test_power_visit_two_different_reads_are_unread(capsys):
     p, g, inj, perc, saver, clock = make()
     perc.levels = {"Growth": [7, 8], "Alignment": [1], "Resonance": [1]}
@@ -221,8 +233,8 @@ def test_power_visit_prints_maxed_line(capsys, monkeypatch):
     perc.levels = {"Growth": [7], "Alignment": [1], "Resonance": [1]}
     real = p.power.start_visit
 
-    def start(read):
-        levels, src, lines = real(read)
+    def start(read, found=None):
+        levels, src, lines = real(read, found)
         return levels, src, lines + ["power card Growth maxed at Lv 8"]
 
     monkeypatch.setattr(p.power, "start_visit", start)
