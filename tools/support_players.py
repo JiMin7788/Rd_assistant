@@ -13,6 +13,8 @@ import os
 import sys
 import time
 
+import numpy as np
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 from rdom.input.inject import cell_uv
 from rdom.perception import board, collect, gear, score, support
@@ -37,6 +39,13 @@ MAX_JUNK = 3
 POWER_EVERY = 20.0
 BUY_GAP = 0.15
 LEVEL_REREAD = 0.3
+BURST_N = 6                    # tick frame + 5 grabs
+BURST_DT = 0.08
+BURST_GAP = 3.0                # min seconds between two bursts
+BURST_REFRESH = 15.0           # remembered cells (and cells with BURST_FAILS failures) re-burst this late
+BURST_FAILS = 3
+BURST_SAVE_GAP = 10.0
+BURST_SAVE_MAX = 60
 
 
 class Perception:
@@ -86,6 +95,12 @@ class Perception:
 
     def read_score(self, f):
         return score.read_score(f)
+
+    def read_cells_support(self, f, cells, pip_source="auto"):
+        return support.read_cells_support(f, cells, pip_source)
+
+    def frames_equal(self, a, b):
+        return np.shape(a) == np.shape(b) and bool(np.array_equal(a, b))
 
 
 class BasePlayer:
@@ -395,3 +410,83 @@ class PlayPlayer(BasePlayer):
             print(f"idle ({act.get('why')}) -> power-up", flush=True)
             self.tap("power_open")
             self._power_last = now
+
+
+class Burster:
+    """Burst mechanics (spec R8, R9): a few quick grabs + reads of hacked cells. Only grabs and reads;
+    it never touches the injector."""
+
+    def __init__(self, player):
+        self.p = player
+        self.last_any = -1e9
+        self.last_burst = {}                   # cell -> time of its last burst (absent = never)
+        self.fails = {}                        # cell -> consecutive bursts without an accepted value
+        self.saved = 0
+        self.last_save = -1e9
+
+    def due(self, now, unreadable_cells, memory):
+        """Cells to burst now, ascending: unknown cells plus remembered cells last burst >= BURST_REFRESH ago."""
+        if now - self.last_any < BURST_GAP or not 1 <= len(unreadable_cells) <= MAX_JUNK:
+            return []
+        out = []
+        for c in sorted(unreadable_cells):
+            age = now - self.last_burst.get(c, -1e9)
+            st = memory.state(c)
+            if st == "unknown":
+                # AI-NOTE: R8 backoff -- a cell that failed BURST_FAILS bursts in a row waits like a remembered one
+                if self.fails.get(c, 0) < BURST_FAILS or age >= BURST_REFRESH:
+                    out.append(c)
+            elif st == "remembered" and age >= BURST_REFRESH:
+                out.append(c)
+        return out
+
+    def done(self, now, cells, results, reads, conf_min):
+        """Book a finished burst. results {cell: accepted (type, pip) | None}, reads {cell: [raw read, ...]}."""
+        self.last_any = now
+        for c in cells:
+            self.last_burst[c] = now
+            confident = any(d["type"] != "junk" and d["conf"] >= conf_min for d in reads.get(c, []))
+            self.fails[c] = 0 if results.get(c) is not None or confident else self.fails.get(c, 0) + 1
+
+    def run(self, f, cells, pip_source="auto"):
+        """-> (kept frames, {cell: [read per kept frame]}, grabs taken). `f` is the tick frame, kept as is."""
+        p = self.p
+        kept, grabs = [f], 0
+        for _ in range(BURST_N - 1):
+            p.sleep(BURST_DT)
+            g = p.g.grab()
+            grabs += 1
+            # AI-NOTE: the grabber repeats the last frame when dxcam sees no change; a repeat must not count as a second read
+            if not p.perc.is_battle(g) or p.perc.frames_equal(g, kept[-1]):
+                continue
+            kept.append(g)
+        reads = {c: [] for c in cells}
+        for fr in kept:
+            for d in p.perc.read_cells_support(fr, cells, pip_source):
+                if d["cell"] in reads:
+                    reads[d["cell"]].append(d)
+        return kept, reads, grabs
+
+    @staticmethod
+    def record(game, t, cells, grabs, kept, reads, result, memory, buffed, glare):
+        """The bursts.jsonl record (R9). result/memory: {cell: (type, pip) | None}."""
+        def val(v):
+            return None if v is None else [v[0], v[1]]
+        return {"game": game, "t": round(t, 1), "cells": list(cells), "grabs": grabs, "kept": len(kept),
+                "reads": {str(c): [[d["type"], d["pip"], round(d["conf"], 3)] for d in rs]
+                          for c, rs in reads.items()},
+                "result": {str(c): val(v) for c, v in result.items()},
+                "memory": {str(c): val(v) for c, v in memory.items()},
+                "buffed": sorted(buffed), "glare": bool(glare)}
+
+    def maybe_save(self, game_id, t, cells, kept, record):
+        """Save at most every BURST_SAVE_GAP s and BURST_SAVE_MAX times; a covered save (None) does not count."""
+        now = self.p.clock()
+        if self.saved >= BURST_SAVE_MAX or now - self.last_save < BURST_SAVE_GAP:
+            return None
+        names = self.p.saver.burst(game_id, t, cells, kept, record)
+        if names is None:
+            return None
+        self.saved += 1
+        self.last_save = now
+        return names
