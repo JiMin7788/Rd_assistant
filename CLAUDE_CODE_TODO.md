@@ -130,8 +130,8 @@ Cowork 샌드박스에서 막힌 항목을 여기 적는다. 사람이 Claude Co
 - [ ] `config/deck.toml` 의 `force` 를 `""` 로 비운다
 - [ ] 봇이 시험판 3판 이상 진행 — 콘솔에 `support deck: trial mode (type gate PASS, pip gate FAIL)`
 - [ ] 새 크롭 검수 (별 후보 포함): `python tools/support_review.py --ambiguous`, 새 홀드아웃 게임: `python tools/support_review.py --holdout <new_game_id> --n 1000`, 시트마다 `ok`
-- [ ] 태그 빌드 후 별 모델 학습: `python tools/train_support_star.py --seed 1 --exclude-games <holdout>`
-- [ ] Res/Align 눈금 정확도가 0.9 미만이면 눈금 모델도: `python tools/train_support_pip.py --seed 1 --exclude-games <holdout>`
+- [ ] 태그 빌드 후 별 모델 학습 (시드 3개 e1..e3 가 모두 있어야 모델이 쓰인다): `for s in 1 2 3; do python tools/train_support_star.py --seed $s --exclude-games <holdout>; done`
+- [ ] Res/Align 눈금 정확도가 0.9 미만이면 눈금 모델도 (시드 3개 모두): `for s in 1 2 3; do python tools/train_support_pip.py --seed $s --exclude-games <holdout>; done` — 세 시드가 모두 생긴 뒤에 게이트를 다시 돌린다
 - [ ] 게이트: `python tools/support_gate.py --holdout <holdout>` — 눈금 PASS 가 나올 때까지 반복
 - [ ] `panel_*.png` 프레임은 지우지 말고 보관
 - [ ] 마스터에게 알려 t15 시작

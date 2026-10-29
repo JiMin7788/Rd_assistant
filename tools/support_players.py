@@ -269,7 +269,7 @@ class PlayPlayer(BasePlayer):
         for c, uv in found.items():
             lv = perc.card_level(f2, uv)
             read[c] = lv if lv is not None and lv == first[c] else None
-        levels, src, lines = tracker.start_visit(read)
+        levels, src, lines = tracker.start_visit(read, set(found))
         for line in lines:
             print(line, flush=True)
         avail = [c for c in tracker.available() if c in found]
@@ -282,8 +282,7 @@ class PlayPlayer(BasePlayer):
             self.inj.tap(*found[c])
             self.sleep(BUY_GAP)
         tracker.tapped(seq)
-        print(PowerTracker.line(seq, {c: levels[c] if c in found else None for c in levels},
-                                src), flush=True)
+        print(PowerTracker.line(seq, levels, src), flush=True)
         self.close_panel()
         self._power_last = self.clock()
 

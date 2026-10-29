@@ -101,22 +101,30 @@ class PowerTracker:
         self._tapped_visit = set()
         self._strikes = {c: 0 for c in CARDS}
         self._maxed = set()
+        self._found_ever = set()
         self._record = None
 
-    def start_visit(self, read):
-        """read: {card: level or None} (None = not read). Returns (levels, src, lines):
-        src 'read' when every card was read, else 'count'; lines = new maxed log lines."""
-        read = {c: read.get(c) for c in CARDS}
+    def start_visit(self, read, found=None):
+        """read: {card: level or None} (None = not read); found: cards seen on the panel
+        (None = all three). Returns (levels, src, lines): levels is None for a not-found card
+        (it counts as 0 purchases); src 'read' when every found card was read, else 'count';
+        lines = new maxed log lines."""
+        found = set(CARDS if found is None else found) & set(CARDS)
+        read = {c: read.get(c) if c in found else None for c in CARDS}
         newly = self._update_maxed(read)
         for c in CARDS:
             if read[c] is not None:
                 self._base[c], self._taps[c] = read[c], 0
-        levels = {c: self._base[c] + self._taps[c] for c in CARDS}
-        src = "read" if all(v is not None for v in read.values()) else "count"
+        self._found_ever |= found
+        levels = {c: self._base[c] + self._taps[c] if c in found else None for c in CARDS}
+        src = "read" if all(read[c] is not None for c in found) else "count"
         lines = [f"power card {c} maxed at Lv {levels[c]}" for c in newly]
         self._prev_read = read
         self._tapped_visit = set()
-        self._record = {"levels": dict(levels), "src": src, "maxed": sorted(self._maxed)}
+        # AI-NOTE: R14 wants power.levels null for a card never found in the game, so the record
+        # uses the found-ever set, while the returned levels use this visit's found set.
+        rec = {c: self._base[c] + self._taps[c] if c in self._found_ever else None for c in CARDS}
+        self._record = {"levels": rec, "src": src, "maxed": sorted(self._maxed)}
         return levels, src, lines
 
     def _update_maxed(self, read):
