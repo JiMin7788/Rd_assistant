@@ -61,6 +61,12 @@ CARD_TEMPLATES = {
 LV_BOX = (0.0160, -0.0414, 0.0448, -0.0261)
 LV_RANGE = (1, 30)
 
+# A read is unreadable when its type is junk or conf < READ_CONF_MIN. Measured with
+# tools/support_conf_report.py --holdout sup20261029_152652 --tags sup1 --data-dir C:/dev/rdom/data:
+#   conf >= 0.90: kept 1003/1008 (99.5%), accuracy of kept 0.997, wrong kept 3, wrong dropped 1
+#   chosen READ_CONF_MIN = 0.90 (largest with kept >= 95%)
+READ_CONF_MIN = 0.90
+
 _models = {}
 
 
@@ -147,20 +153,27 @@ def star_prob(hires_crops):
     return np.mean(outs, 0)
 
 
-def read_board_support(frame_rgb, pip_source="auto"):
-    """15 dicts {cell, type, variant, pip, conf}, cell order 1..15. Pip 7 is the star
-    detector's call when the star nets exist (auto only): p > 0.5 -> 7, else a 7 becomes 6."""
-    crops = gear.cell_crops(frame_rgb)
+def read_cells_support(frame_rgb, cells, pip_source="auto"):
+    """Raw reads {cell, type, variant, pip, conf} of the given cells (1..15), in the given order.
+    Pip 7 is the star detector's call when the star nets exist (auto only): p > 0.5 -> 7, else a 7 becomes 6."""
+    cells = list(cells)
+    all_crops = gear.cell_crops(frame_rgb)
+    crops = [all_crops[c - 1] for c in cells]
     labs, conf = predict_types_support(crops)
     dice = [i for i, lab in enumerate(labs) if lab not in NO_PIP]
     pips = dict(zip(dice, predict_pips_support([crops[i] for i in dice], pip_source)))
     if dice and pip_source != "gear":
-        sp = star_prob([gear.hires_cell(frame_rgb, i + 1, 128) for i in dice])
+        sp = star_prob([gear.hires_cell(frame_rgb, cells[i], 128) for i in dice])
         if sp is not None:
             for i, p in zip(dice, sp):
                 pips[i] = 7 if p > 0.5 else min(pips[i], 6)
-    return [{"cell": i + 1, "type": lab, "variant": lab, "pip": pips.get(i, 0), "conf": float(c)}
-            for i, (lab, c) in enumerate(zip(labs, conf))]
+    return [{"cell": c, "type": lab, "variant": lab, "pip": pips.get(i, 0), "conf": float(cf)}
+            for i, (c, lab, cf) in enumerate(zip(cells, labs, conf))]
+
+
+def read_board_support(frame_rgb, pip_source="auto"):
+    """15 dicts {cell, type, variant, pip, conf}, cell order 1..15."""
+    return read_cells_support(frame_rgb, range(1, 16), pip_source)
 
 
 # ---- gate (Hard Rule R4) ----
