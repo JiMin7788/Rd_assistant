@@ -49,6 +49,15 @@ def test_star_applies_per_cell_in_auto(fakes):
     assert [(d["cell"], d["pip"]) for d in out] == [(6, 6), (1, 7)]
 
 
+def test_read_cells_support_rejects_cells_outside_1_15(fakes):
+    fakes.setattr(support, "star_prob", lambda hr: None)
+    frame = np.zeros((10, 10, 3), np.uint8)
+    for bad in ([0], [-1], [16], [9, 0, 2]):
+        with pytest.raises(ValueError):
+            support.read_cells_support(frame, bad, "auto")
+    assert [d["cell"] for d in support.read_cells_support(frame, [9, 2, 15], "auto")] == [9, 2, 15]
+
+
 def test_read_conf_min_value():
     assert support.READ_CONF_MIN == 0.90
 
