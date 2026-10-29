@@ -99,3 +99,7 @@
 ## 2026-10-29 · rdf02-t2 · deck-bar and power-card templates, LV_BOX
 - Committed deck_support.png and the Resonance/Alignment/Growth card icons (no Alignment _b look exists on the panel); LV_BOX measured on the five H1 panels; check_support_assets.py gained --out-dir and the deck bar / power cards / lv box lines (181/181, 5/5, 5/5).
 - pages: components/perception-support.md (updated), components/perception-score.md (updated)
+
+## 2026-10-29 · rdf02-t3 · per-cell support reading and READ_CONF_MIN
+- Added read_cells_support (given cells, same result as the board entry; read_board_support now calls it) and READ_CONF_MIN = 0.90 measured by new tools/support_conf_report.py on holdout sup20261029_152652 (kept 99.5%, accuracy of kept 0.997).
+- pages: components/perception-support.md (updated)

@@ -2,7 +2,7 @@
 title: Support-deck perception
 type: component
 updated: 2026-10-29
-sources: [rdf01-t5, rdf02-t2]
+sources: [rdf01-t5, rdf02-t2, rdf02-t3]
 ---
 # Support-deck perception
 
@@ -12,7 +12,9 @@ sources: [rdf01-t5, rdf02-t2]
 `PipNet` embeds `len(gear.TYPES)` types, so growing gear's TYPES would break loading the gear pip weights. The support type net is `gear._pipnet_cls()(n_out=len(SUPPORT_CLASSES))`. Pip nets are built with `n_out=7`, star nets with `n_out=1`.
 
 ## Board (read_board_support)
-- Returns 15 dicts `{cell, type, variant, pip, conf}`, cells 1..15. `variant` equals `type`.
+- Returns 15 dicts `{cell, type, variant, pip, conf}`, cells 1..15. `variant` equals `type`. It is `read_cells_support(frame, range(1, 16), pip_source)`.
+- `read_cells_support(frame, cells, pip_source="auto")` reads only the given cells (1..15) and returns raw dicts in the given order; each equals the same cell's entry in `read_board_support` (the star check uses the real cell number for `hires_cell`, not the batch position). Empty list gives `[]`.
+- `READ_CONF_MIN = 0.90`: a read is unreadable when its type is junk or `conf < READ_CONF_MIN`. `read_cells_support` does not apply it; callers do. Measured with `tools/support_conf_report.py --holdout sup20261029_152652 --tags sup1`: at conf >= 0.90 kept 1003/1008 (99.5%), accuracy of kept 0.997, 3 wrong kept, 1 wrong dropped; 0.90 is the largest threshold keeping >= 95% of the checked crops. The tool prints one line per T in 0.50..0.95 and refuses a holdout game listed in the train manifest; it loads the type model from `--data-dir`.
 - Without `support_type_cnn.pt` every cell is `junk`, pip 0, conf 0.
 - A CNN `Bomb` becomes `junk` unless `gear.is_bomb(crop)` (then `Bomb`, conf 1.0), as in gear's `predict_types`. Pip is 0 for empty/junk/Crystal/Bomb.
 - Pip source: `"auto"` uses `support_pip_pat_e1..e3.pt` when all three exist, else the gear ensemble (`gear.PIP_ENSEMBLE`), else the single `gear_pip_pat.pt`, else pip 0. `"gear"` (trial mode) always uses the gear files and loads no support pip or star file.
@@ -37,4 +39,5 @@ sources: [rdf01-t5, rdf02-t2]
 ## Evidence
 - commit `a2c2b9c` (branch task/rdf01-t5, not yet merged into this checkout when written) — adds perception/support.py (all behaviour above: `_pip_files`, `read_board_support`, `gate_state`, `power_cards`, `card_level`, `reload_if_changed`) and tests/test_support_perception.py (synthetic tests for pip source, star, gate, cards); touches no gear file.
 - commit `ee3d48d` (branch task/rdf02-t2, not yet merged into this checkout when written) — support.py `CARD_TEMPLATES` comment (card identity evidence) and `LV_BOX` value/comment; the three card PNGs and deck_support.png under assets/templates; tests/test_support_assets_ui.py (templates exist, LV_BOX is four floats, check-tool lines on synthetic frames).
+- commit `bf6ad6c` (branch task/rdf02-t3, not yet merged into this checkout when written) — support.py `read_cells_support` and the `READ_CONF_MIN` comment with the measured numbers; tools/support_conf_report.py (`report`, `main`); tests/test_support_conf_report.py (cells equal board entries, per-cell star, threshold edges, holdout refusal).
 - `src/rdom/perception/gear.py` — `_pipnet_cls`, `PIP_ENSEMBLE`, `is_bomb`, `power_buttons`, `_best` reused here.
