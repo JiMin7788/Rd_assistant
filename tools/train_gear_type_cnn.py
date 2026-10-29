@@ -33,10 +33,10 @@ def load(tag, cap=4000, seed=0):
     return X, np.array([TYPE_CLASSES.index(y[i]) for i in sel]), t[sel]
 
 
-def train(X, Y, epochs, log=None, seed=0):
+def train(X, Y, epochs, log=None, seed=0, n_out=len(TYPE_CLASSES)):
     torch.manual_seed(seed); rng = np.random.RandomState(seed)
-    net = PipNet(n_out=len(TYPE_CLASSES)); opt = torch.optim.AdamW(net.parameters(), 2e-3, weight_decay=1e-3)
-    cnt = np.bincount(Y, minlength=len(TYPE_CLASSES)); w = 1.0 / np.maximum(cnt[Y], 1); w /= w.sum()
+    net = PipNet(n_out=n_out); opt = torch.optim.AdamW(net.parameters(), 2e-3, weight_decay=1e-3)
+    cnt = np.bincount(Y, minlength=n_out); w = 1.0 / np.maximum(cnt[Y], 1); w /= w.sum()
     steps = max(1, len(X) // 128)
     sched = torch.optim.lr_scheduler.OneCycleLR(opt, 3e-3, total_steps=epochs * steps)
     for ep in range(epochs):
