@@ -91,3 +91,7 @@
 ## 2026-10-29 · rdT02 · Support prelabel seed kNN
 - support_prelabel gained a seed kNN step (gear-CNN block-3 features vs eye-checked seeds) for white/cream Resonance and Alignment, a slime guard, and --out; new tools/check_prelabel.py scores against assets/prelabel_eval_h1.tsv. Corrected page: the seed step runs after the colour rule, not before.
 - pages: components/labelling-support.md (updated)
+
+## 2026-10-29 · rdf02-t1 · score calibration from H1 frames
+- SCORE_BOX measured (0.36, 0.083, 0.64, 0.126) and digits_score.npz committed; read_score accepts 2-D grey input; new tools/check_support_assets.py prints the score and score-lobby lines (n=42 correct=38 none=4 wrong=0; lobby none=1/1).
+- pages: components/perception-score.md (updated)
