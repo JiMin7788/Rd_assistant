@@ -10,8 +10,11 @@ import cv2
 
 from rdom.perception import digits
 
-# (u0, v0, u1, v1) in content-normalised coordinates; measured on real frames in a later task.
-SCORE_BOX = None
+# (u0, v0, u1, v1) in content-normalised coordinates (u relative to round(h*9/16), v to h), digits only.
+# Measured on H1 battle frames sup20261029_135038/1075.0.png, sup20261029_145953/912.9.png and
+# sup20261029_152652/1016.5.png (1244x2224): the yellow digit fill spans u 0.396-0.599 (4 digits), v 0.088-0.122;
+# the box adds room for a 5th digit and the outline and stops above the '처치한 몬스터' label (v ~0.127).
+SCORE_BOX = (0.36, 0.083, 0.64, 0.126)
 MAX_SCORE = 99999
 
 
@@ -24,7 +27,7 @@ def read_score(frame_rgb):
     crop = frame_rgb[int(v0 * h):int(v1 * h), int(u0 * W):int(u1 * W)]
     if crop.size == 0:
         return None
-    gray = cv2.cvtColor(crop, cv2.COLOR_RGB2GRAY)
+    gray = crop if crop.ndim == 2 else cv2.cvtColor(crop, cv2.COLOR_RGB2GRAY)   # AI-NOTE: a 2-D grey frame must give None, not a cv2 error
     try:
         r = digits.read_number(gray, "score")
     except OSError:                                      # no digits_score.npz yet
