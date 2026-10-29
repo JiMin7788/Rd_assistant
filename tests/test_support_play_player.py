@@ -100,6 +100,9 @@ class FakePerception:
     def tactic_sp1000_card(self, f):
         return None
 
+    def dice_info_panel(self, f):
+        return False
+
     def ui_state(self, f):
         return {"hunt_popup": False, "hunt": False, "power_panel": self.panel,
                 "transcend": False, "hpsp": False, **self.ui_extra}
