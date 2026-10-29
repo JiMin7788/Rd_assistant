@@ -78,6 +78,9 @@ class FakePerception:
     def tactic_sp1000_card(self, f):
         return self._s(f).get("card")
 
+    def dice_info_panel(self, f):
+        return False
+
     def ui_state(self, f):
         s = self._s(f)
         if self.panel_next:

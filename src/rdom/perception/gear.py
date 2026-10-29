@@ -508,6 +508,35 @@ def ui_state(frame_rgb):
             "scores": s}
 
 
+def _dark_frac(frame_rgb, v0, v1, thr=60):
+    """Share of pixels with HSV value < thr in the content rows v0..v1, u 0.08..0.92."""
+    h = frame_rgb.shape[0]; W = _content_w(frame_rgb)
+    band = frame_rgb[int(v0 * h):int(v1 * h), int(0.08 * W):int(0.92 * W)]
+    return float((cv2.cvtColor(band, cv2.COLOR_RGB2HSV)[..., 2] < thr).mean())
+
+
+# bands of the dice info panel: title/description (top), stat rows (mid-top), lower effect box.
+# The middle (v 0.30-0.51) is deliberately unused: a boss banner can cover it.
+_INFO_BANDS = ((0.03, 0.15, 0.40), (0.20, 0.28, 0.60), (0.52, 0.585, 0.70))
+
+
+def dice_info_scores(frame_rgb):
+    return tuple(_dark_frac(frame_rgb, v0, v1) for v0, v1, _ in _INFO_BANDS)
+
+
+def dice_info_panel(frame_rgb):
+    """True when the game's dice info panel ('정렬 주사위' + stats, opened by tapping a field
+    die) covers the top ~60% of the screen. One 소환 tap closes it (no summon).
+    Dark-pixel share (V < 60) in three bands, all must reach the threshold (0.40, 0.60, 0.70).
+    Measured 2026-10-30: panel under a boss banner, dimmed 0.98/0.87/0.95; panel undimmed
+    (063914 stall frames) 0.48/0.78/0.91. Normal battle top 0.29-0.44 / 0.00-0.11 / 0.00-0.05,
+    banner alone (v 0.165-0.265) 0.30-0.34 / 0.48-0.59 / 0.01-0.02, power panel 0.33-0.35 /
+    0.02-0.50 / 0.01-0.03, start/loading frames (0.0.png) 0.43 / 0.05 / 0.46, tactic-like
+    frames lower band <= 0.46: all below at least one threshold. 249 saved frames: only the
+    panel frames pass."""
+    return all(s >= thr for s, (_, _, thr) in zip(dice_info_scores(frame_rgb), _INFO_BANDS))
+
+
 # ---- field-effect banner ----
 # Dark rounded banner under the score (v 0.165-0.265). Field effects announced there
 # (OCR'd from the 2026-10-07 bot game) include "40초 후, 낮은 눈금 3개 파괴한 뒤 내

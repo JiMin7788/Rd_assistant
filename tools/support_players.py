@@ -1,7 +1,7 @@
 """Support-deck per-tick players: shared skeleton (BasePlayer) and the collect-mode player.
 
 BasePlayer.tick order, first match wins (reference: tools/gear_bot.py play()):
-  window moved -> stop; game over -> stop; tactic card -> tap it; hunt popup -> tap its 사냥;
+  window moved -> stop; game over -> stop; dice info panel -> tap 소환 to close; tactic card -> tap it; hunt popup -> tap its 사냥;
   power panel -> subclass hook; hunt button -> tap (>= 3 s apart); non-battle -> nothing;
   then the data cadence (cells 15 s, full frame 30 s) and the subclass battle_tick.
 CollectPlayer only summons, takes one power-panel snapshot and saves training data. It never
@@ -26,6 +26,7 @@ from rdom.policy.support import evaluate_support, load_support_deck, plan_suppor
 CELLS_EVERY = 15.0
 FRAME_EVERY = 30.0
 HUNT_EVERY = 3.0
+INFO_TAP_GAP = 1.0             # min seconds between two 소환 taps that close the dice info panel
 SUMMON_GAP = 1.0
 PANEL_AT = 120.0               # battle seconds before the one power-panel snapshot
 PANEL_CLOSE_TRIES = 4
@@ -70,6 +71,9 @@ class Perception:
 
     def tactic_sp1000_card(self, f):
         return gear.tactic_sp1000_card(f)
+
+    def dice_info_panel(self, f):
+        return gear.dice_info_panel(f)
 
     def banner_present(self, f):
         return gear.banner_present(f)
@@ -121,6 +125,7 @@ class BasePlayer:
         self._hunt_last = -1e9
         self._cells_last = -1e9
         self._frame_last = -1e9
+        self._info_last = -1e9                 # last 소환 tap that closed the dice info panel
 
     def tap(self, key):
         self.inj.tap(*gear.UI[key])
@@ -157,6 +162,15 @@ class BasePlayer:
         if perc.is_game_over(f):
             print("game over")
             return "game_over"
+        # AI-NOTE: before the tactic check -- the info panel under a boss banner is dark at the three tactic
+        # card rows, so the tactic OCR would tap a card position on it. Only the first 소환 tap closes the
+        # panel (no summon, no SP spent); the gap keeps a tap storm from summoning once it is closed.
+        if perc.dice_info_panel(f):
+            if now - self._info_last >= INFO_TAP_GAP:
+                print("dice info panel -> 소환 (close)", flush=True)
+                self.tap("summon")
+                self._info_last = now
+            return None                                    # no board read, memory, burst or crop for this frame
         card = perc.tactic_sp1000_card(f)
         if card:
             print(f"tactic screen -> 즉시 SP1000 at v={card[1]}", flush=True)
