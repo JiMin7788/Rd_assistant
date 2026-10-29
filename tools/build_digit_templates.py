@@ -79,9 +79,14 @@ def main():
 
 if __name__ == "__main__":
     # AI-NOTE: room/hp run only from main() so tests can import build_kind without rewriting assets/templates
-    if len(sys.argv) > 1:
+    # AI-NOTE: every argument used to be a kind name, so '--help' built assets/templates/digits_--help.npz
+    import argparse
+    ap = argparse.ArgumentParser(description="Build per-digit templates from verified crops (no kind: room + hp).")
+    ap.add_argument("kinds", nargs="*", help="other kinds: data/digits/<kind>/<value>_<any>.png")
+    kinds = ap.parse_args().kinds
+    if kinds:
         R = np.load(os.path.join(OUT, "digits_room.npz"))["T"]
-        for k in sys.argv[1:]:
+        for k in kinds:
             build_kind(k, os.path.join(ROOT, "data", "digits", k), fallback=R)
     else:
         main()

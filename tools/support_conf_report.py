@@ -55,6 +55,10 @@ def main(argv=None):
     support._DATA = a.data_dir      # the type model is loaded from --data-dir
     support._models.clear()
     sup_dir = os.path.join(a.data_dir, "crops_support")
+    missing = [t for t in C.split_list(a.tags) if not os.path.exists(os.path.join(sup_dir, f"feats_{t}.npz"))]
+    if missing:
+        print(f"FAIL: no feats file for tag {','.join(missing)} in {sup_dir}")
+        return 1
     rows = G._holdout_rows(sup_dir, C.split_list(a.tags), holdout)
     if not rows:
         print("FAIL: no checked crops in the holdout games")
