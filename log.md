@@ -81,3 +81,13 @@
 ## 2026-10-29 · rdT01 · Support-deck tool hardening
 - ScoreTracker ignores negative, >99999 and lower-than-confirmed reads; judge rejects --last<1 and zero games = cannot judge; build_support_tag validates fixes.tsv lines and counts ignored; gate prints real path; missing max_score prints `?`.
 - pages: components/perception-score.md (updated), components/policy-milestones.md (updated), components/labelling-support.md (updated), components/training-support.md (updated)
+
+## 2026-10-29 · rdF01-H1 · force support deck
+- no wiki-worthy change (config/deck.toml `force = "support"` for H1 collection; temporary, to be reverted to "").
+
+## 2026-10-29 · rdF01-H1 · clear force
+- no wiki-worthy change (config/deck.toml `force` back to "" after H1 collection; deck bar detection is the default again).
+
+## 2026-10-29 · rdT02 · Support prelabel seed kNN
+- support_prelabel gained a seed kNN step (gear-CNN block-3 features vs eye-checked seeds) for white/cream Resonance and Alignment, a slime guard, and --out; new tools/check_prelabel.py scores against assets/prelabel_eval_h1.tsv. Corrected page: the seed step runs after the colour rule, not before.
+- pages: components/labelling-support.md (updated)

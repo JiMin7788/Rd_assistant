@@ -2,7 +2,7 @@
 title: Support-deck labelling tools
 type: component
 updated: 2026-10-29
-sources: [rdf01-t7, rdf01-r3-s23, rdT01]
+sources: [rdf01-t7, rdf01-r3-s23, rdT01, rdT02]
 ---
 # Support-deck labelling tools
 
@@ -12,6 +12,9 @@ Offline pipeline that turns collected support crops (`data/crops_support`) into 
 1. `tools/support_prelabel.py` writes `prelabels.jsonl` `{name, type, pip, src, ambiguous, star_cand}` for every `crops.jsonl` row that has a `_raw` PNG.
    - Type = gear type model label if in Bubble/Adjust/Growth/empty/junk/Crystal/Joker with conf >= 0.90 (src `gear-model`); else `_colour_label` (src `colour`); else `?` (src `none`). Colour and `?` crops are `ambiguous`.
    - `_colour_label` (centre half of crop, HSV): green hue 35-85 -> Resonance; dark -> Alignment; yellow hue 15-35 -> Alignment. It lives only in this tool and must never enter `src/rdom` (hue bands misread under battle effects; see [recognition pitfalls](../lessons/recognition-pitfalls.md)).
+   - Seed step (rdT02): only crops still `?` after the gear model and `_colour_label` are matched by kNN against eye-checked seed PNGs in `assets/prelabel_seeds/<Type>/` (Resonance, Alignment, junk; src `seed`, still `ambiguous`). Features = global average of the 3rd conv block of the gear type CNN (class head unused), L2-normalised. Vote: 5 nearest seeds, similarity-weighted; stays `?` if best cosine < 0.95 or the winner has < 0.7 of the vote. This deck's Resonance/Alignment have white/cream faces, so the saturated-colour rule alone left them `?`.
+   - `_slime`: a crop whose centre is > 14 % saturated green is a battle-effect slime splat and is never seed-labelled (the CNN reads it as Resonance).
+   - `--out FILE` writes there instead of `<dir>/prelabels.jsonl`. `tools/check_prelabel.py EVAL.tsv PRELABELS.jsonl` prints per-type precision/recall and the `?` share; the eye-checked set is `assets/prelabel_eval_h1.tsv` (200 rows). Per the task record: Resonance P 0.988, Alignment P 0.965, `?` 14.5 % on it, and `?` over all H1 crops 2452 -> 376.
    - `gear.set_deck("doom")` is called first so `predict_types` applies no Decay remap. Pips come from `gear.predict_pips` for non-`NO_PIP` types.
    - `star_cand` = `support.star_prob` on the `_hires` crop > 0.3, or, in the same (game, cell) time sequence, a pip-6 crop followed by a crop whose pip is not 6 (a 7 star the pip net cannot see).
 2. `tools/support_review.py` cuts sheets of 50 (10x5 tiles of 128 px, caption `#idx Type pip`, font shrunk so the pip digit is not clipped). One pre-label type per sheet, star candidates on their own sheets.
@@ -30,4 +33,5 @@ Offline pipeline that turns collected support crops (`data/crops_support`) into 
 - commit `9cd9078` — adds tools/support_prelabel.py (thresholds, `_colour_label`, `set_deck("doom")`, star_cand rules), tools/support_review.py (sheet geometry, `_cut` grouping, `ambiguous` renumbering, `holdout` caps/seed/--force), tools/build_support_tag.py (`_review`, chk and fix-rate logic, output arrays) and tests/test_support_labels.py (synthetic-crop tests).
 - commit `738eaa2` — tools/support_review.py `main` prints sheet and index.tsv paths; tests/test_support_labels.py `test_ambiguous_prints_sheet_paths` asserts the lines.
 - commit `2dd0464` (task/rdT01) — tools/build_support_tag.py `_parse_fix`, `_read_fixes`, ignored count; tests/test_support_labels.py.
+- commit range `ab37da0..HEAD` (task/rdT02) — tools/support_prelabel.py (`SEED_*` constants, `_features`, `seed_bank`, `seed_labels`, `_slime`, seed step after colour in `prelabel`, `--out`), tools/check_prelabel.py, assets/prelabel_eval_h1.tsv, assets/prelabel_seeds/, tests/test_check_prelabel.py, tests/test_support_labels.py; metrics from `C:/dev/_hub/tasks/rdT02/task.json` (Master note after attempt 2).
 - `wiki/lessons/recognition-pitfalls.md` — hue-band rules misread under effects.
