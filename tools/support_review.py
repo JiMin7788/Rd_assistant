@@ -182,6 +182,11 @@ def main(argv=None):
     if a.ambiguous:
         rows = ambiguous(a.dir)
         print("ambiguous: sheets", len({r[0] for r in rows}), "crops", len(rows))
+        # AI-NOTE: QA S23 expects the written paths on stdout, not only the count; rows holds just the newly cut sheets.
+        out = os.path.join(a.dir, "review", "amb")
+        for sheet in sorted({r[0] for r in rows}):
+            print(os.path.join(out, sheet + ".png"))
+        print(os.path.join(out, "index.tsv"))
     else:
         print("holdout:", holdout(a.dir, a.holdout.split(","), a.n, a.force))
 
