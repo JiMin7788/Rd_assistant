@@ -89,8 +89,12 @@ def test_main_without_inputs_prints_zero_lines(env, tmp_path, capsys, sub):
     d = tmp_path / sub
     if sub == "empty":
         d.mkdir()
-    assert cs.main(["--data-dir", str(d)]) == 0
-    assert capsys.readouterr().out.splitlines() == ["score: n=0 correct=0 none=0 wrong=0", "score lobby: none=0/0"]
+    ov = tmp_path / "ov"
+    assert cs.main(["--data-dir", str(d), "--out-dir", str(ov)]) == 0
+    assert capsys.readouterr().out.splitlines() == [
+        "score: n=0 correct=0 none=0 wrong=0", "score lobby: none=0/0",
+        "deck bar: support 0/0 gear-false 0/0", "deck bar excluded: 0",
+        "power cards: 0/0", f"lv box: drew 0 overlays to {ov}"]
 
 
 def test_main_exit_1_on_exception(env, monkeypatch, capsys):

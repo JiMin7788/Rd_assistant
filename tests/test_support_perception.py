@@ -402,7 +402,7 @@ def lv_crop_wide(text):
 
 
 def test_level_none_without_box_or_templates(tmp_path, monkeypatch):
-    assert support.LV_BOX is None
+    monkeypatch.setattr(support, "LV_BOX", None)
     assert support.card_level(lv_frame(lv_crop("7")), BTN) is None
     monkeypatch.setattr(support, "LV_BOX", BOX)
     monkeypatch.setattr(digits, "_TPL", str(tmp_path))
