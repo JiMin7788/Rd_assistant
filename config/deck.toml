@@ -8,7 +8,7 @@ active = "doom"
 # force = "support" plays the support player (서포팅덱) for every game without reading the deck bar.
 # Needed for H1 data collection, before the deck-bar template exists. Empty it ("") afterwards.
 # force: deck name to use regardless of the deck bar ("" = detect from the bar)
-force = ""
+force = "support"
 
 [decks.doom]            # 파멸기어덱
 dice = ["Gear", "Doom", "Bubble", "Adjust", "Growth"]
