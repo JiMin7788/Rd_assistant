@@ -139,3 +139,7 @@
 ## 2026-10-30 · rdT03 · close the dice info panel by tapping 소환
 - Tapping a field die opens the dice info panel, which made every cell unreadable; gear.dice_info_panel (dark share in three bands, skips the banner band) now triggers one 소환 tap (closes only, no summon) in BasePlayer.tick before the tactic check; repeat taps >= 1.0 s apart.
 - pages: components/support-players.md (updated)
+
+## 2026-10-30 · rdT04 · Support star threshold 0.7 shared constant
+- support.STAR_THRESHOLD = 0.7 replaces the 0.5 literals in read_cells_support and support_gate._predict; 0.5 gave star precision 0.838 on the H2 holdout (pip-1 Resonance false stars), 0.7 gives 0.954 at recall 0.984.
+- pages: components/perception-support.md (updated), components/training-support.md (updated)

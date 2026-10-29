@@ -1,8 +1,8 @@
 ---
 title: Support-deck perception
 type: component
-updated: 2026-10-29
-sources: [rdf01-t5, rdf02-t2, rdf02-t3, rdf02-r2-s12, rdf02-m1]
+updated: 2026-10-30
+sources: [rdf01-t5, rdf02-t2, rdf02-t3, rdf02-r2-s12, rdf02-m1, rdT04]
 ---
 # Support-deck perception
 
@@ -18,7 +18,7 @@ sources: [rdf01-t5, rdf02-t2, rdf02-t3, rdf02-r2-s12, rdf02-m1]
 - Without `support_type_cnn.pt` every cell is `junk`, pip 0, conf 0.
 - A CNN `Bomb` becomes `junk` unless `gear.is_bomb(crop)` (then `Bomb`, conf 1.0), as in gear's `predict_types`. Pip is 0 for empty/junk/Crystal/Bomb.
 - Pip source: `"auto"` uses `support_pip_pat_e1..e3.pt` when all three exist, else the gear ensemble (`gear.PIP_ENSEMBLE`), else the single `gear_pip_pat.pt`, else pip 0. `"gear"` (trial mode) always uses the gear files and loads no support pip or star file.
-- Star (pip 7), `auto` only and only when all three `support_star_e*.pt` exist: mean sigmoid over `hires_cell(frame, cell, 128)` resized to 64; p > 0.5 gives 7, otherwise a 7 from the ensemble becomes 6. Without star files the ensemble pip is returned as is.
+- Star (pip 7), `auto` only and only when all three `support_star_e*.pt` exist: mean sigmoid over `hires_cell(frame, cell, 128)` resized to 64; p > `STAR_THRESHOLD` (0.7) gives 7, otherwise a 7 from the ensemble becomes 6. Without star files the ensemble pip is returned as is. `STAR_THRESHOLD` is shared by `read_cells_support` and `tools/support_gate.py _predict`; at 0.5 the H2 holdout gave star precision 0.838 (clean pip-1 Resonance dice, p 0.62-0.67, were false stars), at 0.7 recall 0.984 / precision 0.954 (rdT04, 2026-10-30).
 
 ## Gate (Hard Rule R4)
 `gate_state()` returns `{"type": bool, "pip": bool}` from `data/support_gate.json` (`models` = filename to sha256, `type.pass`, `pip.pass`). Both are False when the file is missing/unparseable, a listed file is missing or its sha256 differs, or a present support model (type/pip/star) is not listed. The last rule is stricter than the task spec: a retrained model dropped in unlisted is not live until re-gated.
@@ -42,4 +42,5 @@ sources: [rdf01-t5, rdf02-t2, rdf02-t3, rdf02-r2-s12, rdf02-m1]
 - commit `bf6ad6c` (branch task/rdf02-t3, not yet merged into this checkout when written) — support.py `read_cells_support` and the `READ_CONF_MIN` comment with the measured numbers; tools/support_conf_report.py (`report`, `main`); tests/test_support_conf_report.py (cells equal board entries, per-cell star, threshold edges, holdout refusal).
 - commit `b294b48` (branch task/rdf02-r2-s12) — support.py `read_cells_support` range check (`ValueError` for cells outside 1..15, AI-NOTE explains the negative-index cause); tests/test_support_conf_report.py `test_read_cells_support_rejects_cells_outside_1_15` (0, -1, 16, mixed list raise; valid list unchanged).
 - commit `2e74942` (branch task/rdf02-m1) — bool/non-integer check in `read_cells_support` (perception/support.py) and the missing-feats `FAIL:` line in tools/support_conf_report.py; tests `test_read_cells_support_rejects_bool_and_non_int_cells`, `test_conf_report_missing_feats_tag_is_one_fail_line` in tests/test_support_m1_inputs.py.
+- commit `bd09f61` (branch task/rdT04) — support.py `STAR_THRESHOLD = 0.7` (comment has the 0.5 vs 0.7 holdout numbers), used in `read_cells_support`; tools/support_gate.py `_predict` uses `support.STAR_THRESHOLD`; tests/test_support_star_threshold.py (0.65 gives pip 6, 0.75 gives 7, in both code paths).
 - `src/rdom/perception/gear.py` — `_pipnet_cls`, `PIP_ENSEMBLE`, `is_bomb`, `power_buttons`, `_best` reused here.
