@@ -19,7 +19,8 @@ LOCK = os.path.join(DATA, "run_all.pid")
 SHOW = ("===", "room code", "someone joined", "battle result", "game over", "로비로",
         "게임이 꺼져", "팝업", "modal", "unknown screen", "!!", "Traceback", "Error",
         "stopping", "loop done", "초월", "discord bot ready", "tick:", "dm failed",
-        "milestone", "deck route", "support deck", "frame not saved", "power panel", "power card")
+        "milestone", "deck route", "support deck", "frame not saved", "power panel", "power card",
+        "unreadable", "board changed without our action")
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--no-game", action="store_true")
