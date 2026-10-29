@@ -103,3 +103,7 @@
 ## 2026-10-29 · rdf02-t3 · per-cell support reading and READ_CONF_MIN
 - Added read_cells_support (given cells, same result as the board entry; read_board_support now calls it) and READ_CONF_MIN = 0.90 measured by new tools/support_conf_report.py on holdout sup20261029_152652 (kept 99.5%, accuracy of kept 0.997).
 - pages: components/perception-support.md (updated)
+
+## 2026-10-29 · rdf02-t4 · CellMemory, burst_result, merge_verdict
+- Added pure perception/support_memory.py: per-cell memory keeps a hacked die's last confirmed value (2 identical reads), unreadable-without-memory is junk/unknown, external change forgets unreadable cells (Growth and own-action cells exempt), burst_result needs 2 agreeing grabs, merge_verdict on raw reads.
+- pages: components/support-memory.md (new)
