@@ -73,3 +73,7 @@
 ## 2026-10-29 · rdf01-r2-s6 · equal-pip merge tie-break
 - `_best_merge` equal-pip order is now Adjust+Resonance/Alignment > other pairs > Adjust+Bubble (QA S6: a plain Alignment pair used to win).
 - pages: components/policy-support.md (updated)
+
+## 2026-10-29 · rdf01-r3-s23 · support_review --ambiguous prints paths
+- `--ambiguous` now prints each newly cut sheet PNG path and the index.tsv path after the count line (QA S23).
+- pages: components/labelling-support.md (updated)
