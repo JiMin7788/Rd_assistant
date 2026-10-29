@@ -135,3 +135,7 @@
 ## 2026-10-29 · rdf02-m1 · QA round 3 follow-up
 - Non-finite conf is unreadable everywhere (CellMemory, burst_result, Burster.done backoff); read_cells_support rejects bool/non-int cells; `--help` no longer writes digits_--help.npz; conf_report prints one FAIL line for a missing feats tag; tests prove Joker/bomb merges drop both memories and covered-window bursts still feed the board but save nothing.
 - pages: components/support-memory.md (updated), components/support-players.md (updated), components/perception-support.md (updated), howto/run-bot.md (updated)
+
+## 2026-10-30 · rdT03 · close the dice info panel by tapping 소환
+- Tapping a field die opens the dice info panel, which made every cell unreadable; gear.dice_info_panel (dark share in three bands, skips the banner band) now triggers one 소환 tap (closes only, no summon) in BasePlayer.tick before the tactic check; repeat taps >= 1.0 s apart.
+- pages: components/support-players.md (updated)

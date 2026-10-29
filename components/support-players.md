@@ -1,18 +1,19 @@
 ---
 title: Support players (Perception, BasePlayer, CollectPlayer, PlayPlayer)
 type: component
-updated: 2026-10-29
-sources: [rdf01-t10, rdf01-t11, rdf01-t16, rdf01-i1, rdf02-t5, rdf02-t6, rdf02-i1, rdf02-m1]
+updated: 2026-10-30
+sources: [rdf01-t10, rdf01-t11, rdf01-t16, rdf01-i1, rdf02-t5, rdf02-t6, rdf02-i1, rdf02-m1, rdT03]
 ---
 # Support players (Perception, BasePlayer, CollectPlayer, PlayPlayer)
 
 `tools/support_players.py` is the shared per-tick skeleton for the support deck plus the collect-mode and board-play players. All three players are written; `support_bot.play()` ([support-bot-core](support-bot-core.md)) builds them and `run_battle` calls `play()`.
 
 ## Perception
-`Perception` is a thin class of one-line wrappers over `board` (`is_battle`, `is_game_over`, `board_glare`), `gear` (`ui_state`, `power_buttons`, `tactic_sp1000_card`, `banner_present/text`, `effect_kind`, `buffed_cells`, `cell_crops`) and `support` (`read_board_support`, `power_cards`, `card_level`, `read_cells_support`) and `score.read_score`, plus `frames_equal(a, b)` (same shape and `np.array_equal`). Players take it as `perc=` so tests script what a tick sees without images.
+`Perception` is a thin class of one-line wrappers over `board` (`is_battle`, `is_game_over`, `board_glare`), `gear` (`ui_state`, `power_buttons`, `tactic_sp1000_card`, `dice_info_panel`, `banner_present/text`, `effect_kind`, `buffed_cells`, `cell_crops`) and `support` (`read_board_support`, `power_cards`, `card_level`, `read_cells_support`) and `score.read_score`, plus `frames_equal(a, b)` (same shape and `np.array_equal`). Players take it as `perc=` so tests script what a tick sees without images.
 
 ## BasePlayer.tick priority (first match wins)
-1. `g.window_moved()` true -> return `"moved"` (an `OSError` from it skips the tick); 2. game over -> `"game_over"`; 3. tactic SP1000 card -> tap it, sleep 1.2; 4. `ui["hunt_popup"]` -> tap `hunt_popup_ok`; 5. `ui["power_panel"]` -> subclass `on_panel`; 6. `ui["hunt"]` and >= 3 s since last hunt tap -> tap `hunt`; 7. not battle -> nothing; 8. data cadence, then subclass `battle_tick`.
+1. `g.window_moved()` true -> return `"moved"` (an `OSError` from it skips the tick); 2. game over -> `"game_over"`; 2b. dice info panel (below); 3. tactic SP1000 card -> tap it, sleep 1.2; 4. `ui["hunt_popup"]` -> tap `hunt_popup_ok`; 5. `ui["power_panel"]` -> subclass `on_panel`; 6. `ui["hunt"]` and >= 3 s since last hunt tap -> tap `hunt`; 7. not battle -> nothing; 8. data cadence, then subclass `battle_tick`.
+- **Dice info panel (rdT03):** checked right after game over, before the tactic check (the panel under a boss banner would fool the tactic OCR). `gear.dice_info_panel` = dark-pixel share in three bands (v 0.03-0.15 / 0.20-0.28 / 0.52-0.585) all above 0.40/0.60/0.70, never the banner band; it prints `dice info panel -> 소환 (close)`, taps `summon` (this tap only closes the panel, no summon, no SP) and returns with no board read, memory, burst or crop; a repeat tap only >= 1.0 s (`INFO_TAP_GAP`) later with the panel still up. Tests: tests/test_support_dice_info.py.
 - `battle_start` is set on the first battle frame; `t(now)` is seconds since then (0.0 before).
 - Data cadence in battle time: cells every 15 s (`CELLS_EVERY`, with `buffed` and `glare` kwargs), full frame every 30 s (`FRAME_EVERY`) to `data/support_frames/<game_id>/<t>.png`. Both go through the `Saver`, which re-checks `unobscured()` per call; the player never writes files itself.
 - `run(minutes)` sleeps `tick` (0.6 s) then ticks; returns `"game_over"`, `"moved"` or `"timeout"`. `close_panel()` taps `power_close` up to 4 times until `ui_state` shows the panel gone.
@@ -66,3 +67,5 @@ Summons (tap `summon`, >= 1 s apart); at battle time >= 120 s (`PANEL_AT`) taps 
 - commit `be50e5f` — `PlayPlayer._burst` in tools/support_players.py blanks `ev["forgot"]` cells after `apply_burst`; test `test_burst_external_event_forgets_cell_resolved_earlier_in_burst` in tests/test_support_play_memory.py; cited by commit because the files are not yet in the main checkout
 - `C:/dev/_hub/tasks/rdf02-i1/task.json` — integration finding and AC1
 - commit `f4a6837` (branch task/rdf02-m1) — `Burster.done` uses `_unreadable` in tools/support_players.py; test `test_burster_done_non_finite_conf_does_not_reset_fail_counter` in tests/test_support_m1_inputs.py; commit `2e74942` adds `test_covered_window_burst_runs_but_saves_and_counts_nothing` in tests/test_support_play_m1.py
+- `tools/support_players.py`, `src/rdom/perception/gear.py` — `dice_info_panel`/`dice_info_scores`, `INFO_TAP_GAP`, `_info_last`, tick branch before the tactic check (rdT03; measured scores in the `dice_info_panel` docstring); tests/test_support_dice_info.py with fixtures tests/fixtures/dice_info_banner.png, dice_info_plain.png and neg_*.png
+- `C:/dev/_hub/tasks/rdT03/task.json` — task spec (H2 game 1 stall, 2026-10-30)

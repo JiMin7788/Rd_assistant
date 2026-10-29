@@ -15,7 +15,7 @@
 - [Support-deck labelling tools](components/labelling-support.md) — support_prelabel / support_review / build_support_tag: gear+colour+seed-kNN pre-labels, check_prelabel, 50-crop sheets, chk-flagged tags, fixes.tsv validation; offline only (2026-10-29)
 - [Support-deck trainers and R4 gate](components/training-support.md) — train_support_{type_cnn,star,pip}, train manifest, support_gate.py held-out pass flags + sha256 JSON (2026-10-29)
 - [Support bot core](components/support-bot-core.md) — tools/support_bot.py: route_deck, Saver (cells/frame/burst), choose_mode, round record, run_battle with wrong_deck hand-over, play() and dry-run main(); wired into gear_loop/gear_bot (2026-10-29)
-- [Support players](components/support-players.md) — tools/support_players.py: Perception wrappers, BasePlayer tick priority + data cadence, CollectPlayer, PlayPlayer board play with effective board, bursts (R7.4 forgets blank the board) and merge verification, Burster burst mechanics (2026-10-29)
+- [Support players](components/support-players.md) — tools/support_players.py: Perception wrappers, BasePlayer tick priority + data cadence, CollectPlayer, PlayPlayer board play with effective board, bursts (R7.4 forgets blank the board) and merge verification, Burster burst mechanics, dice info panel closed by tapping 소환 (2026-10-30)
 - [Safety guards and stop switches](components/safety-guards.md) — dry-run, battle/window guards, failure limits, PAUSE/STOP (2026-10-23)
 
 ## Decisions
