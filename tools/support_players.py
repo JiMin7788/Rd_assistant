@@ -13,9 +13,12 @@ import os
 import sys
 import time
 
+import numpy as np
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 from rdom.input.inject import cell_uv
 from rdom.perception import board, collect, gear, score, support
+from rdom.perception.support_memory import CellMemory, _unreadable, burst_result, merge_verdict
 from rdom.policy.milestones import MilestoneTracker
 from rdom.policy.power import PowerTracker, load_power_config, plan_visit
 from rdom.policy.support import evaluate_support, load_support_deck, plan_support
@@ -34,9 +37,17 @@ CLONE_FOR = 45.0
 POWER_HOLD_FOR = 65.0
 BAN_FOR = 90.0
 MAX_JUNK = 3
+VERIFY_TICKS = 3               # undecided merge verifications before it counts as an effect
 POWER_EVERY = 20.0
 BUY_GAP = 0.15
 LEVEL_REREAD = 0.3
+BURST_N = 6                    # tick frame + 5 grabs
+BURST_DT = 0.08
+BURST_GAP = 3.0                # min seconds between two bursts
+BURST_REFRESH = 15.0           # remembered cells (and cells with BURST_FAILS failures) re-burst this late
+BURST_FAILS = 3
+BURST_SAVE_GAP = 10.0
+BURST_SAVE_MAX = 60
 
 
 class Perception:
@@ -86,6 +97,12 @@ class Perception:
 
     def read_score(self, f):
         return score.read_score(f)
+
+    def read_cells_support(self, f, cells, pip_source="auto"):
+        return support.read_cells_support(f, cells, pip_source)
+
+    def frames_equal(self, a, b):
+        return np.shape(a) == np.shape(b) and bool(np.array_equal(a, b))
 
 
 class BasePlayer:
@@ -216,7 +233,9 @@ class CollectPlayer(BasePlayer):
 
 def fmt_board(b):
     """15 tokens <Ty><pip> (first two letters of the type), '...' for an empty cell."""
-    return " ".join("..." if d["type"] == "empty" else f"{d['type'][:2]}{d['pip']}" for d in b)
+    return " ".join("..." if d["type"] == "empty"
+                    else f"{d['type'][:2]}{d['pip']}" + ("*" if d.get("src") in ("memory", "burst") else "")
+                    for d in b)
 
 
 class PlayPlayer(BasePlayer):
@@ -244,7 +263,11 @@ class PlayPlayer(BasePlayer):
         self._prev_sig = None
         self._hist = {}                        # cell -> last BUFF_STEADY reads
         self._banned = {}                      # (from, to) -> (from type, to type, expiry)
-        self._pending = None                   # (from, to, board) of the last merge swipe
+        self._pending = None                   # [from, to, {cell: (type, pip)} at the swipe, undecided ticks]
+        self.memory = CellMemory(support.READ_CONF_MIN)
+        self.burster = Burster(self)
+        self._unk_logged = set()               # cells whose 'occupied, unknown' line was printed
+        self.stats.update(bursts=0, burst_hits=0, mem_ticks=0, forgets=0)
 
     def on_panel(self, f, ui, now):
         self.power_visit(f)
@@ -325,12 +348,106 @@ class PlayPlayer(BasePlayer):
             print("frame not saved: game window covered")
             self._covered_logged = now
 
+    def _log_events(self, events):
+        """Print the cell-memory events in the spec R10 wording."""
+        for e in events:
+            if e["kind"] == "remembered":
+                print(f"cell {e['cell']} unreadable -> keep {e['tok']} (last confident read)", flush=True)
+            elif e["kind"] == "unknown":
+                self._log_unknown(e["cell"])
+            elif e["kind"] == "external":
+                self.stats["forgets"] += 1
+                forgot = ",".join(str(c) for c in e["forgot"]) or "none"
+                print(f"board changed without our action at {','.join(str(c) for c in e['cells'])}"
+                      f" -> forget remembered {forgot}", flush=True)
+
+    def _log_unknown(self, c):
+        if c not in self._unk_logged:
+            self._unk_logged.add(c)
+            print(f"cell {c} unreadable -> occupied, unknown", flush=True)
+
+    def _burst(self, f, now, eff, unread, cells):
+        """Run one burst of `cells` (R8): accepted values go into memory and `eff`; log and save it."""
+        mem, conf_min = self.memory, support.READ_CONF_MIN
+        before = {c: mem.memory(c) for c in cells}
+        kept, reads, grabs = self.burster.run(f, cells, self.pip_source)
+        results = {c: burst_result(reads[c], conf_min) for c in cells}
+        self.burster.done(now, cells, results, reads, conf_min)
+        self.stats["bursts"] += 1
+        toks = []
+        for c in cells:
+            v = results[c]
+            toks.append(f"{c}=" + ("?" if v is None else "..." if v[0] == "empty" else f"{v[0][:2]}{v[1]}"))
+        # AI-NOTE: the tick frame counts as a grab in the log (6 of 6), the record's `grabs` is grabs taken.
+        print(f"burst cells {','.join(str(c) for c in cells)} -> {' '.join(toks)} "
+              f"({len(kept)} of {grabs + 1} grabs)", flush=True)
+        for c in cells:
+            if results[c] is None:
+                continue
+            self.stats["burst_hits"] += 1
+            e, events = mem.apply_burst(c, results[c], unread)
+            eff[c - 1] = e
+            for ev in events:
+                if ev["kind"] == "external":
+                    # AI-NOTE: R7.4 dropped these memories (maybe resolved earlier in this burst); the board must not keep the old die.
+                    for x in ev["forgot"]:
+                        eff[x - 1].update(type="junk", variant="junk", pip=0, src="unknown")
+            self._log_events(events)
+        for c in cells:
+            if results[c] is None and mem.state(c) == "unknown":
+                self._log_unknown(c)
+        buffed = self.perc.buffed_cells(f)
+        t = self.t(now)
+        rec = Burster.record(self.game_id, t, cells, grabs, kept, reads, results, before,
+                             [c for c in cells if c in buffed], self.perc.board_glare(f))
+        self.burster.maybe_save(self.game_id, t, cells, kept, rec)
+
+    def _verify_merge(self, f, raw_by, bc, now):
+        """R7.1: judge the last merge on RAW reads against the effective values at the swipe."""
+        fr, to, before, tries = self._pending
+        verdict = merge_verdict(raw_by[fr], raw_by[to], before[fr], before[to], support.READ_CONF_MIN)
+        if verdict == "undecided":
+            tries += 1
+            if tries < VERIFY_TICKS:
+                self._pending[3] = tries
+                return
+            # AI-NOTE: cells stayed unreadable for VERIFY_TICKS ticks; assume it worked (no ban, no fail count).
+            verdict = "effect"
+        self._pending = None
+        if verdict == "effect":
+            self.memory.merged(fr, to)
+            for c in (fr, to):
+                if bc[c].get("src") == "memory":
+                    # AI-NOTE: the memory was just dropped; this tick's effective board must not keep the stale die.
+                    bc[c].update(type="junk", variant="junk", pip=0, src="unknown")
+            return
+        # AI-NOTE: ban keyed on type only, as in gear_bot -- a flickering pip read must not clear it.
+        self._banned[(fr, to)] = (bc[fr]["type"], bc[to]["type"], now + BAN_FOR)
+        print(f"   merge {fr}->{to} had no effect -> banned until those dice change")
+        self._save_fail(f, bc[fr], bc[to], now)
+        self.stats["fails"] += 1
+
     def battle_tick(self, f, ui, now):
         self._banner(f, now)
         confirmed = self.score_tracker.update(self.perc.read_score(f))
         if confirmed is not None:
             self._events(f, self.milestones.on_score(confirmed))
-        b = self.perc.read_board_support(f, pip_source=self.pip_source)
+        raw = self.perc.read_board_support(f, pip_source=self.pip_source)
+        raw_by = {d["cell"]: d for d in raw}
+        b, mevents = self.memory.update(raw)
+        self._log_events(mevents)
+        unread = [d["cell"] for d in raw if self.memory.unreadable(d)]
+        due = self.burster.due(now, unread, self.memory)
+        if due:
+            self._burst(f, now, b, unread, due)
+        for c in list(self._unk_logged):
+            if self.memory.state(c) != "unknown":
+                self._unk_logged.discard(c)
+        if any(d.get("src") == "memory" for d in b):
+            self.stats["mem_ticks"] += 1
+        bc = {d["cell"]: d for d in b}
+        if self._pending:                      # verify the last merge took effect (on raw reads)
+            self._verify_merge(f, raw_by, bc, now)
         sig = tuple((d["type"], d["pip"]) for d in b)
         stable = sig == self._prev_sig
         self._prev_sig = sig
@@ -339,17 +456,6 @@ class PlayPlayer(BasePlayer):
             h.append((d["type"], d["pip"]))
             del h[:-BUFF_STEADY]
         buffed = self.perc.buffed_cells(f)
-        bc = {d["cell"]: d for d in b}
-        if self._pending:                      # verify the last merge took effect
-            fr, to, before = self._pending
-            self._pending = None
-            if all(bc[c]["type"] == before[c]["type"] and bc[c]["pip"] == before[c]["pip"]
-                   for c in (fr, to)):
-                # AI-NOTE: ban keyed on type only, as in gear_bot -- a flickering pip read must not clear it.
-                self._banned[(fr, to)] = (bc[fr]["type"], bc[to]["type"], now + BAN_FOR)
-                print(f"   merge {fr}->{to} had no effect -> banned until those dice change")
-                self._save_fail(f, bc[fr], bc[to], now)
-                self.stats["fails"] += 1
         self._banned = {k: v for k, v in self._banned.items()
                         if v[:2] == (bc[k[0]]["type"], bc[k[1]]["type"]) and now < v[2]}
 
@@ -358,8 +464,8 @@ class PlayPlayer(BasePlayer):
             self.stats["complete"] = True
         if not stable and not ev["empty"]:
             return                             # wait for a confirming read
-        if ev["unknown"] > MAX_JUNK:
-            return                             # popup/banner covering the board
+        if len(unread) > MAX_JUNK:
+            return                             # popup/banner covering the board (raw unreadable cells)
         if stable:
             self._events(f, self.milestones.on_board(
                 {"res7": ev["res7"], "align7": ev["align7"], "bubbles": ev["bubbles"]}))
@@ -371,6 +477,8 @@ class PlayPlayer(BasePlayer):
         act = plan_support(b, self.deck, support_ready=now - self._support_last >= SUPPORT_CD,
                            banned=set(self._banned), clone_alert=now < self.clone_until)
         op = act["op"]
+        if op in ("merge", "support") and self._pending:
+            return                             # a merge is still being verified; summon stays allowed
         if op in ("merge", "support"):
             cells = [c for c in (act.get("from"), act.get("to")) if c in buffed]
             if any(len(self._hist[c]) < BUFF_STEADY or len(set(self._hist[c])) > 1 for c in cells):
@@ -383,15 +491,99 @@ class PlayPlayer(BasePlayer):
             print(f"{fmt_board(b)} | R7 {ev['res7']} L7 {ev['align7']} B{ev['bubbles']} "
                   f"-> merge {act['from']}->{act['to']}", flush=True)
             self.inj.swipe(*cell_uv(act["from"]), *cell_uv(act["to"]))
-            self._pending = (act["from"], act["to"], bc)
+            self._pending = [act["from"], act["to"],
+                             {c: (bc[c]["type"], bc[c]["pip"]) for c in (act["from"], act["to"])}, 0]
+            self.memory.own_action([act["from"], act["to"]])
             self.stats["merges"] += 1
         elif op == "support":
             print(f"{fmt_board(b)} -> supporter <- {act['from']}", flush=True)
             self.inj.swipe(*cell_uv(act["from"]), *gear.UI["support"], dur_ms=400)
             self._support_last = now
+            self.memory.supported(act["from"])
             self.stats["support"] += 1
         elif op == "wait" and self._power_due(now):
             # nothing to do on the board -> spend SP (gear_bot wording)
             print(f"idle ({act.get('why')}) -> power-up", flush=True)
             self.tap("power_open")
             self._power_last = now
+
+
+class Burster:
+    """Burst mechanics (spec R8, R9): a few quick grabs + reads of hacked cells. Only grabs and reads;
+    it never touches the injector."""
+
+    def __init__(self, player):
+        self.p = player
+        self.last_any = -1e9
+        self.last_burst = {}                   # cell -> time of its last burst (absent = never)
+        self.fails = {}                        # cell -> consecutive bursts without an accepted value
+        self.saved = 0
+        self.last_save = -1e9
+
+    def due(self, now, unreadable_cells, memory):
+        """Cells to burst now, ascending: unknown cells plus remembered cells last burst >= BURST_REFRESH ago."""
+        if now - self.last_any < BURST_GAP or not 1 <= len(unreadable_cells) <= MAX_JUNK:
+            return []
+        out = []
+        for c in sorted(unreadable_cells):
+            age = now - self.last_burst.get(c, -1e9)
+            st = memory.state(c)
+            if st == "unknown":
+                # AI-NOTE: R8 backoff -- a cell that failed BURST_FAILS bursts in a row waits like a remembered one
+                if self.fails.get(c, 0) < BURST_FAILS or age >= BURST_REFRESH:
+                    out.append(c)
+            elif st == "remembered" and age >= BURST_REFRESH:
+                out.append(c)
+        return out
+
+    def done(self, now, cells, results, reads, conf_min):
+        """Book a finished burst. results {cell: accepted (type, pip) | None}, reads {cell: [raw read, ...]}."""
+        self.last_any = now
+        for c in cells:
+            self.last_burst[c] = now
+            # AI-NOTE: same predicate as CellMemory, so a NaN conf is not a confident read and does not reset the backoff
+            confident = any(not _unreadable(d, conf_min) for d in reads.get(c, []))
+            self.fails[c] = 0 if results.get(c) is not None or confident else self.fails.get(c, 0) + 1
+
+    def run(self, f, cells, pip_source="auto"):
+        """-> (kept frames, {cell: [read per kept frame]}, grabs taken). `f` is the tick frame, kept as is."""
+        p = self.p
+        kept, grabs = [f], 0
+        for _ in range(BURST_N - 1):
+            p.sleep(BURST_DT)
+            g = p.g.grab()
+            grabs += 1
+            # AI-NOTE: the grabber repeats the last frame when dxcam sees no change; a repeat must not count as a second read
+            if not p.perc.is_battle(g) or p.perc.frames_equal(g, kept[-1]):
+                continue
+            kept.append(g)
+        reads = {c: [] for c in cells}
+        for fr in kept:
+            for d in p.perc.read_cells_support(fr, cells, pip_source):
+                if d["cell"] in reads:
+                    reads[d["cell"]].append(d)
+        return kept, reads, grabs
+
+    @staticmethod
+    def record(game, t, cells, grabs, kept, reads, result, memory, buffed, glare):
+        """The bursts.jsonl record (R9). result/memory: {cell: (type, pip) | None}."""
+        def val(v):
+            return None if v is None else [v[0], v[1]]
+        return {"game": game, "t": round(t, 1), "cells": list(cells), "grabs": grabs, "kept": len(kept),
+                "reads": {str(c): [[d["type"], d["pip"], round(d["conf"], 3)] for d in rs]
+                          for c, rs in reads.items()},
+                "result": {str(c): val(v) for c, v in result.items()},
+                "memory": {str(c): val(v) for c, v in memory.items()},
+                "buffed": sorted(buffed), "glare": bool(glare)}
+
+    def maybe_save(self, game_id, t, cells, kept, record):
+        """Save at most every BURST_SAVE_GAP s and BURST_SAVE_MAX times; a covered save (None) does not count."""
+        now = self.p.clock()
+        if self.saved >= BURST_SAVE_MAX or now - self.last_save < BURST_SAVE_GAP:
+            return None
+        names = self.p.saver.burst(game_id, t, cells, kept, record)
+        if names is None:
+            return None
+        self.saved += 1
+        self.last_save = now
+        return names

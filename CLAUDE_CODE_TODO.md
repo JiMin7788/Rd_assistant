@@ -112,31 +112,40 @@ Cowork 샌드박스에서 막힌 항목을 여기 적는다. 사람이 Claude Co
 
 사람이 직접 해야 하는 단계(라이브 게임 필요). 명령은 `C:\dev\rdom` 에서 `.venv\Scripts\python.exe` 로 실행.
 
-### H1 — 수집 (1단계 병합 후)
-- [ ] 게임에서 서포팅덱을 세팅하고 협동은 일반(deck/일반)으로 한다
-- [ ] 덱을 바꾸기 전에 기어덱 전투 프레임을 5장 이상 저장: `python tools/save_frame.py` (≥ 5회). 계속 `not saved: game window covered` 가 나오면 중단하고 보고 (R6 필터 문제)
-- [ ] `config/deck.toml` 에 `force = "support"` 설정
-- [ ] `봇 시작.bat` 으로 일반 협동 5판 이상 진행 (수집 모드)
-- [ ] 프리라벨: `python tools/support_prelabel.py`
-- [ ] 모호 시트 검수: `python tools/support_review.py --ambiguous`
-- [ ] 층화 홀드아웃 검수: `python tools/support_review.py --holdout <game_id>[,<game_id>] --n 1000`
-- [ ] 모든 시트에 `ok` 표시 (시트마다 fixes.tsv 에 `sheet_NN<TAB>ok`)
-- [ ] 태그 빌드: `python tools/build_support_tag.py --tag sup1`
-- [ ] 타입 모델 학습: `python tools/train_support_type_cnn.py --exclude-games <holdout> --tags sup1`
-- [ ] 게이트: `python tools/support_gate.py --holdout <holdout> --tags sup1` — 타입 PASS 가 나올 때까지 반복
-- [ ] 마스터에게 알려 t14 시작
+### H1 — 수집 (1단계 병합 후) — 완료 (2026-10-29)
+결과: 타입 게이트 PASS (overall 0.996, effect 0.996, Resonance 1.000, Alignment 1.000, n=1008), 눈금 게이트 FAIL (표본 부족, 7 없음) → H2 는 시험판 모드로 진행.
+- [x] 게임에서 서포팅덱을 세팅하고 협동은 일반(deck/일반)으로 한다
+- [x] 덱을 바꾸기 전에 기어덱 전투 프레임을 5장 이상 저장: `python tools/save_frame.py` (≥ 5회). 계속 `not saved: game window covered` 가 나오면 중단하고 보고 (R6 필터 문제)
+- [x] `config/deck.toml` 에 `force = "support"` 설정
+- [x] `봇 시작.bat` 으로 일반 협동 5판 이상 진행 (수집 모드)
+- [x] 프리라벨: `python tools/support_prelabel.py`
+- [x] 모호 시트 검수: `python tools/support_review.py --ambiguous`
+- [x] 층화 홀드아웃 검수: `python tools/support_review.py --holdout <game_id>[,<game_id>] --n 1000`
+- [x] 모든 시트에 `ok` 표시 (시트마다 fixes.tsv 에 `sheet_NN<TAB>ok`)
+- [x] 태그 빌드: `python tools/build_support_tag.py --tag sup1`
+- [x] 타입 모델 학습: `python tools/train_support_type_cnn.py --exclude-games <holdout> --tags sup1`
+- [x] 게이트: `python tools/support_gate.py --holdout <holdout> --tags sup1` — 타입 PASS 가 나올 때까지 반복
+- [x] 마스터에게 알려 t14 시작
 
-### H2 — 시험판 게임으로 눈금 데이터 (t14 병합 + 타입 게이트 PASS 후)
+### H2 — 시험판 게임으로 눈금 데이터 (rdF02 병합 후에 시작)
+H1 과 rdF02 보정(점수, 덱 바, 파워 카드, LV_BOX)은 모두 끝났다. H2 는 rdF02 가 main 에 병합된 뒤에 시작한다. (`save_frame.py` 는 이제 같은 초에 저장해도 덮어쓰지 않고 `_2`, `_3` … 이름을 쓴다.)
 - [ ] `config/deck.toml` 의 `force` 를 `""` 로 비운다
-- [ ] 봇이 시험판 3판 이상 진행 — 콘솔에 `support deck: trial mode (type gate PASS, pip gate FAIL)`
+- [ ] 봇이 시험판 3판 이상 진행. 콘솔에서 확인할 줄 5가지:
+  - `deck route: support (deck bar)`
+  - 시험판 모드 줄 `support deck: trial mode (type gate PASS, pip gate FAIL)`
+  - `power panel -> ...` (카드가 찾아졌는지 확인)
+  - `cell … unreadable` 줄
+  - `board changed without our action` 줄
+- [ ] 판이 끝날 때마다 `data/support_rounds.jsonl` 의 마지막 줄에서 stats 의 `bursts` / `burst_hits` / `forgets` 를 확인한다. bursts 는 많은데 burst_hits 가 적으면 마스터에게 보고한다
+- [ ] `burst cells` 줄은 콘솔에 나오지 않는다. 게임 로그 `data/bot_logs/<date>.log` 에서 읽는다
+- [ ] `panel_*.png` 프레임과 `data/crops_support/_burst/` 는 지우지 말고 보관
 - [ ] 새 크롭 검수 (별 후보 포함): `python tools/support_review.py --ambiguous`, 새 홀드아웃 게임: `python tools/support_review.py --holdout <new_game_id> --n 1000`, 시트마다 `ok`
 - [ ] 태그 빌드 후 별 모델 학습 (시드 3개 e1..e3 가 모두 있어야 모델이 쓰인다): `for s in 1 2 3; do python tools/train_support_star.py --seed $s --exclude-games <holdout>; done`
 - [ ] Res/Align 눈금 정확도가 0.9 미만이면 눈금 모델도 (시드 3개 모두): `for s in 1 2 3; do python tools/train_support_pip.py --seed $s --exclude-games <holdout>; done` — 세 시드가 모두 생긴 뒤에 게이트를 다시 돌린다
 - [ ] 게이트: `python tools/support_gate.py --holdout <holdout>` — 눈금 PASS 가 나올 때까지 반복
-- [ ] `panel_*.png` 프레임은 지우지 말고 보관
-- [ ] 마스터에게 알려 t15 시작
+- [ ] 마스터에게 알려 rdF03 시작
 
-### H3 — 인수 (t15 병합 후)
+### H3 — 인수 (rdF03 병합 후)
 - [ ] 두 게이트가 모두 PASS 인 상태에서 플레이 모드 5판 이상 진행
 - [ ] `python tools/support_judge.py` 실행
 - [ ] 스크린샷을 사용자가 다시 확인

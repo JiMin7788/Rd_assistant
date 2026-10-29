@@ -11,6 +11,7 @@ from rdom.perception.score import ScoreTracker, read_score
 
 H = 1280
 W = round(H * 9 / 16)
+REAL_BOX = score.SCORE_BOX                      # the committed box, before any monkeypatching
 BOX = (0.30, 0.02, 0.70, 0.08)
 BOX_PX = (int(BOX[0] * W), int(BOX[1] * H), int(BOX[2] * W), int(BOX[3] * H))
 
@@ -64,9 +65,43 @@ def templates(tmp_path, tools, monkeypatch):
     return out
 
 
-def test_box_unset_by_default():
-    assert score.SCORE_BOX is None
+def test_box_is_bounded_float_4tuple():
+    b = score.SCORE_BOX
+    assert isinstance(b, tuple) and len(b) == 4 and all(isinstance(x, float) for x in b)
+    u0, v0, u1, v1 = b
+    assert 0 <= u0 < u1 <= 1 and 0 <= v0 < v1 <= 1
+
+
+def test_none_without_box(monkeypatch):
+    monkeypatch.setattr(score, "SCORE_BOX", None)
     assert read_score(np.zeros((H, W, 3), np.uint8)) is None
+
+
+def real_frame(text):
+    u0, v0, u1, v1 = REAL_BOX
+    x0, y0, x1, y1 = int(u0 * W), int(v0 * H), int(u1 * W), int(v1 * H)
+    img = np.zeros((y1 - y0, x1 - x0), np.uint8)
+    (tw, th), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 1.6, 3)
+    cv2.putText(img, text, ((img.shape[1] - tw) // 2, (img.shape[0] + th) // 2),
+                cv2.FONT_HERSHEY_SIMPLEX, 1.6, 255, 3, cv2.LINE_AA)
+    f = np.zeros((H, W, 3), np.uint8)
+    f[y0:y1, x0:x1] = img[..., None]
+    return f
+
+
+def test_real_box_synthetic_thousands_separator_never_wrong(templates, monkeypatch):
+    monkeypatch.setattr(score, "SCORE_BOX", REAL_BOX)
+    assert read_score(real_frame("2,000")) in (2000, None)
+
+
+@pytest.mark.parametrize("name", ["black", "white", "noise", "tiny", "grey2d"])
+def test_real_box_degenerate_inputs_none(templates, monkeypatch, name):
+    monkeypatch.setattr(score, "SCORE_BOX", REAL_BOX)
+    rng = np.random.default_rng(0)
+    frames = {"black": np.zeros((H, W, 3), np.uint8), "white": np.full((H, W, 3), 255, np.uint8),
+              "noise": rng.integers(0, 256, (H, W, 3), dtype=np.uint8),
+              "tiny": np.zeros((10, 10, 3), np.uint8), "grey2d": np.full((H, W), 128, np.uint8)}
+    assert read_score(frames[name]) is None
 
 
 def test_missing_templates_returns_none(tmp_path, monkeypatch):

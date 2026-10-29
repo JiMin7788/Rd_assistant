@@ -71,6 +71,9 @@ class FakeInjector:
 
 
 class FakeSaver:
+    def burst(self, *a, **kw):
+        return None
+
     def cells(self, *a, **kw):
         pass
 
@@ -128,6 +131,12 @@ class FakePerception:
 
     def effect_kind(self, text):
         return self.kinds.get(text)
+
+    def read_cells_support(self, f, cells, pip_source="auto"):
+        return [{"cell": c, "type": "junk", "variant": "junk", "pip": 0, "conf": 1.0} for c in cells]
+
+    def frames_equal(self, a, b):
+        return a == b
 
     def read_board_support(self, f, pip_source="auto"):
         self.pip_sources.append(pip_source)
@@ -363,7 +372,8 @@ def test_summon_bonus_banner_changes_nothing():
     p, perc, clock = _banner_player("summon_bonus_when_short")
     ticks(p, 3)
     assert p.clone_until < 0 and p.hold_power_until < 0
-    assert p.stats == {"merges": 0, "fails": 0, "support": 1, "complete": False}
+    assert {k: p.stats[k] for k in ("merges", "fails", "support", "complete")} == {
+        "merges": 0, "fails": 0, "support": 1, "complete": False}
 
 
 def test_trial_pip_source():

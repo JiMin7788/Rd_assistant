@@ -11,6 +11,7 @@ ensemble and loads no support pip or star file.
 from __future__ import annotations
 import hashlib
 import json
+import numbers
 import os
 import tomllib
 import numpy as np
@@ -37,14 +38,35 @@ DECK_BAR_MIN = 0.70
 POWER_BAND = (0.0, 0.78, 1.0, 0.96)
 POWER_MIN = 0.70
 POWER_DU = 0.06
+# Card templates: the dice icon only (lower part, below the dice-count badge, above 'Lv.N'),
+# cut from the normalised power-panel frame data/support_frames/sup20261029_135038/panel_121.1.png.
+# Identity comes from matching the card icon with board dice of the same look in that frame, whose
+# labels are support_type_cnn's, not from slot order:
+#   Resonance (card 1, u 0.13): white octagon with a green centre dot = board cells 1, 5, 10, 14, 15
+#     of the same frame (CNN: Resonance).
+#   Alignment (card 2, u 0.31): yellow-framed cross-arrow die; the board look of cells 4 and 13 (CNN:
+#     Alignment) has the same arrows. Only this look is on the panel, so there is no _b template.
+#   Growth (card 5, u 0.86): white up/down-arrow die with a purple pip = the Growth die of
+#     sup20261029_141449/335.8.png cell 10 and sup20261029_152652/30.3.png cell 7 (CNN: Growth,
+#     conf 0.93-0.95); no other card of the panel has that face.
 CARD_TEMPLATES = {
     "Growth": ("ui_power_growth_card.png",),
-    "Alignment": ("ui_power_align_card_a.png", "ui_power_align_card_b.png"),   # both looks of the card
+    "Alignment": ("ui_power_align_card_a.png", "ui_power_align_card_b.png"),   # _b: only if a second look is found
     "Resonance": ("ui_power_res_card.png",),
 }
-# (du0, dv0, du1, dv1) offsets from the buy-button centre, content-normalised; measured later (t14)
-LV_BOX = None
+# (du0, dv0, du1, dv1) offsets from the buy-button centre, content-normalised (u over the content
+# width, v over the height). Measured on the five H1 panels sup20261029_{135038,141449,143137,145953,152652}/
+# panel_*.png (Lv.1 and Lv.2): the digits of Resonance/Alignment/Growth sit at +17..+46 px, -88..-62 px
+# of a 1251x2224 frame. The 'Lv.' dot ends at +20 px for the Growth card, so the box starts there
+# (a dot inside the box makes digits.glyphs return None) and ends at +56 px for a second digit.
+LV_BOX = (0.0160, -0.0414, 0.0448, -0.0261)
 LV_RANGE = (1, 30)
+
+# A read is unreadable when its type is junk or conf < READ_CONF_MIN. Measured with
+# tools/support_conf_report.py --holdout sup20261029_152652 --tags sup1 --data-dir C:/dev/rdom/data:
+#   conf >= 0.90: kept 1003/1008 (99.5%), accuracy of kept 0.997, wrong kept 3, wrong dropped 1
+#   chosen READ_CONF_MIN = 0.90 (largest with kept >= 95%)
+READ_CONF_MIN = 0.90
 
 _models = {}
 
@@ -132,20 +154,34 @@ def star_prob(hires_crops):
     return np.mean(outs, 0)
 
 
-def read_board_support(frame_rgb, pip_source="auto"):
-    """15 dicts {cell, type, variant, pip, conf}, cell order 1..15. Pip 7 is the star
-    detector's call when the star nets exist (auto only): p > 0.5 -> 7, else a 7 becomes 6."""
-    crops = gear.cell_crops(frame_rgb)
+def read_cells_support(frame_rgb, cells, pip_source="auto"):
+    """Raw reads {cell, type, variant, pip, conf} of the given cells (1..15), in the given order.
+    Pip 7 is the star detector's call when the star nets exist (auto only): p > 0.5 -> 7, else a 7 becomes 6.
+    A cell outside 1..15, a bool or a non-integer raises ValueError (nothing is read)."""
+    cells = list(cells)
+    # AI-NOTE: without this check cell 0 / negatives index the crop list from the end (another cell's read under the wrong label);
+    # True would read cell 1 and 2.5 died with a TypeError, so bools and non-integers get the same ValueError
+    bad = [c for c in cells
+           if isinstance(c, bool) or not isinstance(c, numbers.Integral) or not 1 <= c <= 15]
+    if bad:
+        raise ValueError(f"cells must be in 1..15, got {bad}")
+    all_crops = gear.cell_crops(frame_rgb)
+    crops = [all_crops[c - 1] for c in cells]
     labs, conf = predict_types_support(crops)
     dice = [i for i, lab in enumerate(labs) if lab not in NO_PIP]
     pips = dict(zip(dice, predict_pips_support([crops[i] for i in dice], pip_source)))
     if dice and pip_source != "gear":
-        sp = star_prob([gear.hires_cell(frame_rgb, i + 1, 128) for i in dice])
+        sp = star_prob([gear.hires_cell(frame_rgb, cells[i], 128) for i in dice])
         if sp is not None:
             for i, p in zip(dice, sp):
                 pips[i] = 7 if p > 0.5 else min(pips[i], 6)
-    return [{"cell": i + 1, "type": lab, "variant": lab, "pip": pips.get(i, 0), "conf": float(c)}
-            for i, (lab, c) in enumerate(zip(labs, conf))]
+    return [{"cell": c, "type": lab, "variant": lab, "pip": pips.get(i, 0), "conf": float(cf)}
+            for i, (c, lab, cf) in enumerate(zip(cells, labs, conf))]
+
+
+def read_board_support(frame_rgb, pip_source="auto"):
+    """15 dicts {cell, type, variant, pip, conf}, cell order 1..15."""
+    return read_cells_support(frame_rgb, range(1, 16), pip_source)
 
 
 # ---- gate (Hard Rule R4) ----
