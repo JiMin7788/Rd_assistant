@@ -2,7 +2,7 @@
 title: Support-deck rule engine
 type: component
 updated: 2026-10-29
-sources: [rdf01-t1]
+sources: [rdf01-t1, rdf01-r2-s6]
 ---
 # Support-deck rule engine
 
@@ -18,7 +18,7 @@ sources: [rdf01-t1]
 - Complete = `res7` Resonance pip 7 (2) + `align7_min` Alignment pip 7 (3) + Bubbles >= keep lo (2). Merging continues after completion; `wait` has why `complete` or `no move`.
 - Pip-7 dice and Growth never merge (bot policy). Adjust merges with any die of equal pip. Bomb merges only with Bomb or pip-1 Adjust.
 - Order per call: empty cell → `summon`; clone_alert supporter; bomb; Joker copy (Alignment > Resonance > Bubble only while Bubbles < lo); crystal merge; best merge; supporter; wait.
-- Best merge: highest pip, then Adjust paired with Resonance/Alignment over Adjust+Bubble, then landing column in `align_cols`, then smaller `to` cell. With Bubbles > keep hi the merge must consume a Bubble.
+- Best merge: highest pip, then at equal pip an Adjust paired with Resonance/Alignment beats any other pair (e.g. plain Alignment+Alignment), which beats Adjust+Bubble, then landing column in `align_cols`, then smaller `to` cell. With Bubbles > keep hi the merge must consume a Bubble.
 - Bubble keep: a merge may not drop Bubbles below keep lo, so with exactly 2 Bubbles none is consumed and with 3 only a one-Bubble merge (e.g. Bubble+Adjust) is allowed.
 - Supporter pool (only when `support_ready`): Adjust 7, then highest Bubble while above keep hi, then Resonance 7 beyond `res7`, then a partnerless Adjust 2..6. Growth, Alignment and pip-1 dice are never chosen.
 - clone_alert: a Bubble/Adjust/Joker above every Resonance/Alignment is rerolled; merges whose result would exceed the top Resonance/Alignment pip are banned.
@@ -33,3 +33,4 @@ sources: [rdf01-t1]
 - `config/deck.toml` — `force`, `[decks.support]` placed after `[decks.decay]`
 - `src/rdom/perception/gear.py` — `deck_name()` falls back to the first deck table
 - commit `0720269` — rdf01-t1 change
+- commit `e3ae428` — rdf01-r2-s6: `_best_merge` key `adj_pref` 2/1/0; tests `test_equal_pip_adjust_res_align_beats_plain_alignment_pair` and `test_keeper_prefers_align_column_else_smaller_cell` (test file not yet in the main checkout when written, so cited by commit)

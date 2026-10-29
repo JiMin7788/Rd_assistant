@@ -69,3 +69,7 @@
 ## 2026-10-29 · rdf01-i1 · integration fixes round 1
 - PowerTracker.start_visit gained `found`: a card not on the panel is level None and does not force src `count`; record levels are null only for cards never found in the game. Runbook now trains star/pip models for seeds 1-3.
 - pages: components/policy-power.md (updated), components/support-players.md (updated)
+
+## 2026-10-29 · rdf01-r2-s6 · equal-pip merge tie-break
+- `_best_merge` equal-pip order is now Adjust+Resonance/Alignment > other pairs > Adjust+Bubble (QA S6: a plain Alignment pair used to win).
+- pages: components/policy-support.md (updated)
