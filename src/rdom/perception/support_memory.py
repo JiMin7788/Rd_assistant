@@ -6,13 +6,23 @@ is kept until the cell really changes (spec rdF02 R6, R7). Reads are dicts {cell
 Effective reads carry src: 'read' (raw), 'memory', 'burst', 'unknown'.
 """
 
+import math
+
 GROWTH = "Growth"
 EMPTY = "empty"
 JUNK = "junk"
 
 
+def _finite(x):
+    try:
+        return math.isfinite(x)
+    except TypeError:
+        return False
+
+
 def _unreadable(d, conf_min):
-    return d["type"] == JUNK or d["conf"] < conf_min
+    # AI-NOTE: a NaN conf makes `conf < conf_min` False, which would read as confident; a non-finite conf is unreadable
+    return d["type"] == JUNK or not _finite(d["conf"]) or d["conf"] < conf_min
 
 
 def _value(d):

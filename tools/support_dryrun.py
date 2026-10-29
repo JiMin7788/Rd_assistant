@@ -26,6 +26,9 @@ def dryrun(frame_rgb):
 
 def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
+    if argv in (["--help"], ["-h"]):                # AI-NOTE: otherwise '--help' was opened as an image path
+        print("usage: python tools/support_dryrun.py <frame.png>")
+        return 0
     if len(argv) != 1:
         print("usage: python tools/support_dryrun.py <frame.png>")
         return 2

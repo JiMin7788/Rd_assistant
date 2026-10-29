@@ -11,6 +11,7 @@ ensemble and loads no support pip or star file.
 from __future__ import annotations
 import hashlib
 import json
+import numbers
 import os
 import tomllib
 import numpy as np
@@ -156,10 +157,12 @@ def star_prob(hires_crops):
 def read_cells_support(frame_rgb, cells, pip_source="auto"):
     """Raw reads {cell, type, variant, pip, conf} of the given cells (1..15), in the given order.
     Pip 7 is the star detector's call when the star nets exist (auto only): p > 0.5 -> 7, else a 7 becomes 6.
-    A cell outside 1..15 raises ValueError (nothing is read)."""
+    A cell outside 1..15, a bool or a non-integer raises ValueError (nothing is read)."""
     cells = list(cells)
-    # AI-NOTE: without this check cell 0 / negatives index the crop list from the end (another cell's read under the wrong label)
-    bad = [c for c in cells if not 1 <= c <= 15]
+    # AI-NOTE: without this check cell 0 / negatives index the crop list from the end (another cell's read under the wrong label);
+    # True would read cell 1 and 2.5 died with a TypeError, so bools and non-integers get the same ValueError
+    bad = [c for c in cells
+           if isinstance(c, bool) or not isinstance(c, numbers.Integral) or not 1 <= c <= 15]
     if bad:
         raise ValueError(f"cells must be in 1..15, got {bad}")
     all_crops = gear.cell_crops(frame_rgb)
