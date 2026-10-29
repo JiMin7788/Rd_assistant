@@ -119,3 +119,7 @@
 ## 2026-10-29 · rdf02-t7 · H2 readiness
 - tools/save_frame.py claims names with exclusive create (_2.._99), never overwrites; run_all SHOW echoes cell-memory lines; H2 runbook and H1-done note in CLAUDE_CODE_TODO.md.
 - pages: components/capture-live.md (updated), howto/run-bot.md (updated)
+
+## 2026-10-29 · rdf02-i1 · integration fixes round 1
+- _burst now blanks cells forgotten by an R7.4 external event from apply_burst on this tick's effective board (before, only the burst cell was replaced), so a forgotten die cannot be merged on a "stable" board.
+- pages: components/support-players.md (updated)
