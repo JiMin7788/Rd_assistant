@@ -1,6 +1,6 @@
 """Check the support-deck perception assets against the saved H1 data.
 
-  python tools/check_support_assets.py [--data-dir <repo>/data] [--out-dir <tmp>/rdom_lvbox]
+  python tools/check_support_assets.py [--data-dir <repo>/data] [--out-dir <data-dir>/support_frames/_check]
 
 Prints one line per check; exit 0 (exit 1 only on an exception). Missing inputs give n=0 / 0/0.
   score: n=<n> correct=<c> none=<k> wrong=<w>   read_score on data/digits/score/<value>_<any>.png crops
@@ -21,9 +21,9 @@ Run on C:/dev/rdom/data (2026-10-29):
   deck bar: support 181/181 gear-false 5/5
   deck bar excluded: 0
   power cards: 5/5
-  lv box: drew 5 overlays to <tmp>/rdom_lvbox
+  lv box: drew 5 overlays to <data-dir>/support_frames/_check
 """
-import argparse, glob, os, sys, tempfile
+import argparse, glob, os, sys
 import cv2
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
@@ -160,8 +160,10 @@ def draw_lv_boxes(data_dir, out_dir):
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--data-dir", default=os.path.join(ROOT, "data"))
-    ap.add_argument("--out-dir", default=os.path.join(tempfile.gettempdir(), "rdom_lvbox"))   # overlays are never written into data/
+    ap.add_argument("--out-dir", default=None)   # AI-NOTE: default depends on --data-dir, so it is resolved after parsing
     a = ap.parse_args(argv)
+    if a.out_dir is None:
+        a.out_dir = os.path.join(a.data_dir, "support_frames", "_check")
     try:
         print(check_score(a.data_dir))
         print(check_score_lobby(a.data_dir))

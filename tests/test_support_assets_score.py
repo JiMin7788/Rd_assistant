@@ -97,6 +97,15 @@ def test_main_without_inputs_prints_zero_lines(env, tmp_path, capsys, sub):
         "power cards: 0/0", f"lv box: drew 0 overlays to {ov}"]
 
 
+def test_main_default_out_dir_is_support_frames_check(env, tmp_path, capsys):
+    cs, _, _ = env
+    d = tmp_path / "empty_data"
+    d.mkdir()
+    assert cs.main(["--data-dir", str(d)]) == 0
+    expected = d / "support_frames" / "_check"
+    assert capsys.readouterr().out.splitlines()[-1] == f"lv box: drew 0 overlays to {expected}"
+
+
 def test_main_exit_1_on_exception(env, monkeypatch, capsys):
     cs, data, _ = env
     monkeypatch.setattr(cs, "check_score", lambda d: 1 / 0)
