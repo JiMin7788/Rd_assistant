@@ -387,6 +387,11 @@ class PlayPlayer(BasePlayer):
             self.stats["burst_hits"] += 1
             e, events = mem.apply_burst(c, results[c], unread)
             eff[c - 1] = e
+            for ev in events:
+                if ev["kind"] == "external":
+                    # AI-NOTE: R7.4 dropped these memories (maybe resolved earlier in this burst); the board must not keep the old die.
+                    for x in ev["forgot"]:
+                        eff[x - 1].update(type="junk", variant="junk", pip=0, src="unknown")
             self._log_events(events)
         for c in cells:
             if results[c] is None and mem.state(c) == "unknown":
