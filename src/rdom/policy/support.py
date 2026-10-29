@@ -199,9 +199,12 @@ def _best_merge(cands, ev, deck):
 
     def key(p):
         a, b = p
-        # AI-NOTE: Adjust is worth more spent on Resonance/Alignment (raises their pip)
-        # than on a Bubble, so an Adjust+Bubble pair loses the equal-pip tie.
-        adj_pref = 0 if {a["type"], b["type"]} == {"Adjust", "Bubble"} else 1
+        # AI-NOTE: Adjust is worth most spent on Resonance/Alignment (raises their pip) and
+        # least on a Bubble, so at equal pip: Adjust+Res/Align > other pairs > Adjust+Bubble.
+        # The rest of the key lands in align_cols, else on the smaller cell.
+        types = {a["type"], b["type"]}
+        adj_pref = (2 if "Adjust" in types and types & {"Resonance", "Alignment"}
+                    else 0 if types == {"Adjust", "Bubble"} else 1)
         return (a["pip"], adj_pref, _col(b["cell"]) in deck.align_cols, -b["cell"])
 
     a, b = max(cands, key=key)
