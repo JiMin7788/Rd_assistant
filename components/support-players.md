@@ -2,7 +2,7 @@
 title: Support players (Perception, BasePlayer, CollectPlayer, PlayPlayer)
 type: component
 updated: 2026-10-29
-sources: [rdf01-t10, rdf01-t11, rdf01-t16, rdf01-i1, rdf02-t5]
+sources: [rdf01-t10, rdf01-t11, rdf01-t16, rdf01-i1, rdf02-t5, rdf02-t6]
 ---
 # Support players (Perception, BasePlayer, CollectPlayer, PlayPlayer)
 
@@ -22,9 +22,11 @@ sources: [rdf01-t10, rdf01-t11, rdf01-t16, rdf01-i1, rdf02-t5]
 Summons (tap `summon`, >= 1 s apart); at battle time >= 120 s (`PANEL_AT`) taps `power_open` once. On the first panel seen after that it saves one `panel_<t>.png` frame, then only closes the panel. It never touches the board, hpsp or transcend and never taps a power card, so it cannot buy a power-up.
 
 ## PlayPlayer (board play)
-`PlayPlayer(trial=False, deck=None)` extends BasePlayer. `trial=True` reads pips with `read_board_support(pip_source="gear")`, otherwise `"auto"`; both use the same tick rules. `battle_tick` order: banner OCR, board read, merge-effect check, guards, `plan_support`, action.
-- **Guards (R2):** no board action unless two consecutive reads are identical (skipped when the board is empty); more than 3 junk (`unknown`) cells -> no action; a merge or supporter touching a `buffed_cells` cell needs 4 identical reads of that cell (`BUFF_STEADY`).
-- **Merge ban:** the tick after a merge swipe, if both cells are unchanged it prints `merge a->b had no effect -> banned until those dice change`, bans the pair, saves failure crops (`collect.save_fail`, only if `unobscured()`) and bumps `stats["fails"]`. The ban is keyed on die types only (a flickering pip read must not clear it) and expires after 90 s.
+`PlayPlayer(trial=False, deck=None)` extends BasePlayer. `trial=True` reads pips with `read_board_support(pip_source="gear")`, otherwise `"auto"`; both use the same tick rules. `battle_tick` order: banner OCR, raw board read, `CellMemory.update` (effective board `b`), burst if due, merge verification, guards, `plan_support`, action.
+- **Effective board (rdf02-t6):** `self.memory = CellMemory(READ_CONF_MIN)` turns the raw read into `b`; `plan_support`, the stability check (`sig`) and the R13 line use `b`. `fmt_board` marks cells with `src` memory/burst with a trailing `*`. Memory events print: `cell N unreadable -> keep <tok> (last confident read)`, `cell N unreadable -> occupied, unknown` (once per cell until it leaves `unknown`), `board changed without our action at <cells> -> forget remembered <cells|none>` (bumps `stats["forgets"]`). A swipe calls `memory.own_action([from, to])`; a supporter swipe calls `memory.supported(from)`.
+- **Bursts:** each tick `burster.due(now, unread, memory)`; `_burst` runs it, books it with `burster.done`, applies accepted results through `memory.apply_burst` into the effective board, prints `burst cells 3,7 -> 3=Re3 7=? (4 of 6 grabs)` (the tick frame counts as a grab in the log; the record's `grabs` is grabs taken), saves via `maybe_save`. Stats: `bursts`, `burst_hits` (accepted cells), `mem_ticks` (ticks with any memory cell), `forgets`.
+- **Guards (R2):** no board action unless two consecutive effective boards are identical (skipped when the board is empty); more than 3 RAW unreadable cells (`len(unread) > MAX_JUNK`, not effective junk) -> no action; a merge or supporter touching a `buffed_cells` cell needs 4 identical reads of that cell (`BUFF_STEADY`). While a merge is being verified, `merge`/`support` are not issued (summon still is).
+- **Merge verification (R7.1):** `_pending = [from, to, {cell: (type, pip)} at the swipe, undecided ticks]`; each tick `merge_verdict` runs on the RAW reads against those values. `effect` -> `memory.merged(from, to)`, and a still-`memory` effective cell is overwritten with junk/unknown for that tick. `none` -> prints `merge a->b had no effect -> banned until those dice change`, bans the pair, saves failure crops (`collect.save_fail`, only if `unobscured()`), bumps `stats["fails"]`. `undecided` (cells unreadable) is retried up to `VERIFY_TICKS` 3 ticks, then counts as `effect` (no ban, no fail count). The ban is keyed on die types only (a flickering pip read must not clear it) and expires after 90 s.
 - **Actions:** summon taps >= 0.5 s apart; supporter swipe from the cell to `gear.UI["support"]` only when >= 130 s since the last; merge/supporter print the R13 board line and bump `stats["merges"]`/`["support"]`. `stats["complete"]` turns True once `evaluate_support` reports complete. hpsp and transcend are never tapped.
 - **Banners:** OCR at most every 3 s. `destroy3_clone_max` sets `clone_until = now+45` (passed to `plan_support` as `clone_alert`); `sp_double_later` sets `hold_power_until = now+65` (gates the power bar); `summon_bonus_when_short` only prints.
 - **Power bar (R13 step 10):** `_power_due` = >= 20 s (`POWER_EVERY`) since the last power visit/tap and `now > hold_power_until`. When the board is complete it prints `power-up (complete)`; when `plan_support` says `wait` it prints `idle (<why>) -> power-up`; either taps `power_open`. Both are only reached after the R2 guards.
@@ -32,8 +34,8 @@ Summons (tap `summon`, >= 1 s apart); at battle time >= 120 s (`PANEL_AT`) taps 
 - **Score/milestones (R14):** every battle tick feeds `read_score` to `ScoreTracker`; a confirmed value goes to `MilestoneTracker.on_score`. On a stable board `on_board({res7, align7, bubbles})` is fed too. Each event prints its log line and saves a screenshot to `data/support_runs/<game_id>/<id>_<score|na>.png` or `cross_<S>_<score>.png`; a covered window (Saver returns None) stores shot null via `set_shot`.
 - `last_frame` (last battle frame) is kept for `play()`'s `end.png`.
 
-## Burster (burst mechanics, not yet called by a player)
-`Burster(player)` holds the burst state and only grabs and reads; it never touches the injector. Constants: `BURST_N` 6 (tick frame + 5 grabs), `BURST_DT` 0.08 s, `BURST_GAP` 3 s between bursts, `BURST_REFRESH` 15 s, `BURST_FAILS` 3, `BURST_SAVE_GAP` 10 s, `BURST_SAVE_MAX` 60.
+## Burster (burst mechanics, called by PlayPlayer since rdf02-t6)
+`Burster(player)` holds the burst state and only grabs and reads; it never touches the injector. `PlayPlayer._burst` drives it (see above); CollectPlayer does not use it. Constants: `BURST_N` 6 (tick frame + 5 grabs), `BURST_DT` 0.08 s, `BURST_GAP` 3 s between bursts, `BURST_REFRESH` 15 s, `BURST_FAILS` 3, `BURST_SAVE_GAP` 10 s, `BURST_SAVE_MAX` 60.
 - `due(now, unreadable_cells, memory)` -> ascending cells to burst. Empty if < `BURST_GAP` since any burst or if the unreadable count is not 1..`MAX_JUNK`. A cell is due when `memory.state(c)` is `unknown` (unless it failed `BURST_FAILS` bursts in a row and its last burst is < `BURST_REFRESH` ago) or `remembered` with the last burst >= `BURST_REFRESH` ago.
 - `run(f, cells, pip_source)` -> `(kept, reads, grabs)`. The tick frame `f` is kept as is; each of the 5 grabs is dropped if it is not battle or equals the previous kept frame (the grabber repeats the last frame when dxcam sees no change, and a repeat must not count as a second read). Every kept frame is read with `read_cells_support`.
 - `done(now, cells, results, reads, conf_min)` books the burst: `fails[c]` resets to 0 if the cell has an accepted result or any non-junk read with `conf >= conf_min`, else it grows by 1.
@@ -56,3 +58,5 @@ Summons (tap `summon`, >= 1 s apart); at battle time >= 120 s (`PANEL_AT`) taps 
 - `C:/dev/_hub/tasks/rdf01-t16/task.json` — task spec AC1–AC7
 - `tools/support_players.py` — `Burster`, `BURST_*` constants, `Perception.read_cells_support` / `frames_equal` (rdf02-t5); commit `558b79e` adds tests/test_support_burst.py (fake-based tests of due/run/done/maybe_save), cited by commit because the file is not yet in the main checkout
 - `C:/dev/_hub/tasks/rdf02-t5/task.json` — task spec
+- `tools/support_players.py` — `PlayPlayer.__init__` (memory, burster, stats), `_log_events`, `_burst`, `_verify_merge`, `VERIFY_TICKS`, `fmt_board` `*` marker, `battle_tick` order (rdf02-t6); commit `78aa900` adds tests/test_support_play_memory.py (fake-based) and adjusts tests/test_support_play_player.py
+- `C:/dev/_hub/tasks/rdf02-t6/task.json` — task spec

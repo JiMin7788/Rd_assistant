@@ -111,3 +111,7 @@
 ## 2026-10-29 · rdf02-t5 · Burst capture and saving
 - Added collect.save_burst (72/128 px burst crops + bursts.jsonl, nothing written when covered), Saver.burst, Perception.read_cells_support/frames_equal, and Burster (due/run/done/record/maybe_save: 6 frames 0.08 s apart, repeat frames dropped, fail backoff, save cap 60). Not yet called by a player.
 - pages: components/support-players.md (updated), components/capture-live.md (updated), components/support-bot-core.md (updated)
+
+## 2026-10-29 · rdf02-t6 · PlayPlayer effective board, bursts, merge verification
+- PlayPlayer now plans on the CellMemory effective board, runs bursts for unreadable cells, verifies merges with merge_verdict on RAW reads (undecided x3 counts as effect), guards on raw unreadable count, prints memory/burst log lines, adds stats bursts/burst_hits/mem_ticks/forgets.
+- pages: components/support-players.md (updated), components/support-memory.md (updated)

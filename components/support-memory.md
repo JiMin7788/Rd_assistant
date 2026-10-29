@@ -2,11 +2,11 @@
 title: Support-deck cell memory
 type: component
 updated: 2026-10-29
-sources: [rdf02-t4]
+sources: [rdf02-t4, rdf02-t6]
 ---
 # Support-deck cell memory
 
-`perception/support_memory.py` is a pure module (no cv2, torch or I/O) that builds an "effective board" from raw support reads: a hacked die reads as junk but keeps its type and pip, so the last confirmed value is remembered until the cell really changes. Not yet called by any player; later rdf02 tasks wire it in.
+`perception/support_memory.py` is a pure module (no cv2, torch or I/O) that builds an "effective board" from raw support reads: a hacked die reads as junk but keeps its type and pip, so the last confirmed value is remembered until the cell really changes. `PlayPlayer` in `tools/support_players.py` uses it since rdf02-t6 (effective board, bursts, merge verification on raw reads); see [support-players](support-players.md). CollectPlayer does not.
 
 ## CellMemory(conf_min, confirm=2)
 - A read is unreadable when `type == "junk"` or `conf < conf_min` (`unreadable(d)`); `conf_min` is a parameter (callers pass `support.READ_CONF_MIN`, see [support perception](perception-support.md)).
@@ -29,3 +29,4 @@ sources: [rdf02-t4]
 
 ## Evidence
 - commit `19fc3e4` (branch task/rdf02-t4, not yet merged into this checkout when written) — adds perception/support_memory.py (CellMemory, burst_result, merge_verdict, _external; own-action and Growth exemption in update) and tests/test_support_memory.py (one test group per rule above).
+- `tools/support_players.py` — PlayPlayer calls `update`, `apply_burst`, `own_action`, `supported`, `merged`, `merge_verdict`, `burst_result` (rdf02-t6, commit `78aa900`).
