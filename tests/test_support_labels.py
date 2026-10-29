@@ -23,6 +23,12 @@ rv = _load("support_review")
 bt = _load("build_support_tag")
 
 
+@pytest.fixture(autouse=True)
+def _no_seed_net(monkeypatch):
+    """The seed kNN needs the gear CNN (data/ is not in a test checkout): off unless a test turns it on."""
+    monkeypatch.setattr(pl, "seed_labels", lambda crops, bank=None: [None] * len(crops))
+
+
 def _write_crops(d, specs):
     """specs: [(game, t, cell, rgb_colour, extra_meta)] -> crops.jsonl + _raw/_hires PNGs."""
     (d / "_raw").mkdir(parents=True, exist_ok=True)
@@ -98,6 +104,83 @@ def test_colour_rule_only_in_tools():
         src = p.read_text(encoding="utf-8")
         assert "support_prelabel" not in src, p
         assert "_colour_label" not in src, p
+        assert "prelabel_seeds" not in src, p
+
+
+# ---- seed nearest-neighbour pre-label (plumbing only, with a fake feature extractor) ----
+
+_real_seed_labels = pl.seed_labels
+BLUE, RED, SPLASH = (40, 40, 250), (250, 40, 40), (60, 60, 60)
+
+
+def _fake_features(crops):                       # mean colour, L2-normalised
+    f = np.array([np.asarray(c, np.float32).mean((0, 1)) for c in crops])
+    return f / np.linalg.norm(f, axis=1, keepdims=True)
+
+
+def _seed_dir(d):
+    for typ, rgb in (("Resonance", BLUE), ("Alignment", RED), ("junk", SPLASH)):
+        (d / typ).mkdir(parents=True)
+        for i in range(3):
+            im = np.zeros((72, 72, 3), np.uint8); im[:] = rgb
+            cv2.imwrite(str(d / typ / f"{i}.png"), cv2.cvtColor(im, cv2.COLOR_RGB2BGR))
+    return d
+
+
+def test_seed_bank_reads_type_folders(tmp_path, monkeypatch):
+    monkeypatch.setattr(pl, "_features", _fake_features)
+    feats, labs = pl.seed_bank(str(_seed_dir(tmp_path / "seeds")))
+    assert sorted(set(labs)) == ["Alignment", "Resonance", "junk"] and len(labs) == 9 and len(feats) == 9
+    assert pl.seed_bank(str(tmp_path / "nope")) is None
+
+
+def test_seed_labels_vote_and_reject(tmp_path, monkeypatch):
+    monkeypatch.setattr(pl, "_features", _fake_features)
+    monkeypatch.setattr(pl, "SEED_K", 3)          # one seed per type is 3 here; the vote needs a majority
+    bank = pl.seed_bank(str(_seed_dir(tmp_path / "seeds")))
+    def crop(rgb):
+        im = np.zeros((72, 72, 3), np.uint8); im[:] = rgb; return im
+    got = _real_seed_labels([crop(BLUE), crop(RED), crop(SPLASH), crop((0, 255, 0))], bank)
+    assert got[:3] == ["Resonance", "Alignment", "junk"]
+    assert got[3] is None                         # too far from every seed (and slime) -> stays "?"
+    assert _real_seed_labels([], bank) == [] and _real_seed_labels([crop(BLUE)], None) == [None]
+
+
+def test_slime_guard_blocks_seed_label(tmp_path, monkeypatch):
+    monkeypatch.setattr(pl, "_features", _fake_features)
+    bank = (_fake_features([np.full((4, 4, 3), (0, 255, 0), np.uint8)]), ["Resonance"])
+    slime = np.zeros((72, 72, 3), np.uint8); slime[:] = (0, 255, 0)
+    assert pl._slime(slime) and not pl._slime(np.full((72, 72, 3), BLUE, np.uint8))
+    assert _real_seed_labels([slime], bank) == [None]
+
+
+def test_prelabel_seed_rows_are_ambiguous_and_out_file(tmp_path, monkeypatch):
+    names = _write_crops(tmp_path, [("g", 1.0, 1, BLUE, {}), ("g", 2.0, 2, (128, 128, 128), {}),
+                                    ("g", 3.0, 3, (0, 0, 255), {})])
+    _patch_gear(monkeypatch, lambda crops: (["Bubble" if c[0, 0, 2] == 255 else "GearTeal" for c in crops],
+                                            [0.95 if c[0, 0, 2] == 255 else 0.5 for c in crops]),
+                lambda c: 2)
+    monkeypatch.setattr(pl, "seed_labels",
+                        lambda crops, bank=None: ["Resonance" if c[0, 0, 0] == 40 else None for c in crops])
+    out = tmp_path / "elsewhere.jsonl"
+    pl.main(["--dir", str(tmp_path), "--out", str(out)])
+    assert not (tmp_path / "prelabels.jsonl").exists()
+    rows = _read(out)
+    assert [r["name"] for r in rows] == names
+    assert [(r["type"], r["src"], r["ambiguous"]) for r in rows] == [
+        ("Resonance", "seed", True), ("?", "none", True), ("Bubble", "gear-model", False)]
+    assert rows[0]["pip"] == 2                    # pips are labelled as before
+
+
+def test_shipped_seeds_and_eval_set():
+    seeds = ROOT / "assets" / "prelabel_seeds"
+    for t in ("Resonance", "Alignment", "junk"):
+        assert 10 <= len(list((seeds / t).glob("*.png"))) <= 40, t
+    rows = [l.split("\t") for l in (ROOT / "assets" / "prelabel_eval_h1.tsv").read_text(encoding="utf-8").splitlines()]
+    assert len(rows) >= 150 and len({r[0] for r in rows}) == len(rows)
+    assert {r[1] for r in rows} <= {"Resonance", "Alignment", "junk", "Growth", "?"}
+    seed_games = {p.name.rsplit("_", 2)[0] for p in seeds.rglob("*.png")}
+    assert not seed_games & {r[0].rsplit("_", 2)[0] for r in rows}   # eval games are not seed games
 
 
 # ---- review sheets ----

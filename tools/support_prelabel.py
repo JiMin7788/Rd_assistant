@@ -1,14 +1,15 @@
 """Pre-label the collected support-deck crops (data/crops_support) for human review.
 
-  python tools/support_prelabel.py [--dir data/crops_support]
+  python tools/support_prelabel.py [--dir data/crops_support] [--out FILE]
 
-Writes <dir>/prelabels.jsonl, one line per crop in crops.jsonl that has a _raw PNG:
+Writes <dir>/prelabels.jsonl (or FILE), one line per crop in crops.jsonl that has a _raw PNG:
 {name, type, pip, src, ambiguous, star_cand}.
 
 Type: the gear type model's label when it is Bubble/Adjust/Growth/empty/junk/Crystal/Joker with
-confidence >= 0.90 (src "gear-model"); else the offline colour rule (src "colour"); else "?".
-Both colour-labelled and "?" crops are `ambiguous` and go to review sheets (tools/support_review.py);
-none is trained on unreviewed (R4, docs/07 §1.1).
+confidence >= 0.90 (src "gear-model"); else the offline colour rule (src "colour"); else the nearest
+eye-checked seed crops in assets/prelabel_seeds/<Type>/ by gear-CNN feature similarity (src "seed");
+else "?". Colour-, seed-labelled and "?" crops are `ambiguous` and go to review sheets
+(tools/support_review.py); none is trained on unreviewed (R4, docs/07 §1.1).
 """
 import argparse
 import collections
@@ -47,6 +48,71 @@ def _colour_label(rgb):
     return None
 
 
+SEED_DIR = os.path.join(os.path.dirname(__file__), "..", "assets", "prelabel_seeds")
+SEED_K = 5            # neighbours that vote
+SEED_MIN_SIM = 0.95   # cosine of the best neighbour below which the crop stays "?"
+SEED_MIN_VOTE = 0.7   # share of the (similarity-weighted) vote the winning type needs
+SLIME_FRAC = 0.14     # green share of the crop centre above which it is a slime splat, not a die
+_bank = {}
+
+
+def _features(crops):
+    """L2-normalised features of the gear type CNN, one row per crop: the global average of the third
+    conv block (64 channels). AI-NOTE: the net is only a feature extractor here, its class head is not
+    used. Measured on the H1 eval set this beat the last block and any flattened (position-bound) map:
+    the dice are shifted and glossy, so a position-free texture/colour summary generalises best."""
+    import torch
+    x = np.stack([cv2.resize(c, (gear.PIP_IN, gear.PIP_IN)) for c in crops]).astype(np.float32) / 255.0
+    with torch.no_grad():
+        f = gear._typenet().f[:3](torch.from_numpy(x.transpose(0, 3, 1, 2))).mean((2, 3)).numpy()
+    return f / np.maximum(np.linalg.norm(f, axis=1, keepdims=True), 1e-9)
+
+
+def seed_bank(seed_dir=SEED_DIR):
+    """(features, labels) of the eye-checked seed crops <seed_dir>/<Type>/*.png, or None when there
+    are none. Cached per directory."""
+    key = os.path.abspath(seed_dir)
+    if key not in _bank:
+        crops, labs = [], []
+        for t in sorted(os.listdir(seed_dir)) if os.path.isdir(seed_dir) else []:
+            for fn in sorted(os.listdir(os.path.join(seed_dir, t))):
+                if fn.endswith(".png") and (rgb := _read_rgb(os.path.join(seed_dir, t, fn))) is not None:
+                    crops.append(rgb); labs.append(t)
+        _bank[key] = (_features(crops), labs) if crops else None
+    return _bank[key]
+
+
+def _slime(rgb):
+    """True when green slime covers the middle of the crop. AI-NOTE: a battle-effect slime splat hides
+    the die face, but the CNN reads it as Resonance (green); on the H1 eval set the green share of the
+    centre is <= 0.12 for real Resonance dice and 0.15..0.43 for slime. Offline pre-label only."""
+    h = rgb.shape[0]
+    m = rgb[int(h * .2):int(h * .8), int(h * .2):int(h * .8)]
+    hsv = cv2.cvtColor(np.ascontiguousarray(m), cv2.COLOR_RGB2HSV)
+    return ((hsv[..., 0] >= 40) & (hsv[..., 0] <= 90) & (hsv[..., 1] > 100) & (hsv[..., 2] > 100)).mean() > SLIME_FRAC
+
+
+def seed_labels(crops, bank=None):
+    """Nearest-neighbour type per crop against the seed bank: a weighted vote of the SEED_K most similar
+    seeds, None when the best one is too dissimilar or the vote is not clear (the crop stays "?")."""
+    bank = bank or seed_bank()
+    if bank is None or not crops:
+        return [None] * len(crops)
+    sf, sl = bank
+    sims = _features(crops) @ sf.T
+    out = []
+    for crop, row in zip(crops, sims):
+        top = np.argsort(-row)[:SEED_K]
+        if row[top[0]] < SEED_MIN_SIM or _slime(crop):
+            out.append(None); continue
+        votes = collections.defaultdict(float)
+        for j in top:
+            votes[sl[j]] += max(float(row[j]), 0.0)
+        best = max(votes, key=votes.get)
+        out.append(best if votes[best] / sum(votes.values()) >= SEED_MIN_VOTE else None)
+    return out
+
+
 def _read_rgb(path):
     im = cv2.imread(path)
     return None if im is None else cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
@@ -75,6 +141,10 @@ def prelabel(d):
                 types.append(cl); srcs.append("colour")
             else:
                 types.append("?"); srcs.append("colour")
+        rest = [i for i, t in enumerate(types) if t == "?"]      # neither gear model nor colour rule
+        for i, sl in zip(rest, seed_labels([crops[i] for i in rest])):
+            if sl is not None:
+                types[i], srcs[i] = sl, "seed"
         dice = [i for i, t in enumerate(types) if t not in support.NO_PIP]
         pips = [0] * len(chunk)
         if dice:
@@ -106,9 +176,10 @@ def prelabel(d):
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--dir", default=DEFAULT_DIR)
+    ap.add_argument("--out", help="write here instead of <dir>/prelabels.jsonl (for evaluation)")
     a = ap.parse_args(argv)
     out = prelabel(a.dir)
-    with open(os.path.join(a.dir, "prelabels.jsonl"), "w", encoding="utf-8") as f:
+    with open(a.out or os.path.join(a.dir, "prelabels.jsonl"), "w", encoding="utf-8") as f:
         for r in out:
             f.write(json.dumps(r) + "\n")
     print("prelabels", len(out), dict(collections.Counter(r["type"] for r in out)),
