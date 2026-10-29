@@ -54,6 +54,17 @@ def test_burst_result_never_accepts_non_finite_conf():
     assert v == "undecided"
 
 
+def test_burster_done_non_finite_conf_does_not_reset_fail_counter():
+    import support_players as sp
+    b = sp.Burster(None)
+    nan_reads = {3: [rd(3, conf=NAN), rd(3, conf=float("inf"))]}
+    for i in range(1, 4):
+        b.done(10.0 * i, [3], {3: None}, nan_reads, CM)
+    assert b.fails[3] == 3
+    b.done(50.0, [3], {3: None}, {3: [rd(3)]}, CM)         # a finite confident read still resets
+    assert b.fails[3] == 0
+
+
 # ---- AC6 ----
 
 @pytest.mark.parametrize("bad", [[True], [2.5], [3, False], ["4"], [None], [1.0]])

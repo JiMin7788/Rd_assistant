@@ -18,7 +18,7 @@ import numpy as np
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 from rdom.input.inject import cell_uv
 from rdom.perception import board, collect, gear, score, support
-from rdom.perception.support_memory import CellMemory, burst_result, merge_verdict
+from rdom.perception.support_memory import CellMemory, _unreadable, burst_result, merge_verdict
 from rdom.policy.milestones import MilestoneTracker
 from rdom.policy.power import PowerTracker, load_power_config, plan_visit
 from rdom.policy.support import evaluate_support, load_support_deck, plan_support
@@ -541,7 +541,8 @@ class Burster:
         self.last_any = now
         for c in cells:
             self.last_burst[c] = now
-            confident = any(d["type"] != "junk" and d["conf"] >= conf_min for d in reads.get(c, []))
+            # AI-NOTE: same predicate as CellMemory, so a NaN conf is not a confident read and does not reset the backoff
+            confident = any(not _unreadable(d, conf_min) for d in reads.get(c, []))
             self.fails[c] = 0 if results.get(c) is not None or confident else self.fails.get(c, 0) + 1
 
     def run(self, f, cells, pip_source="auto"):
