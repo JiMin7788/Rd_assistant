@@ -159,6 +159,21 @@ def test_adjust_prefers_res_align_over_bubble():
     assert {a["from"], a["to"]} == {6, 7}
 
 
+def test_equal_pip_adjust_res_align_beats_plain_alignment_pair():
+    # QA S6: Align4 pair (cells 1,5) vs Adjust4(6)+Res4(11), all in column 1
+    b = sparse({1: "L4", 5: "L4", 6: "A4", 11: "R4"})
+    a = plan_support(b)
+    assert a["op"] == "merge" and {a["from"], a["to"]} & {6, 11}
+    assert plan_support(b) == a
+
+
+def test_keeper_prefers_align_column_else_smaller_cell():
+    a = plan_support(sparse({3: "L4", 5: "L4"}))
+    assert (a["from"], a["to"]) == (5, 3)
+    a = plan_support(sparse({1: "L4", 6: "L4"}))
+    assert (a["from"], a["to"]) == (6, 1)
+
+
 def test_merge_lands_in_align_columns():
     assert plan_support(sparse({1: "R2", 2: "R2"})) == {"op": "merge", "from": 1, "to": 2}
     assert plan_support(sparse({2: "R2", 3: "R2"})) == {"op": "merge", "from": 3, "to": 2}
