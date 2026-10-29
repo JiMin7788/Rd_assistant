@@ -2,6 +2,8 @@ import ast
 import importlib.util
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location("support_judge", ROOT / "tools" / "support_judge.py")
 sj = importlib.util.module_from_spec(spec)
@@ -31,6 +33,27 @@ def test_pass_4_of_5():
     lines, code = sj.judge(five(4))
     assert code == 0
     assert lines[-1] == "판정: 통과 — 5판 중 4판 달성 (4판 필요)"
+
+
+@pytest.mark.parametrize("last", [0, -3])
+def test_last_below_one_is_cannot_judge(last, capsys):
+    lines, code = sj.judge(five(5), last)
+    assert code == 2 and any(l.startswith("판정 불가") for l in lines)
+    assert not any("통과" in l for l in lines)
+    with pytest.raises(SystemExit) as e:
+        sj.main(["--log", str(ROOT / "nonexistent.jsonl"), "--last", str(last)])
+    assert e.value.code == 2
+    assert "판정: 통과" not in capsys.readouterr().out
+
+
+def test_zero_judged_games_cannot_judge():
+    lines, code = sj.judge([], 5)
+    assert code == 2 and lines[-1].startswith("판정 불가")
+
+
+def test_missing_max_score_prints_question_mark():
+    lines, _ = sj.judge([rec("g0", max_score=None)], 1)
+    assert "최고 점수 ?" in lines[0] and "최고 점수 -" not in lines[0]
 
 
 def test_fail_3_of_5():
