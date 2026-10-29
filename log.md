@@ -123,3 +123,7 @@
 ## 2026-10-29 · rdf02-i1 · integration fixes round 1
 - _burst now blanks cells forgotten by an R7.4 external event from apply_burst on this tick's effective board (before, only the burst cell was replaced), so a forgotten die cannot be merged on a "stable" board.
 - pages: components/support-players.md (updated)
+
+## 2026-10-29 · rdf02-i2 · integration fixes round 2
+- check_support_assets.py now writes the lv box overlays to `<data-dir>/support_frames/_check` by default (spec R4), not a temp folder.
+- pages: components/perception-score.md (updated)

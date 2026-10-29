@@ -2,7 +2,7 @@
 title: Score reader and generic digit-template kinds
 type: component
 updated: 2026-10-29
-sources: [rdf01-t4, rdT01, rdf02-t1, rdf02-t2]
+sources: [rdf01-t4, rdT01, rdf02-t1, rdf02-t2, rdf02-i2]
 ---
 # Score reader and generic digit-template kinds
 
@@ -24,7 +24,7 @@ sources: [rdf01-t4, rdT01, rdf02-t1, rdf02-t2]
 - `python tools/check_support_assets.py [--data-dir D]` prints `score: n= correct= none= wrong=` over `D/digits/score/<value>_*.png` crops and `score lobby: none=k/n` over non-battle frames in `D/support_frames/manual`. Exit 1 only on an exception; missing dirs give n=0.
 - Crops are cut with `SCORE_BOX`, so `check_score` pastes each crop back at the box position in a blank 2224-high frame before calling `read_score`. Unreadable files and names without an integer prefix are skipped, not counted.
 - Last run on `C:/dev/rdom/data` (2026-10-29): `score: n=42 correct=38 none=4 wrong=0`, `score lobby: none=1/1`. `wrong` must stay 0 (exact-or-None reader).
-- rdf02-t2 added `--out-dir` (default `<tmp>/rdom_lvbox`, overlays never go into `data/`) and three more lines: `deck bar: support t/n gear-false g/m`, `deck bar excluded: k (names, max 10 then ...)`, `power cards: k/n`, `lv box: drew n overlays to <dir>`. Support frames are `sup*/<t>.png`; ones with the power panel open ("panel") or no battle ("bar hidden") are excluded and listed, `panel_*.png` frames feed power cards and the LV_BOX overlays. A power-cards frame counts only if Growth, Alignment and Resonance sit on three different buttons. H1 run: `deck bar: support 181/181 gear-false 5/5`, `excluded: 0`, `power cards: 5/5`, `lv box: drew 5`. Templates and LV_BOX: [perception-support.md](perception-support.md).
+- rdf02-t2 added `--out-dir` (default `<data-dir>/support_frames/_check` since rdf02-i2, resolved after parsing because it depends on `--data-dir`; it was a temp folder before, which left the folder named in spec R4 and the runbook empty) and three more lines: `deck bar: support t/n gear-false g/m`, `deck bar excluded: k (names, max 10 then ...)`, `power cards: k/n`, `lv box: drew n overlays to <dir>`. Support frames are `sup*/<t>.png`; ones with the power panel open ("panel") or no battle ("bar hidden") are excluded and listed, `panel_*.png` frames feed power cards and the LV_BOX overlays. A power-cards frame counts only if Growth, Alignment and Resonance sit on three different buttons. H1 run: `deck bar: support 181/181 gear-false 5/5`, `excluded: 0`, `power cards: 5/5`, `lv box: drew 5`. Templates and LV_BOX: [perception-support.md](perception-support.md).
 - Tests (tests/test_support_assets_score.py, tests/test_support_assets_ui.py) use synthetic digits in `tmp_path` and assert the committed npz has `T` of shape (10, GH, GW).
 
 ## Building templates for a kind
@@ -40,4 +40,5 @@ sources: [rdf01-t4, rdT01, rdf02-t1, rdf02-t2]
 - `src/rdom/perception/score.py` — `SCORE_BOX` value and measurement comment; grey-frame handling in `read_score`.
 - commit `9273516` (branch task/rdf02-t1, not yet merged into this checkout when written) — adds tools/check_support_assets.py (`check_score`, `_frame_for_crop`, `check_score_lobby`, docstring with the run on `data/`), tests/test_support_assets_score.py, assets/templates/digits_score.npz, and the box/separator/degenerate-input tests in tests/test_support_score.py.
 - commit `ee3d48d` (branch task/rdf02-t2, not yet merged into this checkout when written) — tools/check_support_assets.py: check_deck_bar, check_power_cards, draw_lv_boxes, --out-dir and the docstring with the H1 run; tests/test_support_assets_ui.py.
+- commit `ad02bed` (branch task/rdf02-i2) — tools/check_support_assets.py: `--out-dir` default None resolved in `main()` to `<data-dir>/support_frames/_check`; tests/test_support_assets_score.py `test_main_default_out_dir_is_support_frames_check`.
 - commit `29b2651` (branch task/rdf01-t4, not yet merged into this checkout when written) — adds perception/score.py (`SCORE_BOX`, `read_score` guards, `ScoreTracker.update` None handling) and tests/test_support_score.py (synthetic-glyph tests for reader, tracker and build helper).
