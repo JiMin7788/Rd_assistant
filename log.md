@@ -65,3 +65,7 @@
 ## 2026-10-29 · rdf01-t13 · integration into gear_loop and gear_bot
 - gear_loop now calls support_bot.run_battle (keyword args, gear_play=play) and reloads support models; gear_bot hands over with "wrong_deck" when the support deck bar is seen (first tick, then every 10 s, before all other rules); run_all SHOW and deck.toml comments extended; H1-H3 runbook added to CLAUDE_CODE_TODO.md.
 - pages: components/support-bot-core.md (updated), howto/run-bot.md (updated)
+
+## 2026-10-29 · rdf01-i1 · integration fixes round 1
+- PowerTracker.start_visit gained `found`: a card not on the panel is level None and does not force src `count`; record levels are null only for cards never found in the game. Runbook now trains star/pip models for seeds 1-3.
+- pages: components/policy-power.md (updated), components/support-players.md (updated)

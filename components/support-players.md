@@ -2,7 +2,7 @@
 title: Support players (Perception, BasePlayer, CollectPlayer, PlayPlayer)
 type: component
 updated: 2026-10-29
-sources: [rdf01-t10, rdf01-t11, rdf01-t16]
+sources: [rdf01-t10, rdf01-t11, rdf01-t16, rdf01-i1]
 ---
 # Support players (Perception, BasePlayer, CollectPlayer, PlayPlayer)
 
@@ -28,7 +28,7 @@ Summons (tap `summon`, >= 1 s apart); at battle time >= 120 s (`PANEL_AT`) taps 
 - **Actions:** summon taps >= 0.5 s apart; supporter swipe from the cell to `gear.UI["support"]` only when >= 130 s since the last; merge/supporter print the R13 board line and bump `stats["merges"]`/`["support"]`. `stats["complete"]` turns True once `evaluate_support` reports complete. hpsp and transcend are never tapped.
 - **Banners:** OCR at most every 3 s. `destroy3_clone_max` sets `clone_until = now+45` (passed to `plan_support` as `clone_alert`); `sp_double_later` sets `hold_power_until = now+65` (gates the power bar); `summon_bonus_when_short` only prints.
 - **Power bar (R13 step 10):** `_power_due` = >= 20 s (`POWER_EVERY`) since the last power visit/tap and `now > hold_power_until`. When the board is complete it prints `power-up (complete)`; when `plan_support` says `wait` it prints `idle (<why>) -> power-up`; either taps `power_open`. Both are only reached after the R2 guards.
-- **Power visit (R20), `on_panel` -> `power_visit(f)`:** saves the panel frame (`panel_<t:.1f>.png`) before any buy tap; `power_cards` finds the card centres (none -> `power panel: cards not found -- closed`). Levels are read twice via `card_level`, with a fresh `g.grab()` after `sleep(0.3)`; a card whose two reads differ or are None counts as unread (PowerTracker counts it, line ends `, count)`). `plan_visit(levels, available, cfg, 6)` gives the buy order (empty -> `power panel: nothing to buy -- closed`); buy taps are 0.15 s apart, then `PowerTracker.line` is printed and `close_panel()`.
+- **Power visit (R20), `on_panel` -> `power_visit(f)`:** saves the panel frame (`panel_<t:.1f>.png`) before any buy tap; `power_cards` finds the card centres (none -> `power panel: cards not found -- closed`). Levels are read twice via `card_level`, with a fresh `g.grab()` after `sleep(0.3)`; a card whose two reads differ or are None counts as unread (PowerTracker counts it, line ends `, count)`). Cards `power_cards` did not find are passed as `found` to `start_visit`: they show `-` in the line and do not turn `src` into `count`. `plan_visit(levels, available, cfg, 6)` gives the buy order (empty -> `power panel: nothing to buy -- closed`); buy taps are 0.15 s apart, then `PowerTracker.line` is printed and `close_panel()`.
 - **Score/milestones (R14):** every battle tick feeds `read_score` to `ScoreTracker`; a confirmed value goes to `MilestoneTracker.on_score`. On a stable board `on_board({res7, align7, bubbles})` is fed too. Each event prints its log line and saves a screenshot to `data/support_runs/<game_id>/<id>_<score|na>.png` or `cross_<S>_<score>.png`; a covered window (Saver returns None) stores shot null via `set_shot`.
 - `last_frame` (last battle frame) is kept for `play()`'s `end.png`.
 
@@ -39,6 +39,7 @@ Summons (tap `summon`, >= 1 s apart); at battle time >= 120 s (`PANEL_AT`) taps 
 - Tick order mirrors `tools/gear_bot.py` `play()`.
 
 ## Evidence
+- commit `5115ba1` — support_players.py calls `start_visit(read, set(found))` and prints the line from `levels` directly; test `test_power_visit_missing_card_does_not_make_src_count` in test_support_play_power; cited by commit because the files are not yet in the main checkout
 - commit `8482bf1` — adds tools/support_players.py (Perception wrappers, BasePlayer.tick order and cadence constants, CollectPlayer behaviour) and tests/test_support_collect_player.py (fake-based tests); cited by commit because the files are not yet in the main checkout
 - `C:/dev/_hub/tasks/rdf01-t10/task.json` — task spec
 - commit `ce6f41a` — adds PlayPlayer (guards, merge ban, banner timers, trial pip_source, provisional panel_hook, since replaced) to tools/support_players.py and tests/test_support_play_player.py; cited by commit because the files are not yet in the main checkout

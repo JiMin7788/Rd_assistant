@@ -2,7 +2,7 @@
 title: Power-up order policy
 type: component
 updated: 2026-10-29
-sources: [rdf01-t2]
+sources: [rdf01-t2, rdf01-i1]
 ---
 # Power-up order policy
 
@@ -17,7 +17,11 @@ sources: [rdf01-t2]
 ## Entry points
 - `next_card(levels, available, cfg)` → card or `None`; `plan_visit(levels, available, cfg, n=6)` → up to 6 taps for one panel visit, simulating each level rise.
 - `load_power_config(path)` reads the `power_*` keys of `[decks.support]` in `config/deck.toml`; a missing file, bad TOML, missing table or key gives the default for it.
-- `PowerTracker`: `start_visit(read)` → `(levels, src, lines)`, `tapped(seq)`, `available()`, `record()`, static `line(seq, levels, src)`.
+- `PowerTracker`: `start_visit(read, found=None)` → `(levels, src, lines)`, `tapped(seq)`, `available()`, `record()`, static `line(seq, levels, src)`.
+
+## Cards not found on the panel
+- `found` = cards the player located this visit (None = all three). A not-found card has level `None` in the returned `levels` (it counts as 0 purchases, so `plan_visit` is unchanged) and does not make `src` `count`: `src` is `read` when every *found* card was read.
+- `record()["levels"]` (R14 `power.levels`) is `None` only for a card never found in the whole game (`_found_ever`); a card found earlier keeps its last base+taps level even if missing on a later visit.
 
 ## Pitfalls
 - Taps without enough SP do nothing, so the order is recomputed from card levels at every panel visit, never from tap history alone. A level read from the screen replaces the count; an unread level is last read plus taps since (`src` `count` instead of `read`).
@@ -26,5 +30,6 @@ sources: [rdf01-t2]
 - The `power_*` keys sit in `[decks.support]`, which must stay after `[decks.decay]` (see [support-deck engine](policy-support.md)).
 
 ## Evidence
+- commit `5115ba1` — power.py (policy package) `start_visit(read, found)`, `_found_ever`, AI-NOTE on record vs returned levels; tests `test_not_found_card_is_none_and_not_unread`, `test_record_levels_null_for_never_found_card` in test_policy_power; cited by commit because the files are not yet in the main checkout
 - commit `5359adb` — adds the power-up module (power.py in the policy package: `next_card`, `PowerTracker`), its tests (test_policy_power) and the `power_*` keys; cited by commit because the files are not yet in the main checkout
 - `config/deck.toml` — `power_growth_first`, `power_ratio`, `power_growth_late`, `power_growth_late_after` under `[decks.support]`
