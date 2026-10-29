@@ -1,7 +1,7 @@
 # rdom wiki
 
 ## Components
-- [Live screen capture](components/capture-live.md) — dxcam grab of the content rect, window-move check, hang watchdog, unobscured check + support crop/frame/burst writers (2026-10-29)
+- [Live screen capture](components/capture-live.md) — dxcam grab of the content rect, window-move check, hang watchdog, unobscured check + support crop/frame/burst writers, save_frame tool never overwrites (2026-10-29)
 - [Input injection (M2)](components/input-inject.md) — PostMessage taps/swipes to GPG, dry-run default, UI coordinates (2026-10-23)
 - [Board perception and cell tracker (Predator deck)](components/perception-board.md) — board.py reads + screen states, Layer A belief tracker (2026-10-23)
 - [Gear-deck perception](components/perception-gear.md) — CNN type/pip models, deck detection, UI templates, OCR banners (2026-10-23)
@@ -23,7 +23,7 @@
 - [Content-normalised (u,v) coordinates; window messages instead of adb](decisions/input-coordinates.md) — one coordinate space; GPG PostMessage since 2026-10-16 (2026-10-23)
 
 ## Howto
-- [Run the bot (launchers, dry-run, live)](howto/run-bot.md) — .bat launchers, run_all/supervisor, dry-run entry points, support-deck offline frame check (2026-10-29)
+- [Run the bot (launchers, dry-run, live)](howto/run-bot.md) — .bat launchers, run_all/supervisor, dry-run entry points, support-deck offline frame check, run_all SHOW lines, H2 runbook (2026-10-29)
 - [Run the tests](howto/run-tests.md) — pytest from the venv; unittest misses test_policy_gear (2026-10-23)
 
 ## Lessons

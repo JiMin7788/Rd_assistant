@@ -2,7 +2,7 @@
 title: Live screen capture
 type: component
 updated: 2026-10-29
-sources: [seed, rdf01-t6, rdf02-t5]
+sources: [rdf02-t7, seed, rdf01-t6, rdf02-t5]
 ---
 # Live screen capture
 
@@ -37,7 +37,11 @@ ndarray, so frame pixels map 1:1 to content-normalised (u,v) — the same space 
   (`_burst/_hires/`), and appends `record` plus `"names"` (the 72 px names) to `_burst/bursts.jsonl`. Covered
   -> writes nothing and returns `None`; never raises (returns `None` on error). Called through `Saver.burst`
   by the burst code in [support-players](support-players.md).
-- `tools/save_frame.py` saves one manual frame to `data/support_frames/manual/`; exit 1 if covered.
+- `tools/save_frame.py` saves one manual frame to `data/support_frames/manual/`; exit 1 if covered. It no
+  longer goes through `collect.save_frame`: it checks `unobscured()` first (covered -> prints
+  `not saved: game window covered`, no file), then `claim_file(folder, stamp)` creates `<stamp>.png`, else
+  `<stamp>_2.png` ... `_99.png` with exclusive create (`'xb'`), so two saves in the same second (or from two
+  processes) never overwrite. No free name -> `not saved: no free file name`, exit 1.
 
 ## Invariants
 - Changing chrome/window size invalidates coordinates and the recorder's env fingerprint
@@ -47,7 +51,9 @@ ndarray, so frame pixels map 1:1 to content-normalised (u,v) — the same space 
 - `src/rdom/capture/live.py` — `LiveGrabber`, `place_game_window`, `_grab_region` retry spacing, `_grab_watchdog`
 - `src/rdom/capture/live.py` — `rects_cover`, `windows_above`, `LiveGrabber.unobscured`
 - `src/rdom/perception/collect.py` — `save_support_cells`, `save_frame`, `save_burst` (paths, names, jsonl line, covered -> `None`), `_covered_warn`
-- task rdf01-t6 branch (not yet merged into the main checkout): tools/save_frame.py manual frame saver, tests/test_support_collect.py writer/rects tests
+- `tools/save_frame.py` — `claim_file` ('xb' exclusive create, `_2`..`_99` suffix), covered check before claiming
+- commit `d4aff7c` (not yet merged into the main checkout), test_save_frame_tool.py — never-overwrite, skips pre-created suffix, exhausted -> `None`
+- task rdf01-t6 branch (not yet merged into the main checkout): tests/test_support_collect.py writer/rects tests
 - `config/recorder.toml` — `[target]`, `[target.chrome]`, `[target.place]`, `monitor_index = 1`
 - `docs/01_GAME_SPEC.md` — emulator section (GPG since 2026-10-16, chrome 132/72)
 - `docs/05_AMENDMENTS.md` — A1 chrome insets, A2 capture covers content

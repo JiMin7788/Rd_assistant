@@ -115,3 +115,7 @@
 ## 2026-10-29 · rdf02-t6 · PlayPlayer effective board, bursts, merge verification
 - PlayPlayer now plans on the CellMemory effective board, runs bursts for unreadable cells, verifies merges with merge_verdict on RAW reads (undecided x3 counts as effect), guards on raw unreadable count, prints memory/burst log lines, adds stats bursts/burst_hits/mem_ticks/forgets.
 - pages: components/support-players.md (updated), components/support-memory.md (updated)
+
+## 2026-10-29 · rdf02-t7 · H2 readiness
+- tools/save_frame.py claims names with exclusive create (_2.._99), never overwrites; run_all SHOW echoes cell-memory lines; H2 runbook and H1-done note in CLAUDE_CODE_TODO.md.
+- pages: components/capture-live.md (updated), howto/run-bot.md (updated)
