@@ -135,6 +135,16 @@ def test_ambiguous_sheets_single_type(tmp_path):
     assert len(first) == 5 and first[0] == "sheet_00" and first[1] == "0"
 
 
+def test_ambiguous_prints_sheet_paths(tmp_path, capsys):
+    _write_pre(tmp_path, [_pre(f"g_{i:04d}") for i in range(120)])
+    rv.main(["--ambiguous", "--dir", str(tmp_path)])
+    lines = capsys.readouterr().out.splitlines()
+    out = tmp_path / "review" / "amb"
+    for name in ("sheet_00.png", "sheet_01.png", "sheet_02.png", "index.tsv"):
+        assert str(out / name) in lines
+        assert (out / name).exists()
+
+
 def test_ambiguous_mixed_types_and_star_separate(tmp_path):
     rows = ([_pre(f"a_{i:03d}", "Resonance") for i in range(60)] + [_pre(f"b_{i:03d}", "Alignment") for i in range(30)]
             + [_pre(f"c_{i:03d}", "Resonance", star=True) for i in range(10)]
