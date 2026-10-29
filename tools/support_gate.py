@@ -89,7 +89,7 @@ def _predict(sup_dir, names, y_true, pip_true):
         if all(os.path.exists(os.path.join(support._DATA, f)) for f in support.STAR_FILES):
             sp = support.star_prob([C.read_rgb(os.path.join(sup_dir, "_hires", names[i] + ".png")) for i in di])
         for k, i in enumerate(di):
-            pip_pred[i] = pips[k] if sp is None else (7 if sp[k] > 0.5 else min(pips[k], 6))   # as read_board_support
+            pip_pred[i] = pips[k] if sp is None else (7 if sp[k] > support.STAR_THRESHOLD else min(pips[k], 6))   # as read_board_support
     return y_pred, pip_pred
 
 
