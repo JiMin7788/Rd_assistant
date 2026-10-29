@@ -17,3 +17,6 @@ _gear/
 /*.png
 /*.mp4
 config/discord.toml
+
+# Local-only project wiki (C:/dev/_hub/shared/skills/wiki)
+wiki/
