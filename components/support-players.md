@@ -2,14 +2,14 @@
 title: Support players (Perception, BasePlayer, CollectPlayer, PlayPlayer)
 type: component
 updated: 2026-10-29
-sources: [rdf01-t10, rdf01-t11, rdf01-t16, rdf01-i1]
+sources: [rdf01-t10, rdf01-t11, rdf01-t16, rdf01-i1, rdf02-t5]
 ---
 # Support players (Perception, BasePlayer, CollectPlayer, PlayPlayer)
 
 `tools/support_players.py` is the shared per-tick skeleton for the support deck plus the collect-mode and board-play players. All three players are written; `support_bot.play()` ([support-bot-core](support-bot-core.md)) builds them and `run_battle` calls `play()`.
 
 ## Perception
-`Perception` is a thin class of one-line wrappers over `board` (`is_battle`, `is_game_over`, `board_glare`), `gear` (`ui_state`, `power_buttons`, `tactic_sp1000_card`, `banner_present/text`, `effect_kind`, `buffed_cells`, `cell_crops`) and `support` (`read_board_support`, `power_cards`, `card_level`) and `score.read_score`. Players take it as `perc=` so tests script what a tick sees without images.
+`Perception` is a thin class of one-line wrappers over `board` (`is_battle`, `is_game_over`, `board_glare`), `gear` (`ui_state`, `power_buttons`, `tactic_sp1000_card`, `banner_present/text`, `effect_kind`, `buffed_cells`, `cell_crops`) and `support` (`read_board_support`, `power_cards`, `card_level`, `read_cells_support`) and `score.read_score`, plus `frames_equal(a, b)` (same shape and `np.array_equal`). Players take it as `perc=` so tests script what a tick sees without images.
 
 ## BasePlayer.tick priority (first match wins)
 1. `g.window_moved()` true -> return `"moved"` (an `OSError` from it skips the tick); 2. game over -> `"game_over"`; 3. tactic SP1000 card -> tap it, sleep 1.2; 4. `ui["hunt_popup"]` -> tap `hunt_popup_ok`; 5. `ui["power_panel"]` -> subclass `on_panel`; 6. `ui["hunt"]` and >= 3 s since last hunt tap -> tap `hunt`; 7. not battle -> nothing; 8. data cadence, then subclass `battle_tick`.
@@ -32,6 +32,14 @@ Summons (tap `summon`, >= 1 s apart); at battle time >= 120 s (`PANEL_AT`) taps 
 - **Score/milestones (R14):** every battle tick feeds `read_score` to `ScoreTracker`; a confirmed value goes to `MilestoneTracker.on_score`. On a stable board `on_board({res7, align7, bubbles})` is fed too. Each event prints its log line and saves a screenshot to `data/support_runs/<game_id>/<id>_<score|na>.png` or `cross_<S>_<score>.png`; a covered window (Saver returns None) stores shot null via `set_shot`.
 - `last_frame` (last battle frame) is kept for `play()`'s `end.png`.
 
+## Burster (burst mechanics, not yet called by a player)
+`Burster(player)` holds the burst state and only grabs and reads; it never touches the injector. Constants: `BURST_N` 6 (tick frame + 5 grabs), `BURST_DT` 0.08 s, `BURST_GAP` 3 s between bursts, `BURST_REFRESH` 15 s, `BURST_FAILS` 3, `BURST_SAVE_GAP` 10 s, `BURST_SAVE_MAX` 60.
+- `due(now, unreadable_cells, memory)` -> ascending cells to burst. Empty if < `BURST_GAP` since any burst or if the unreadable count is not 1..`MAX_JUNK`. A cell is due when `memory.state(c)` is `unknown` (unless it failed `BURST_FAILS` bursts in a row and its last burst is < `BURST_REFRESH` ago) or `remembered` with the last burst >= `BURST_REFRESH` ago.
+- `run(f, cells, pip_source)` -> `(kept, reads, grabs)`. The tick frame `f` is kept as is; each of the 5 grabs is dropped if it is not battle or equals the previous kept frame (the grabber repeats the last frame when dxcam sees no change, and a repeat must not count as a second read). Every kept frame is read with `read_cells_support`.
+- `done(now, cells, results, reads, conf_min)` books the burst: `fails[c]` resets to 0 if the cell has an accepted result or any non-junk read with `conf >= conf_min`, else it grows by 1.
+- `record(...)` builds the `bursts.jsonl` line (game, t, cells, grabs, kept, reads as `[type, pip, conf]`, result, memory, buffed, glare).
+- `maybe_save(game_id, t, cells, kept, record)` calls `Saver.burst` at most every `BURST_SAVE_GAP` s and `BURST_SAVE_MAX` times; a covered window (`None`) does not use up the quota or restart the gap. File layout: [capture-live](capture-live.md). Memory side: [support-memory](support-memory.md).
+
 ## Pitfalls
 - Levels are read only at visit start, never after a buy tap: the number updates a beat after the tap (HP-reader lesson), so a post-tap read would be stale.
 - Same rule as the core: tests must use fakes (FakeGrabber/injector/saver/perception, injected `clock` and `sleep`) and never import `gear_loop`, `run_all`, `supervisor` or `discord_bot`.
@@ -46,3 +54,5 @@ Summons (tap `summon`, >= 1 s apart); at battle time >= 120 s (`PANEL_AT`) taps 
 - `C:/dev/_hub/tasks/rdf01-t11/task.json` — task spec
 - commit `db27b4f` — adds power bar, power_visit, score/milestone wiring, last_frame to tools/support_players.py and tests/test_support_play_power.py (fakes with scripted scores and panel levels); cited by commit because the files are not yet in the main checkout
 - `C:/dev/_hub/tasks/rdf01-t16/task.json` — task spec AC1–AC7
+- `tools/support_players.py` — `Burster`, `BURST_*` constants, `Perception.read_cells_support` / `frames_equal` (rdf02-t5); commit `558b79e` adds tests/test_support_burst.py (fake-based tests of due/run/done/maybe_save), cited by commit because the file is not yet in the main checkout
+- `C:/dev/_hub/tasks/rdf02-t5/task.json` — task spec

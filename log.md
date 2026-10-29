@@ -107,3 +107,7 @@
 ## 2026-10-29 · rdf02-t4 · CellMemory, burst_result, merge_verdict
 - Added pure perception/support_memory.py: per-cell memory keeps a hacked die's last confirmed value (2 identical reads), unreadable-without-memory is junk/unknown, external change forgets unreadable cells (Growth and own-action cells exempt), burst_result needs 2 agreeing grabs, merge_verdict on raw reads.
 - pages: components/support-memory.md (new)
+
+## 2026-10-29 · rdf02-t5 · Burst capture and saving
+- Added collect.save_burst (72/128 px burst crops + bursts.jsonl, nothing written when covered), Saver.burst, Perception.read_cells_support/frames_equal, and Burster (due/run/done/record/maybe_save: 6 frames 0.08 s apart, repeat frames dropped, fail backoff, save cap 60). Not yet called by a player.
+- pages: components/support-players.md (updated), components/capture-live.md (updated), components/support-bot-core.md (updated)

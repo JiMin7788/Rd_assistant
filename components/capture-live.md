@@ -2,7 +2,7 @@
 title: Live screen capture
 type: component
 updated: 2026-10-29
-sources: [seed, rdf01-t6]
+sources: [seed, rdf01-t6, rdf02-t5]
 ---
 # Live screen capture
 
@@ -32,6 +32,11 @@ ndarray, so frame pixels map 1:1 to content-normalised (u,v) — the same space 
   `save_frame(frame, path, unobscured)` writes a PNG, returns path or `None`. Both write nothing when
   covered and print `frame not saved: game window covered` at most once per 60 s; neither raises.
   Not called from any bot loop yet. The older `maybe_save`/`save_fail` still have no covered check.
+- `save_burst(game_id, t, cells, grabs, unobscured, record)` saves every kept burst grab k of every listed
+  cell as `<game>_<t:.1f>_<cell:02d>_<k>.png` at 72 px (`data/support_frames/_burst/_raw/`) and 128 px
+  (`_burst/_hires/`), and appends `record` plus `"names"` (the 72 px names) to `_burst/bursts.jsonl`. Covered
+  -> writes nothing and returns `None`; never raises (returns `None` on error). Called through `Saver.burst`
+  by the burst code in [support-players](support-players.md).
 - `tools/save_frame.py` saves one manual frame to `data/support_frames/manual/`; exit 1 if covered.
 
 ## Invariants
@@ -41,7 +46,7 @@ ndarray, so frame pixels map 1:1 to content-normalised (u,v) — the same space 
 ## Evidence
 - `src/rdom/capture/live.py` — `LiveGrabber`, `place_game_window`, `_grab_region` retry spacing, `_grab_watchdog`
 - `src/rdom/capture/live.py` — `rects_cover`, `windows_above`, `LiveGrabber.unobscured`
-- `src/rdom/perception/collect.py` — `save_support_cells`, `save_frame`, `_covered_warn`
+- `src/rdom/perception/collect.py` — `save_support_cells`, `save_frame`, `save_burst` (paths, names, jsonl line, covered -> `None`), `_covered_warn`
 - task rdf01-t6 branch (not yet merged into the main checkout): tools/save_frame.py manual frame saver, tests/test_support_collect.py writer/rects tests
 - `config/recorder.toml` — `[target]`, `[target.chrome]`, `[target.place]`, `monitor_index = 1`
 - `docs/01_GAME_SPEC.md` — emulator section (GPG since 2026-10-16, chrome 132/72)
