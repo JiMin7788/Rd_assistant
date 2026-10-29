@@ -26,6 +26,7 @@ NO_PIP = ("empty", "junk", "Crystal", "Bomb")
 TYPE_FILE = "support_type_cnn.pt"
 PIP_FILES = tuple(f"support_pip_pat_e{i}.pt" for i in (1, 2, 3))
 STAR_FILES = tuple(f"support_star_e{i}.pt" for i in (1, 2, 3))
+STAR_THRESHOLD = 0.7     # star = pip 7 when p > this; measured on the H2 holdout 2026-10-30 (0.5: precision 0.838, 0.7: 0.954)
 GATE_FILE = "support_gate.json"
 GEAR_PIP_SINGLE = "gear_pip_pat.pt"
 
@@ -156,7 +157,7 @@ def star_prob(hires_crops):
 
 def read_cells_support(frame_rgb, cells, pip_source="auto"):
     """Raw reads {cell, type, variant, pip, conf} of the given cells (1..15), in the given order.
-    Pip 7 is the star detector's call when the star nets exist (auto only): p > 0.5 -> 7, else a 7 becomes 6.
+    Pip 7 is the star detector's call when the star nets exist (auto only): p > STAR_THRESHOLD -> 7, else a 7 becomes 6.
     A cell outside 1..15, a bool or a non-integer raises ValueError (nothing is read)."""
     cells = list(cells)
     # AI-NOTE: without this check cell 0 / negatives index the crop list from the end (another cell's read under the wrong label);
@@ -174,7 +175,7 @@ def read_cells_support(frame_rgb, cells, pip_source="auto"):
         sp = star_prob([gear.hires_cell(frame_rgb, cells[i], 128) for i in dice])
         if sp is not None:
             for i, p in zip(dice, sp):
-                pips[i] = 7 if p > 0.5 else min(pips[i], 6)
+                pips[i] = 7 if p > STAR_THRESHOLD else min(pips[i], 6)
     return [{"cell": c, "type": lab, "variant": lab, "pip": pips.get(i, 0), "conf": float(cf)}
             for i, (c, lab, cf) in enumerate(zip(cells, labs, conf))]
 
