@@ -52,6 +52,10 @@ class Saver:
     def frame(self, frame, path):
         return collect.save_frame(frame, path, unobscured=self.g.unobscured())
 
+    def burst(self, game_id, t, cells, grabs, record):
+        return collect.save_burst(game_id, t, cells, grabs, unobscured=self.g.unobscured(),
+                                  record=record)
+
 
 def choose_mode(gates):
     """(mode, log line) from gate_state() (R4)."""

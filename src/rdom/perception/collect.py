@@ -116,3 +116,34 @@ def save_frame(frame_rgb, path, unobscured):
     except Exception as e:
         print("save_frame failed:", e, flush=True)
         return None
+
+
+def save_burst(game_id, t, cells, grabs, unobscured, record):
+    """Save every kept burst grab k of every cell as 72 px (_burst/_raw) and 128 px (_burst/_hires)
+    PNGs plus one bursts.jsonl line (record + 'names' = the 72 px names). Returns the names; nothing is
+    written and None is returned when another window covers the game (R5). Never raises."""
+    if not unobscured:
+        _covered_warn()
+        return None
+    try:
+        from rdom.perception.gear import cell_crops, hires_cell
+        base = os.path.join(SUPPORT_DIR, "_burst")
+        raw, hires = os.path.join(base, "_raw"), os.path.join(base, "_hires")
+        os.makedirs(raw, exist_ok=True)
+        os.makedirs(hires, exist_ok=True)
+        names = []
+        for k, frame in enumerate(grabs):
+            crops = cell_crops(frame)
+            for cell in cells:
+                name = f"{game_id}_{t:.1f}_{cell:02d}_{k}"
+                cv2.imwrite(os.path.join(raw, name + ".png"),
+                            cv2.cvtColor(crops[cell - 1], cv2.COLOR_RGB2BGR))
+                cv2.imwrite(os.path.join(hires, name + ".png"),
+                            cv2.cvtColor(hires_cell(frame, cell, 128), cv2.COLOR_RGB2BGR))
+                names.append(name)
+        with open(os.path.join(base, "bursts.jsonl"), "a", encoding="utf-8") as f:
+            f.write(json.dumps({**record, "names": names}) + "\n")
+        return names
+    except Exception as e:
+        print("save_burst failed:", e, flush=True)
+        return None
