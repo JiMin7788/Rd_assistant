@@ -218,6 +218,20 @@ def test_refused_merge_bans_pair_and_keeps_memory(capsys):
     assert [s for s in inj.swipes if s[:2] == cell_uv(1)] == inj.swipes[:1]   # 1->2 banned, not repeated
 
 
+def test_burst_external_event_forgets_cell_resolved_earlier_in_burst():
+    AD4, BU3, BU5 = ("Adjust", 4), ("Bubble", 3), ("Bubble", 5)
+    seen = {1: AD4, 5: AD4, 6: BU3}
+    p, inj, perc, _ = make([seen, seen, {**seen, 5: "junk", 6: "junk"}])
+    perc.burst_script[5] = [rd(AD4)] * 6
+    perc.burst_script[6] = [rd(BU5)] * 6                    # refresh burst: cell 6 changed, 5 was resolved first
+    ticks(p, 2)
+    done = len(inj.swipes)                                  # cell 1 and 5 merge while both are readable
+    ticks(p, 1)
+    assert p.stats["bursts"] == 1 and p.memory.memory(5) is None and p.memory.memory(6) == BU5
+    assert p._prev_sig[4] == ("junk", 0)                    # this tick's effective board must not keep the old die
+    assert all(not uses(s, 5) for s in inj.swipes[done:])
+
+
 def spy_merged(p):
     calls = []
     orig = p.memory.merged
