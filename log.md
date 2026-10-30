@@ -154,4 +154,9 @@
 
 ## 2026-10-30 · rdf03-t4 · Power-panel readers
 - Added read_panel_sp and read_price (PANEL_SP_BOX, PRICE_BOX); price reads the weakest RGB channel because white digits on the green button grey to ~180, near the 170 threshold; templates are thin (room fallback for most digits) until H3 panel frames.
+
+## 2026-10-30 · rdf03-t5 · Power policy: SP reserve, count-based levels, Lv cross-check
+- PowerTracker levels are now 1 + game-confirmed purchases; screen digits only cross-check (field-effect +1 detected, count kept); maxed needs 2 strikes with SP known and enough; keep() = power_reserve_x (3) * summon cost.
+- PlayPlayer still counts every tap as confirmed with SP/keep unknown until rdf03-t6.
+- pages: components/policy-power.md (updated)
 - pages: components/perception-score.md (updated)

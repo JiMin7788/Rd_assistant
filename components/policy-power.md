@@ -1,12 +1,12 @@
 ---
 title: Power-up order policy
 type: component
-updated: 2026-10-29
-sources: [rdf01-t2, rdf01-i1]
+updated: 2026-10-30
+sources: [rdf01-t2, rdf01-i1, rdf03-t5]
 ---
 # Power-up order policy
 
-`policy/power.py` (under `src/rdom`) decides which power-up card (Growth / Alignment / Resonance) to buy next for the support deck. Pure functions plus a small `PowerTracker`; the player does the tapping. Not yet wired into a play loop. See [support-deck engine](policy-support.md) for the sibling engine.
+`policy/power.py` (under `src/rdom`) decides which power-up card (Growth / Alignment / Resonance) to buy next for the support deck. Pure functions plus a small `PowerTracker`; `PlayPlayer` in `tools/support_players.py` does the tapping. See [support-deck engine](policy-support.md) for the sibling engine.
 
 ## Order as built
 - Growth up to `power_growth_first` (7); then Alignment:Resonance by `power_ratio` (3:1); once `power_growth_late_after` (8) Alignment/Resonance purchases are made, Growth goes on up to `power_growth_late` (8).
@@ -14,22 +14,29 @@ sources: [rdf01-t2, rdf01-i1]
 - Ratio pick: Resonance when `pa*y >= x*(pr+1)`, else Alignment, so the sequence from A1 R1 is A A A R A A A R.
 - If Alignment and Resonance are both unusable (maxed), Growth is bought up to `growth_late` regardless of the A/R count; at `growth_late` nothing is left (`None`).
 
+## SP reserve
+- `keep(cost, cfg)` = `reserve_x * cost` (`power_reserve_x`, default 3, in `[decks.support]`): power-ups may spend only SP above it, the rest is kept for summons. `cost` is the summon cost read by `perception/sp.py` (see [score reader](perception-score.md)).
+- Only the policy side exists so far: `PlayPlayer` still passes `sp=None, keep=None` (log shows `SP ?, keep ?`) until rdf03-t6 reads SP/prices.
+
 ## Entry points
 - `next_card(levels, available, cfg)` → card or `None`; `plan_visit(levels, available, cfg, n=6)` → up to 6 taps for one panel visit, simulating each level rise.
 - `load_power_config(path)` reads the `power_*` keys of `[decks.support]` in `config/deck.toml`; a missing file, bad TOML, missing table or key gives the default for it.
-- `PowerTracker`: `start_visit(read, found=None)` → `(levels, src, lines)`, `tapped(seq)`, `available()`, `record()`, static `line(seq, levels, src)`.
+- `PowerTracker` (per game): `levels()`, `start_visit(read, found=None)` → `Lv check` log lines, `confirmed(card, price)`, `not_confirmed(card, affordable, sp_known)` → new maxed lines, `last_price(card)`, `available()`, `record()`, static `line(taps, levels, sp, keep, bought)`.
 
-## Cards not found on the panel
-- `found` = cards the player located this visit (None = all three). A not-found card has level `None` in the returned `levels` (it counts as 0 purchases, so `plan_visit` is unchanged) and does not make `src` `count`: `src` is `read` when every *found* card was read.
-- `record()["levels"]` (R14 `power.levels`) is `None` only for a card never found in the whole game (`_found_ever`); a card found earlier keeps its last base+taps level even if missing on a later visit.
+## Levels are a count, screen digits only cross-check
+- Level = `INITIAL` + purchases the game *confirmed* (SP drop or level change, reported through `confirmed`). Read digits never change it.
+- `start_visit` compares read digits with the count and returns one of: `Lv check: read G2 A1 R1 = count`, `... = count +1 on every card (field effect)` (at least two cards read and all exactly one above the count: a per-game field effect, detected, never assumed), `Lv check: <card> read N, count M (count kept)`, or `Lv check: not read`. A card not found on the panel counts as not read.
+- `record()` (R14 `power`) is `None` before the first visit, else `levels`, `src` (always `count`), `maxed`, `bought`, `unconfirmed`, `visits`, `lv_check` (ok/field/mismatch/unread counters) and `price`. Levels are never `None` any more.
+
+## Maxed detection
+- A tap that is not confirmed is a strike only when SP was known and enough (`affordable and sp_known`); a missing or short SP proves nothing and adds none. Two strikes in a row make the card maxed (`power card X maxed at Lv N`); a confirmed buy resets the strikes.
 
 ## Pitfalls
-- Taps without enough SP do nothing, so the order is recomputed from card levels at every panel visit, never from tap history alone. A level read from the screen replaces the count; an unread level is last read plus taps since (`src` `count` instead of `read`).
-- Maxed detection: a card is maxed only after 2 strikes. A strike needs the card tapped last visit, read both now and the visit before, not risen while another tapped card did rise (if nothing rose, SP was missing, which proves nothing). A rise resets strikes.
+- Interim in `PlayPlayer`: until rdf03-t6, every tap is recorded as `confirmed(card, None)`, so levels behave like the old tap counting and a screen Lv of 7 with count 1 just logs a mismatch and still buys Growth.
 - The module imports stdlib only (a test enforces `__future__`, `dataclasses`, `tomllib`, `math`).
 - The `power_*` keys sit in `[decks.support]`, which must stay after `[decks.decay]` (see [support-deck engine](policy-support.md)).
 
 ## Evidence
-- commit `5115ba1` — power.py (policy package) `start_visit(read, found)`, `_found_ever`, AI-NOTE on record vs returned levels; tests `test_not_found_card_is_none_and_not_unread`, `test_record_levels_null_for_never_found_card` in test_policy_power; cited by commit because the files are not yet in the main checkout
-- commit `5359adb` — adds the power-up module (power.py in the policy package: `next_card`, `PowerTracker`), its tests (test_policy_power) and the `power_*` keys; cited by commit because the files are not yet in the main checkout
+- commit `93dbaf2` — power.py (`keep`, `reserve_x`, count-based `PowerTracker`, `Lv check` lines, strike rule), `PlayPlayer` interim `confirmed(c, None)` with AI-NOTE in tools/support_players.py, tests `test_lv_check_field_effect_leaves_levels`, `test_no_strike_when_not_affordable_or_sp_unknown`, `test_keep_and_reserve_config`, `test_record_shape`; cited by commit because the task branch is not yet merged into the main checkout
+- commit `5359adb` — original power-up module and `power_*` keys (superseded tracker design)
 - `config/deck.toml` — `power_growth_first`, `power_ratio`, `power_growth_late`, `power_growth_late_after` under `[decks.support]`
