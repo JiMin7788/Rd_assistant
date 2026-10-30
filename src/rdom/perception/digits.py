@@ -67,27 +67,42 @@ def hp_mask(bgr):
     return m
 
 
-def glyphs(gray, thr=170, min_h=0.30, max_h=0.95):
+def glyphs(gray, thr=170, min_h=0.30, max_h=0.95, merge_x=False, vis=1.0):
     """White glyphs of a dark-background crop, left->right, each GHxGW float in 0..1.
     `gray` may also be a ready binary mask (0/255). Returns None if something that
-    is not a glyph (blob, occluder) is in the way."""
+    is not a glyph (blob, occluder) is in the way.
+    merge_x: components whose x-ranges overlap by >= half of the narrower one are one glyph (a digit whose
+    top was cut off by the crop falls apart into pieces); vis: visible fraction of a digit's height
+    (the typical glyph width is 0.8 x the full digit height, so 0.8 / vis x the visible height)."""
     gray = normalise(gray); h = gray.shape[0]
     _, b = cv2.threshold(gray, thr, 255, cv2.THRESH_BINARY)
     n, lab, st, _ = cv2.connectedComponentsWithStats(b)
-    comps = []
+    comps = []                                     # [x0, x1, y0, y1, [labels]]
     for i in range(1, n):
         x, y, w, hh, a = st[i]
         if a < 0.004 * b.size:                     # specks
             continue
-        if not (min_h * h <= hh <= max_h * h):
+        if not merge_x and not (min_h * h <= hh <= max_h * h):
             return None                            # not a digit: occluder / glare
-        comps.append((x, y, w, hh, i))
+        comps.append([x, x + w, y, y + hh, [i]])
+    if merge_x:
+        comps.sort(); merged = []
+        for c in comps:
+            p = merged[-1] if merged else None
+            if p and min(p[1], c[1]) - max(p[0], c[0]) >= 0.5 * min(p[1] - p[0], c[1] - c[0]):
+                p[0], p[1], p[2], p[3] = min(p[0], c[0]), max(p[1], c[1]), min(p[2], c[2]), max(p[3], c[3]); p[4] += c[4]
+            else:
+                merged.append(c)
+        comps = merged
+        if any(not (min_h * h <= c[3] - c[2] <= max_h * h) for c in comps):
+            return None
     if not comps:
         return None
-    unit = np.median([hh for *_, hh, _ in comps]) * 0.80      # typical digit width ~0.8 x height
+    unit = np.median([c[3] - c[2] for c in comps]) * 0.80 / vis
     out = []
-    for x, y, w, hh, i in comps:
-        m = (lab[y:y+hh, x:x+w] == i).astype(np.float32)
+    for x0, x1, y0, y1, ids in comps:
+        w = x1 - x0
+        m = np.isin(lab[y0:y1, x0:x1], ids).astype(np.float32)
         k = max(1, int(round(w / unit))) if w > 1.15 * unit else 1
         if k > 4:
             return None
@@ -99,7 +114,7 @@ def glyphs(gray, thr=170, min_h=0.30, max_h=0.95):
             ph, pw = part.shape; side = max(ph, pw)
             part = cv2.copyMakeBorder(part, (side-ph)//2, side-ph-(side-ph)//2, (side-pw)//2, side-pw-(side-pw)//2,
                                       cv2.BORDER_CONSTANT, value=0)
-            out.append((x + j * w / k, cv2.resize(part, (GW, GH), interpolation=cv2.INTER_AREA)))
+            out.append((x0 + j * w / k, cv2.resize(part, (GW, GH), interpolation=cv2.INTER_AREA)))
     return [g for _, g in sorted(out, key=lambda t: t[0])]
 
 
@@ -120,8 +135,8 @@ def classify(g, T, min_score=0.80, min_margin=0.08):
     return int(o[0]), float(s[o[0]])
 
 
-def _read_once(gray, kind, n_digits, thr):
-    gs = glyphs(gray, thr)
+def _read_once(gray, kind, n_digits, thr, **gkw):
+    gs = glyphs(gray, thr, **gkw)
     if not gs or (n_digits and len(gs) != n_digits):
         return None
     T = _templates(kind); ds = []
@@ -133,9 +148,9 @@ def _read_once(gray, kind, n_digits, thr):
     return "".join(ds)
 
 
-def read_number(gray, kind, n_digits=None, thr=170):
+def read_number(gray, kind, n_digits=None, thr=170, **gkw):
     """Read at a few thresholds (a high one thins the strokes so neighbouring digits
     stop touching). Every threshold that yields a confident read must agree,
     otherwise None -- disagreement means at least one read is wrong."""
-    reads = {r for t in (thr + 40, thr + 20, thr) if t < 250 for r in [_read_once(gray, kind, n_digits, t)] if r}
+    reads = {r for t in (thr + 40, thr + 20, thr) if t < 250 for r in [_read_once(gray, kind, n_digits, t, **gkw)] if r}
     return reads.pop() if len(reads) == 1 else None

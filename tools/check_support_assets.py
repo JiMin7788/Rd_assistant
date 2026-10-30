@@ -3,7 +3,7 @@
   python tools/check_support_assets.py [--data-dir <repo>/data] [--out-dir <data-dir>/support_frames/_check]
 
 Prints one line per check; exit 0 (exit 1 only on an exception). Missing inputs give n=0 / 0/0.
-  score: n=<n> correct=<c> none=<k> wrong=<w>   read_score on data/digits/score/<value>_<any>.png crops
+  score: n=<n> correct=<c> none=<k> wrong=<w>   read_score on data/digits/score_v2/<value>_<any>.png crops
   score lobby: none=<k>/<n>                      read_score is None on data/support_frames/manual lobby frames
   deck bar: support <t>/<n> gear-false <g>/<m>   detect_support_deck is True on <t> of <n> support battle frames
                                                  (sup*/<t>.png, is_battle, no power panel) and False on <g> of
@@ -15,13 +15,27 @@ Prints one line per check; exit 0 (exit 1 only on an exception). Missing inputs 
   lv box: drew <n> overlays to <dir>             LV_BOX drawn at every buy button of each panel frame
                                                  (lvbox_<game>_<frame>.png), to check by eye
 
-Run on C:/dev/rdom/data (2026-10-29):
+Run on C:/dev/rdom/data (2026-10-29, H1 only, SCORE_BOX v0 0.083):
   score: n=42 correct=38 none=4 wrong=0
   score lobby: none=1/1
   deck bar: support 181/181 gear-false 5/5
   deck bar excluded: 0
   power cards: 5/5
   lv box: drew 5 overlays to <data-dir>/support_frames/_check
+
+Run on C:/dev/rdom/data (2026-10-30, rdf03-t1: SCORE_BOX v0 0.099 below the second effect-icon row, templates from
+data/digits/score_v2 = the 42 old crops re-cut from their frames + 7 late H2 crops 4594/4683/4873/5000 (061946) and
+4592/4892/5000 (063914)):
+  score: n=49 correct=49 none=0 wrong=0        (old 42: 42 correct; new late-game 7: 7 correct; the templates are built from
+                                               these same crops, a leave-one-out build gave 48 correct, 1 none, 0 wrong)
+  score lobby: none=2/2
+  deck bar: support 246/246 gear-false 5/5
+  deck bar excluded: 0
+  power cards: 6/6
+  lv box: drew 6 overlays to <out-dir>
+read_score on whole frames: sup20261030_061946/1040.9.png 4683, 1071.7.png 4873, support_runs/sup20261030_061946/end.png 5000,
+sup20261030_063914/1014.5.png 4892, support_runs/sup20261030_063914/end.png 5000 (all checked by eye), sup20261030_063914/984.3.png
+(banner) None. All 52 H2 frames (support_frames/sup2026103*, support_runs end.png) that read were checked by eye: 0 wrong.
 """
 import argparse, glob, os, sys
 import cv2
@@ -32,9 +46,9 @@ from rdom.perception import board, gear, score, support
 
 
 def check_score(data_dir):
-    """Crops are cut with SCORE_BOX, so the frame fed to read_score is the crop itself laid out at its box position."""
+    """score_v2 crops are cut with SCORE_BOX (data/digits/score holds the same frames cut at the old box, v0 0.083), so the frame fed to read_score is the crop itself laid out at its box position."""
     n = correct = none = wrong = 0
-    for p in sorted(glob.glob(os.path.join(data_dir, "digits", "score", "*.png"))):
+    for p in sorted(glob.glob(os.path.join(data_dir, "digits", "score_v2", "*.png"))):
         value = os.path.basename(p).split("_", 1)[0]
         img = cv2.imread(p)
         if img is None or not value.isdigit():            # 0-byte / corrupt file or no value prefix
