@@ -57,6 +57,24 @@ digits_powerlv built from the crops of the 6 saved panel frames, most digits fro
 On the whole panel frames: read_panel_sp gives 59050 and 14510 on two frames and None on the four others (a cyan '+30'
 popup covers the digits, or hangs into the box on 11530); read_price 250/500 and card_level 1/2 on all 30 buttons,
 equal to the eye-checked values, 0 wrong. The PANEL_SP_BOX non-None count is 2 of 6 panel frames.
+
+Run on C:/dev/rdom/data (2026-10-30, rdf03-m3: after rdf03-r2-s4 and rdf03-r2-s18):
+  score: n=49 correct=49 none=0 wrong=0        (old 42: 42 correct, 0 none, 0 wrong; new late 7: 7 correct, 0 none, 0 wrong)
+  score lobby: none=2/2
+  deck bar: support 246/246 gear-false 5/5
+  deck bar excluded: 0
+  power cards: 6/6
+  lv box: drew 6 overlays to <out-dir>
+  sp: n=34 correct=33 none=1 wrong=0
+  summon cost: n=56 correct=52 none=4 wrong=0
+  panel sp: n=3 correct=2 none=1 wrong=0
+  price: n=30 correct=30 none=0 wrong=0
+  power level: n=30 correct=30 none=0 wrong=0
+read_score on whole frames: sup20261030_061946/1040.9.png 4683, 1071.7.png 4873, support_runs/sup20261030_061946/end.png 5000,
+sup20261030_063914/1014.5.png 4892, support_runs/sup20261030_063914/end.png 5000, sup20261030_063914/984.3.png (banner) None.
+panel sp, price and power level are equal to the t4 block (2/3, 30/30, 30/30; 0 wrong), so sp._undim stays in the shared _read.
+views_agree: the variant "every count at 170/190/210 is n or 0" gave score n=49 correct=38 none=11 wrong=0 (78 % non-None, below
+90 %), so views_agree keeps the lowest-threshold check (counts[0] == n) only.
 """
 import argparse, glob, os, sys
 import cv2

@@ -46,11 +46,11 @@ def layout_ok(geom, w, h):
 
 
 def views_agree(gray, n):
-    """True when every binarisation threshold read_number tries finds exactly n glyphs (or none at all, but the lowest does).
-    AI-NOTE: a bright flat shape can be the only thing left at a high threshold (read as '1') or add pieces at a lower one
-    (a cut 5 read as 3 while the lower threshold sees 5 glyphs); digits seen differently at different thresholds are not a clean read."""
-    counts = [len(g) if g else 0 for g in (digits.glyphs(gray, t, **GLYPH_KW) for t in (170, 190, 210))]
-    return counts[0] == n
+    """True when the lowest binarisation threshold (170) finds exactly n glyphs, n being the length of the read.
+    AI-NOTE: only the lowest threshold is checked: requiring 190/210 to give n or 0 as well dropped 11 of 49 score crops to
+    None (rdf03-m3 check run: 38 correct, 11 none, 0 wrong), so the glyph count at the higher thresholds is not used."""
+    g = digits.glyphs(gray, 170, **GLYPH_KW)
+    return (len(g) if g else 0) == n
 
 
 def read_score(frame_rgb):
