@@ -147,3 +147,83 @@ def test_dimmed_frame_reads_sp_and_cost(env):
 
 def test_near_black_crop_is_not_amplified(env):
     assert sp.read_sp((frame_with("7080", sp.SP_BOX) * (20 / 255)).astype(np.uint8)) is None
+
+
+# --- rdf03-r3-s16: a number wider than the box must read None, not its visible left part ---------------------------------
+
+PRICE_UV = (0.5, 0.9)
+
+
+def price_box(uv=PRICE_UV):
+    du0, dv0, du1, dv1 = sp.PRICE_BOX
+    return (uv[0] + du0, uv[1] + dv0, uv[0] + du1, uv[1] + dv1)
+
+
+@pytest.fixture
+def env4(tmp_path, monkeypatch):
+    """Templates for sp, cost, panelsp and price, drawn with spaced_frame (n digits per box) so they match the test strips."""
+    tools = load("build_digit_templates")
+    out = tmp_path / "tpl"; out.mkdir()
+    for kind, box, n in (("sp", sp.SP_BOX, 6), ("cost", sp.COST_BOX, 5), ("panelsp", sp.PANEL_SP_BOX, 5), ("price", price_box(), 3)):
+        d = tmp_path / "data" / "digits" / kind; d.mkdir(parents=True)
+        x0, y0, x1, y1 = box_px(box)
+        for i in range(0, 10, n):
+            v = "1234567890"[i:i + n]
+            cv2.imwrite(str(d / f"{v}_{i}.png"), spaced_frame(v, box, n)[y0:y1, x0:x1])
+        tools.build_kind(kind, str(d), out=str(out))
+    monkeypatch.setattr(digits, "_TPL", str(out))
+    monkeypatch.setattr(digits, "_cache", {})
+
+
+def spaced_frame(text, box, n_fit, right_fill=None):
+    """Digits at a fixed pitch of (box width / n_fit) from the box's left edge, so digit n_fit+1 lies wholly right of the
+    box with the box's last column in a gap (a real number longer than the box, not a clipped glyph)."""
+    f = np.zeros((H, W, 3), np.uint8)
+    x0, y0, x1, y1 = box_px(box)
+    pitch = (x1 - x0) / n_fit
+    scale = 0.45 * (y1 - y0) / 22
+    for i, ch in enumerate(text):
+        (tw, th), _ = cv2.getTextSize(ch, cv2.FONT_HERSHEY_SIMPLEX, scale, 2)
+        cv2.putText(f, ch, (int(x0 + i * pitch + (pitch - tw) / 2), (y0 + y1 + th) // 2),
+                    cv2.FONT_HERSHEY_SIMPLEX, scale, (255, 255, 255), 2, cv2.LINE_AA)
+    if right_fill is not None:                                   # light sand right of the pill, as on a real battle frame
+        f[y0 - 20:y1 + 20, x1 + 3:] = right_fill
+    return f
+
+
+CASES = [
+    ("sp", lambda f: sp.read_sp(f), sp.SP_BOX, 6, [("123456", 123456), ("1234567", None), ("9999999", None), ("10000000", None)]),
+    ("cost", lambda f: sp.read_summon_cost(f), sp.COST_BOX, 5, [("12345", 12345), ("100000", None), ("123456", None)]),
+    ("panelsp", lambda f: sp.read_panel_sp(f), sp.PANEL_SP_BOX, 5, [("12345", 12345), ("123456", None), ("10000000", None)]),
+    ("price", lambda f: sp.read_price(f, PRICE_UV), price_box(), 3, [("250", 250), ("2500", None), ("5200", None), ("2500000", None)]),
+]
+PARAMS = [(k, rd, box, n, t, want) for k, rd, box, n, ts in CASES for t, want in ts]
+
+
+@pytest.mark.parametrize("kind,read,box,n_fit,text,want", PARAMS)
+def test_number_wider_than_box_is_none(env4, kind, read, box, n_fit, text, want):
+    assert read(spaced_frame(text, box, n_fit)) == want
+
+
+@pytest.mark.parametrize("kind,read,box,n_fit,text,want", [p for p in PARAMS if p[5] is not None])
+def test_light_background_right_of_box_keeps_fitting_reads(env4, kind, read, box, n_fit, text, want):
+    # AI-NOTE: the overflow strip lies on sand (grey ~205) behind/after the pill; that is no digit and must not turn a fitting number into None
+    assert read(spaced_frame(text, box, n_fit, right_fill=205)) == want
+
+
+def test_beige_blob_right_of_pill_is_no_digit(env4):
+    # AI-NOTE: real frames show sand / skin (R215 G170 B130) covering only part of the strip height beside the pill end; its grey is > 170 but its weakest channel is not
+    f = spaced_frame("123456", sp.SP_BOX, 6)
+    x0, y0, x1, y1 = box_px(sp.SP_BOX)
+    f[y0 + 12:y1 + 20, x1 + 3:] = (215, 170, 130)
+    assert sp.read_sp(f) == 123456
+
+
+def test_dimmed_wide_number_is_none(env4):
+    f = (spaced_frame("1234567", sp.SP_BOX, 6) * (70 / 255)).astype(np.uint8)
+    assert sp.read_sp(f) is None
+    assert sp.read_sp((spaced_frame("123456", sp.SP_BOX, 6) * (70 / 255)).astype(np.uint8)) == 123456
+
+
+def test_zero_price_is_none(env4):
+    assert sp.read_price(spaced_frame("0", price_box(), 3), PRICE_UV) is None
