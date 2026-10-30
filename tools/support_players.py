@@ -49,6 +49,9 @@ BURST_REFRESH = 15.0           # remembered cells (and cells with BURST_FAILS fa
 BURST_FAILS = 3
 BURST_SAVE_GAP = 10.0
 BURST_SAVE_MAX = 60
+GAME_OVER_TICKS = 2            # consecutive result-screen ticks (game-over look, battle UI gone) before stopping
+LOOKALIKE_LOG_EVERY = 10.0     # min seconds between two 'look-alike ignored' lines
+GAME_OVER_SHOTS_MAX = 3        # saved look-alike / seen-once frames per game, each kind
 
 
 class Perception:
@@ -126,6 +129,10 @@ class BasePlayer:
         self._cells_last = -1e9
         self._frame_last = -1e9
         self._info_last = -1e9                 # last 소환 tap that closed the dice info panel
+        self._go_ticks = 0                     # consecutive result-screen ticks so far
+        self._look_last = -1e9                 # last 'look-alike ignored' line
+        self._look_saved = 0
+        self._once_saved = 0
 
     def tap(self, key):
         self.inj.tap(*gear.UI[key])
@@ -148,6 +155,11 @@ class BasePlayer:
             if not self.perc.ui_state(self.g.grab())["power_panel"]:
                 break
 
+    def _save_go(self, f, now, name):
+        """Save a game-over diagnostic frame through the Saver; True when it was written."""
+        path = f"data/support_runs/{self.game_id}/{name}_{self.t(now):.1f}.png"
+        return self.saver.frame(f, path) is not None
+
     def tick(self):
         """One loop step. Returns "moved" / "game_over" to stop, else None."""
         try:
@@ -159,9 +171,25 @@ class BasePlayer:
         f = self.g.grab()
         now = self.clock()
         perc = self.perc
-        if perc.is_game_over(f):
-            print("game over")
-            return "game_over"
+        # AI-NOTE: the game-over colour test also fires on battle frames (H2 06:39 stopped a running game
+        # after 31 s). Stop only when the battle UI is gone too, on GAME_OVER_TICKS ticks in a row.
+        over = perc.is_game_over(f)
+        if over and not perc.is_battle(f):
+            self._go_ticks += 1
+            if self._go_ticks >= GAME_OVER_TICKS:
+                print("game over")
+                return "game_over"
+            return None                                    # pending: no board action on this tick
+        if self._go_ticks:
+            self._go_ticks = 0
+            print("game-over screen seen once -- not confirmed", flush=True)
+            if self._once_saved < GAME_OVER_SHOTS_MAX and self._save_go(f, now, "gameover_once"):
+                self._once_saved += 1
+        if over and now - self._look_last >= LOOKALIKE_LOG_EVERY:
+            self._look_last = now
+            print("game-over look-alike ignored (battle screen visible)", flush=True)
+            if self._look_saved < GAME_OVER_SHOTS_MAX and self._save_go(f, now, "gameover_lookalike"):
+                self._look_saved += 1
         # AI-NOTE: before the tactic check -- the info panel under a boss banner is dark at the three tactic
         # card rows, so the tactic OCR would tap a card position on it. Only the first 소환 tap closes the
         # panel (no summon, no SP spent); the gap keeps a tap storm from summoning once it is closed.

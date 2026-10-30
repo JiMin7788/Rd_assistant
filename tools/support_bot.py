@@ -15,7 +15,9 @@ from rdom.policy.milestones import MilestoneTracker
 
 ROUTE_FRAMES = 20
 ROUTE_GAP = 0.5
-ROUTE_NEED = 2                 # consecutive deck-bar hits
+# AI-NOTE: user 2026-10-30: '5000점이면 클리어로 끝남' -- a normal game ends as a clear at 5000.
+CLEAR_SCORE = 5000
+ROUTE_NEED = 2                # consecutive deck-bar hits
 ROUNDS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data",
                            "support_rounds.jsonl")
 
@@ -74,10 +76,11 @@ def _iso(t):
     return t.isoformat() if isinstance(t, datetime.datetime) else t
 
 
-def build_record(game_id, wall_start, wall_end, result, mode, gates, milestone_rec, power_rec, stats):
+def build_record(game_id, wall_start, wall_end, result, mode, gates, milestone_rec, power_rec, stats,
+                 final_score=None):
     """R14 round-record dict; milestone_rec from MilestoneTracker.record(), power_rec from
     PowerTracker.record() or None."""
-    return {
+    rec = {
         "game_id": game_id,
         "wall_start": _iso(wall_start),
         "wall_end": _iso(wall_end),
@@ -91,6 +94,9 @@ def build_record(game_id, wall_start, wall_end, result, mode, gates, milestone_r
         "power": power_rec,
         "stats": stats,
     }
+    if final_score is not None:                    # key only when read, so older records keep their shape
+        rec["final_score"] = final_score
+    return rec
 
 
 def append_round(path, record):
@@ -139,8 +145,18 @@ def play(g, inj, minutes=40, tick=0.6, mode=None):
     saver.frame(end, f"data/support_runs/{game_id}/end.png")
     milestones = getattr(player, "milestones", None) or MilestoneTracker()
     power = getattr(player, "power", None)
+    final_score = None
+    if res == "game_over" and player.last_frame is not None:
+        final_score = sp.Perception().read_score(player.last_frame)
+    mrec = milestones.record()
+    # AI-NOTE: the tracker may have missed the last digits, so a fresh read of the last battle frame counts too.
+    if res == "game_over" and max(mrec["max_score"] or 0, final_score or 0) >= CLEAR_SCORE:
+        res = "clear"
+    print(f"support result: {res} (max score {mrec['max_score']}, "
+          f"last frame {'-' if final_score is None else final_score})", flush=True)
     rec = build_record(game_id, wall_start, datetime.datetime.now(), res, mode, gates,
-                       milestones.record(), power.record() if power else None, dict(player.stats))
+                       mrec, power.record() if power else None, dict(player.stats),
+                       final_score=final_score)
     append_round(ROUNDS_FILE, rec)
     play.stats = dict(player.stats)
     return res

@@ -347,6 +347,7 @@ def run_env(monkeypatch, tmp_path):
     monkeypatch.setattr(sb, "Saver", lambda g: saver)
     monkeypatch.setattr(sb, "new_game_id", lambda now=None: "sup_T")
     monkeypatch.setattr(sb, "ROUNDS_FILE", str(tmp_path / "data" / "support_rounds.jsonl"))
+    monkeypatch.setattr(sp.Perception, "read_score", lambda self, f: None)   # last_frame is a fake string
     monkeypatch.setattr(sp, "CollectPlayer", FakeCollect)
     monkeypatch.setattr(sp, "PlayPlayer", FakePlay)
 
