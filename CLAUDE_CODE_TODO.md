@@ -164,7 +164,7 @@ H1 과 rdF02 보정(점수, 덱 바, 파워 카드, LV_BOX)은 모두 끝났다.
   - `battle still on screen`
 - [ ] 판이 끝날 때마다 `data/support_rounds.jsonl` 의 마지막 줄을 읽는다: `result` (clear/game_over), `final_score`, `max_score`, `power.bought`, `power.unconfirmed`, `power.lv_check`
 - [ ] 마스터에게 보고: `power.bought` 가 계속 0, `power.unconfirmed` 가 높음, `power.lv_check` 불일치 발생, 또는 look-alike / once 프레임이 저장됨 (`data/support_runs/<game_id>/gameover_*.png`)
-- [ ] `panel_*.png` 프레임은 지우지 말고 보관
+- [ ] `panel_*.png` 와 `gameover_*.png` 프레임은 지우지 말고 보관
 - [ ] 5판 후 `python tools/support_judge.py` 실행
 - [ ] 스크린샷을 사용자가 다시 확인
 - [ ] `판정: 통과` + 스크린샷 일치 = 완료. `판정: 실패` 이고 스크린샷도 일치하면 결과를 사용자에게 가져가 규칙을 다시 정한다 (기준은 완화하지 않음)

@@ -94,8 +94,7 @@ def build_record(game_id, wall_start, wall_end, result, mode, gates, milestone_r
         "power": power_rec,
         "stats": stats,
     }
-    if final_score is not None:                    # key only when read, so older records keep their shape
-        rec["final_score"] = final_score
+    rec["final_score"] = final_score               # null when not read (architecture §2)
     return rec
 
 
