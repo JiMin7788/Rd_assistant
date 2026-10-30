@@ -59,6 +59,9 @@ DIM_PEAK = (40, 200)                                         # a crop whose brig
 OVERFLOW_U = 0.022                                           # strip right of a box checked for digits the box cannot hold (one digit pitch; a longer one reaches the pale streak on skin right of the pill)
 
 
+SLIVER_W = 2                                                 # px; widest strip blob that is just the box-cut edge of the last digit
+
+
 def _undim(gray, peak=None):
     """Stretch a dimmed crop to full range (`peak`: the brightest pixel of the digit box, default this crop's own).
     AI-NOTE: a dice-info panel / popup dims the whole battle (white digits peak at ~70 instead of 255), so the fixed
@@ -72,13 +75,17 @@ def _undim(gray, peak=None):
 
 def _digits_beyond(strip):
     """True if the grey strip right of the digit box holds a digit-sized bright blob. A blob as tall as the strip (the
-    light sand behind the pill, a button edge) is no digit: same height window as digits.glyphs, but not fatal."""
+    light sand behind the pill, a button edge) is no digit: same height window as digits.glyphs, but not fatal.
+    AI-NOTE: a blob at most SLIVER_W px wide is the last column(s) of the box's own last digit, cut by the box edge when
+    the position is a few px off (support.power_cards uv is ~3 px left of the button centre: price 250 read as None); a
+    next digit is far wider."""
     if strip.size == 0:
         return False
     h = strip.shape[0]
     _, b = cv2.threshold(strip, 170, 255, cv2.THRESH_BINARY)
     n, _, st, _ = cv2.connectedComponentsWithStats(b)
-    return any(st[i][4] >= 0.004 * b.size and 0.30 * h <= st[i][3] <= 0.95 * h for i in range(1, n))
+    return any(st[i][4] >= 0.004 * b.size and st[i][2] > SLIVER_W and 0.30 * h <= st[i][3] <= 0.95 * h
+               for i in range(1, n))
 
 
 def _read(frame_rgb, box, kind, lo, hi, min_channel=False):
