@@ -25,6 +25,11 @@ def gray(path):
     return cv2.imread(path, cv2.IMREAD_GRAYSCALE)
 
 
+def _min_channel(path):
+    img = cv2.imread(path)
+    return None if img is None else img.min(axis=2)
+
+
 def build(kind, items, thr=170, fallback=None, out=OUT, gkw=None):
     acc = collections.defaultdict(list)
     for g, label in items:
@@ -48,7 +53,7 @@ def build_kind(kind, src_dir, out=OUT, thr=170, fallback=None):
     items = []
     for p in sorted(glob.glob(os.path.join(src_dir, "*.png"))):
         value = os.path.basename(p).split("_", 1)[0]
-        g = gray(p)
+        g = _min_channel(p) if kind == "price" else gray(p)   # AI-NOTE: perception.sp.read_price feeds the weakest channel (white digits on the green button)
         if g is not None and value.isdigit():
             items.append((g, value))
     return build(kind, items, thr, fallback, out, GLYPH_KW.get(kind))

@@ -16,6 +16,9 @@ Prints one line per check; exit 0 (exit 1 only on an exception). Missing inputs 
                                                  (lvbox_<game>_<frame>.png), to check by eye
   sp: n=<n> correct=<c> none=<k> wrong=<w>       read_sp on data/digits/sp/<value>_<any>.png crops (cut with SP_BOX)
   summon cost: n=<n> correct=<c> none=<k> wrong=<w>  read_summon_cost on data/digits/cost/<value>_<any>.png crops (COST_BOX)
+  panel sp: n=<n> correct=<c> none=<k> wrong=<w>  read_panel_sp on data/digits/panelsp/<value>_<any>.png crops (PANEL_SP_BOX)
+  price: n=<n> correct=<c> none=<k> wrong=<w>     read_price on data/digits/price/<value>_<any>.png crops (PRICE_BOX, pasted at a button centre)
+  power level: n=<n> correct=<c> none=<k> wrong=<w>  support.card_level on data/digits/powerlv/<value>_<any>.png crops (LV_BOX)
 
 Run on C:/dev/rdom/data (2026-10-29, H1 only, SCORE_BOX v0 0.083):
   score: n=42 correct=38 none=4 wrong=0
@@ -45,6 +48,15 @@ data/digits/sp and data/digits/cost; crops cut with other boxes by earlier tries
   summon cost: n=56 correct=52 none=4 wrong=0   (the 4 none are 2-digit costs '10', where the 'Ø' icon sticks into the box)
 read_sp / read_summon_cost on the whole source frames of those crops: sp 51 correct, 1 none, 0 wrong; cost 71 correct,
 4 none, 0 wrong (values checked by eye; frames with a '+N' popup over the digits were not used).
+
+Run on C:/dev/rdom/data (2026-10-30, rdf03-t4: PANEL_SP_BOX / PRICE_BOX, templates digits_panelsp / digits_price /
+digits_powerlv built from the crops of the 6 saved panel frames, most digits from the room fallback, see sp.py):
+  panel sp: n=3 correct=2 none=1 wrong=0        (only 3 of the 6 frames have the SP readable by eye: 59050, 14510, 11530)
+  price: n=30 correct=30 none=0 wrong=0         (6 frames x 5 buy buttons; 250 on four frames, 500 on two; non-None 100 %)
+  power level: n=30 correct=30 none=0 wrong=0   (support.card_level; Lv.1 on four frames, Lv.2 on two; non-None 100 %)
+On the whole panel frames: read_panel_sp gives 59050 and 14510 on two frames and None on the four others (a cyan '+30'
+popup covers the digits, or hangs into the box on 11530); read_price 250/500 and card_level 1/2 on all 30 buttons,
+equal to the eye-checked values, 0 wrong. The PANEL_SP_BOX non-None count is 2 of 6 panel frames.
 """
 import argparse, glob, os, sys
 import cv2
@@ -117,6 +129,28 @@ def check_sp(data_dir):
 
 def check_summon_cost(data_dir):
     return _check_digits(data_dir, "cost", sp.COST_BOX, sp.read_summon_cost, "summon cost")
+
+
+def check_panel_sp(data_dir):
+    return _check_digits(data_dir, "panelsp", sp.PANEL_SP_BOX, sp.read_panel_sp, "panel sp")
+
+
+PANEL_BUTTON = (0.5, 0.9407)                              # where the relative-box crops are pasted back (a buy-button centre)
+
+
+def _check_relative(data_dir, kind, offsets, read, label):
+    """Crops data/digits/<kind>/<value>_<any>.png are cut at offsets from a buy-button centre: pasted back at PANEL_BUTTON, `read(frame, button)` must give the value."""
+    bu, bv = PANEL_BUTTON; du0, dv0, du1, dv1 = offsets
+    box = (bu + du0, bv + dv0, bu + du1, bv + dv1)
+    return _check_digits(data_dir, kind, box, lambda f: read(f, PANEL_BUTTON), label)
+
+
+def check_price(data_dir):
+    return _check_relative(data_dir, "price", sp.PRICE_BOX, sp.read_price, "price")
+
+
+def check_power_level(data_dir):
+    return _check_relative(data_dir, "powerlv", support.LV_BOX, support.card_level, "power level")
 
 
 def check_score_lobby(data_dir):
@@ -230,6 +264,9 @@ def main(argv=None):
         print(draw_lv_boxes(a.data_dir, a.out_dir))
         print(check_sp(a.data_dir))
         print(check_summon_cost(a.data_dir))
+        print(check_panel_sp(a.data_dir))
+        print(check_price(a.data_dir))
+        print(check_power_level(a.data_dir))
     except Exception as e:                                # AI-NOTE: only an exception is a failure; bad reads are reported in the lines
         print(f"error: {e!r}")
         return 1

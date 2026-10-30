@@ -3,7 +3,9 @@ read with the template digit reader. Exact or nothing, like perception.score: No
 the crop is empty, the reader is unsure or the number is out of range.
 """
 from __future__ import annotations
+import math
 import cv2
+import numpy as np
 
 from rdom.perception import digits
 
@@ -19,8 +21,25 @@ SP_BOX = (0.446, 0.790, 0.600, 0.813)
 COST_BOX = (0.4745, 0.876, 0.575, 0.897)
 MAX_SP = 9_999_999
 MAX_COST = 99_999
+MAX_PRICE = 999_999
 # Room-template fallback (tools/build_digit_templates.py sp cost): none. All ten digits 0-9 have samples in
 # data/digits/sp (>= 24 per digit) and data/digits/cost (>= 7 per digit), so no digit fell back to the room templates.
+
+# Open power panel (rdf03-t4), measured on the six saved panel frames sup20261029_{135038,141449,143137,145953,152652}/
+# panel_*.png and sup20261030_060122/panel_140.0.png (1244x2224, content width 1251).
+# Panel SP: dark pill at the top centre of the panel, 'Ø' icon at x 500-542, digits left-aligned from x 586 (u 0.468) to
+# about x 723 for 5 digits, y 1725-1765; the pill ends at x 777. A cyan '+30' kill popup lands on the middle digits
+# (4 of the 6 frames); such reads must be None, never a wrong number.
+PANEL_SP_BOX = (0.4636, 0.7734, 0.6155, 0.7959)
+# Price: offsets (du0, dv0, du1, dv1) from a buy-button centre (gear.power_buttons / support.power_cards). The 'Ø' icon
+# sits left of the digits (x 111-147 with the button centre at x 162); du0 starts at x 150, right of its diagonal spike.
+# Digits '250' / '500' fill x 151-220, y 2084-2114 (centre y 2092). Wider prices are on no saved frame.
+PRICE_BOX = (-0.0096, -0.0045, 0.0496, 0.0108)
+# Room-template fallback (tools/build_digit_templates.py panelsp price powerlv): the six frames only show panel SP
+# 59050 / 14510 / 11530 readable by eye (the other three have a '+30' popup over the digits), prices 250 / 500 and levels
+# 1 / 2. So digits_panelsp.npz has samples for 0 1 3 4 5 9 (2 6 7 8 fall back to the room templates), digits_price.npz
+# for 0 2 5 and digits_powerlv.npz for 1 2 only; every other digit is a room template (same game font). H3 will save
+# more panel frames for a recalibration.
 
 
 def read_crop(gray, kind):
@@ -34,15 +53,22 @@ def read_crop(gray, kind):
     return None if r is None else int(r)
 
 
-def _read(frame_rgb, box, kind, lo, hi):
+def _read(frame_rgb, box, kind, lo, hi, min_channel=False):
     if frame_rgb is None or frame_rgb.ndim < 2 or frame_rgb.shape[0] < 2:
         return None
     h = frame_rgb.shape[0]; W = round(h * 9 / 16)           # true 9:16 content width, as gear._content_w
     u0, v0, u1, v1 = box
+    if min(u0, v0) < 0:                                      # AI-NOTE: a negative slice start would wrap to the far side of the frame
+        return None
     crop = frame_rgb[int(v0 * h):int(v1 * h), int(u0 * W):int(u1 * W)]
     if crop.size == 0:
         return None
-    gray = crop if crop.ndim == 2 else cv2.cvtColor(crop, cv2.COLOR_RGB2GRAY)   # AI-NOTE: a 2-D grey frame must give None, not a cv2 error
+    if crop.ndim == 2:                                       # AI-NOTE: a 2-D grey frame must give None, not a cv2 error
+        gray = crop
+    elif min_channel:                                        # AI-NOTE: white digits on the green button: its grey (~180) sits next to the 170 threshold, the weakest channel (~90) does not
+        gray = np.ascontiguousarray(crop[..., :3].min(axis=2))
+    else:
+        gray = cv2.cvtColor(crop, cv2.COLOR_RGB2GRAY)
     r = read_crop(gray, kind)
     return r if r is not None and lo <= r <= hi else None
 
@@ -55,3 +81,20 @@ def read_sp(frame_rgb):
 def read_summon_cost(frame_rgb):
     """Summon cost on the 소환 button as int in 1..99_999, or None."""
     return _read(frame_rgb, COST_BOX, "cost", 1, MAX_COST)
+
+
+def read_panel_sp(frame_rgb):
+    """SP shown on the open power panel as int in 0..9_999_999, or None."""
+    return _read(frame_rgb, PANEL_SP_BOX, "panelsp", 0, MAX_SP)
+
+
+def read_price(frame_rgb, button_uv):
+    """Price on the buy button centred at button_uv = (u, v), as gear.power_buttons returns it, int in 1..999_999 or None."""
+    try:
+        u, v = float(button_uv[0]), float(button_uv[1])
+    except (TypeError, ValueError, IndexError, KeyError):
+        return None
+    if not (math.isfinite(u) and math.isfinite(v)):
+        return None
+    du0, dv0, du1, dv1 = PRICE_BOX
+    return _read(frame_rgb, (u + du0, v + dv0, u + du1, v + dv1), "price", 1, MAX_PRICE, min_channel=True)
