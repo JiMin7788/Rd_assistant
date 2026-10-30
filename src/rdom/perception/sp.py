@@ -56,15 +56,29 @@ def read_crop(gray, kind):
 DIM_PEAK = (40, 200)                                         # a crop whose brightest pixel lies in this range is a dimmed one
 
 
-def _undim(gray):
-    """Stretch a dimmed crop to full range.
+OVERFLOW_U = 0.022                                           # strip right of a box checked for digits the box cannot hold (one digit pitch; a longer one reaches the pale streak on skin right of the pill)
+
+
+def _undim(gray, peak=None):
+    """Stretch a dimmed crop to full range (`peak`: the brightest pixel of the digit box, default this crop's own).
     AI-NOTE: a dice-info panel / popup dims the whole battle (white digits peak at ~70 instead of 255), so the fixed
     170+ binarisation of digits.glyphs saw nothing and SP / cost read None. Clean crops peak at 255 and pass unchanged;
     below DIM_PEAK[0] nothing digit-like is there, so noise is not amplified."""
-    peak = int(gray.max())
+    peak = int(gray.max()) if peak is None else peak
     if not DIM_PEAK[0] <= peak < DIM_PEAK[1]:
         return gray
     return np.ascontiguousarray(np.minimum(gray.astype(np.float32) * (255.0 / peak), 255).astype(np.uint8))
+
+
+def _digits_beyond(strip):
+    """True if the grey strip right of the digit box holds a digit-sized bright blob. A blob as tall as the strip (the
+    light sand behind the pill, a button edge) is no digit: same height window as digits.glyphs, but not fatal."""
+    if strip.size == 0:
+        return False
+    h = strip.shape[0]
+    _, b = cv2.threshold(strip, 170, 255, cv2.THRESH_BINARY)
+    n, _, st, _ = cv2.connectedComponentsWithStats(b)
+    return any(st[i][4] >= 0.004 * b.size and 0.30 * h <= st[i][3] <= 0.95 * h for i in range(1, n))
 
 
 def _read(frame_rgb, box, kind, lo, hi, min_channel=False):
@@ -74,8 +88,9 @@ def _read(frame_rgb, box, kind, lo, hi, min_channel=False):
     u0, v0, u1, v1 = box
     if min(u0, v0) < 0:                                      # AI-NOTE: a negative slice start would wrap to the far side of the frame
         return None
-    crop = frame_rgb[int(v0 * h):int(v1 * h), int(u0 * W):int(u1 * W)]
-    if crop.size == 0:
+    x0, x1 = int(u0 * W), int(u1 * W)
+    crop = frame_rgb[int(v0 * h):int(v1 * h), x0:int((u1 + OVERFLOW_U) * W)]   # the box plus the strip right of it
+    if crop.size == 0 or x1 <= x0:
         return None
     if crop.ndim == 2:                                       # AI-NOTE: a 2-D grey frame must give None, not a cv2 error
         gray = crop
@@ -83,7 +98,16 @@ def _read(frame_rgb, box, kind, lo, hi, min_channel=False):
         gray = np.ascontiguousarray(crop[..., :3].min(axis=2))
     else:
         gray = cv2.cvtColor(crop, cv2.COLOR_RGB2GRAY)
-    gray = _undim(gray)
+    # AI-NOTE: the strip is judged on the weakest channel: digits are white, the sand / skin / green right of the pill end
+    # (partly covering the strip, so no 'as tall as the strip' blob) have a weak channel far below the 170 threshold
+    strip = np.ascontiguousarray(crop[:, x1 - x0:, :3].min(axis=2)) if crop.ndim == 3 else gray[:, x1 - x0:]
+    gray = np.ascontiguousarray(gray[:, :x1 - x0])
+    peak = int(gray.max()) if gray.size else 0
+    gray, strip = _undim(gray, peak), _undim(strip, peak)    # the strip is stretched like the box
+    # AI-NOTE: a number wider than the box is cut at its edge and the visible left part reads as a clean, shorter, wrong
+    # value (SP 1234567 -> 123456, price 2500 -> 250); a digit-sized blob right of the box means the box does not hold it all
+    if _digits_beyond(strip):
+        return None
     r = read_crop(gray, kind)
     return r if r is not None and lo <= r <= hi else None
 
