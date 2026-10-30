@@ -151,6 +151,7 @@ class BasePlayer:
         self._look_last = -1e9                 # last 'look-alike ignored' line
         self._look_saved = 0
         self._once_saved = 0
+        self._go_seen = None                   # frame of the last pending result-like tick
 
     def tap(self, key):
         self.inj.tap(*gear.UI[key])
@@ -197,11 +198,13 @@ class BasePlayer:
             if self._go_ticks >= GAME_OVER_TICKS:
                 print("game over")
                 return "game_over"
+            self._go_seen = f
             return None                                    # pending: no board action on this tick
         if self._go_ticks:
             self._go_ticks = 0
             print("game-over screen seen once -- not confirmed", flush=True)
-            if self._once_saved < GAME_OVER_SHOTS_MAX and self._save_go(f, now, "gameover_once"):
+            # AI-NOTE: save the frame the result-like screen was seen on, not this (battle) frame.
+            if self._once_saved < GAME_OVER_SHOTS_MAX and self._save_go(self._go_seen, now, "gameover_once"):
                 self._once_saved += 1
         if over and now - self._look_last >= LOOKALIKE_LOG_EVERY:
             self._look_last = now
@@ -416,7 +419,10 @@ class PlayPlayer(BasePlayer):
                 tracker.confirmed(c, price)
                 taps += c[0]
                 bought += 1
-                sp0 = sp1 if sp1 is not None else sp0 - price
+                # AI-NOTE: a tap confirmed by the level alone can still show the old SP (the number lags);
+                # do not carry that stale value forward -- the spend is known. A read that shows the drop wins.
+                dropped = sp1 is not None and sp1 <= sp0 - price / 2
+                sp0 = sp1 if dropped else sp0 - price
                 continue
             taps += c[0].lower()
             print(f"power panel: {c} tap not confirmed (SP {sp0} -> {'?' if sp1 is None else sp1})", flush=True)

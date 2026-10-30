@@ -358,8 +358,26 @@ def test_visit_confirms_by_level_rise(capsys):
     assert p.power.last_price("Growth") == 100
     assert card_taps(inj) == ["Growth", "Growth"]           # the second tap shows no rise and no drop
     out = capsys.readouterr().out
-    assert "power panel: Growth tap not confirmed (SP 1000 -> 1000)" in out
-    assert "power panel -> Gg (1 bought), close (Lv G2 A1 R1, SP 1000, keep 300)" in out
+    assert "power panel: Growth tap not confirmed (SP 900 -> 1000)" in out    # sp0 = 1000 - price, not the stale 1000
+    assert "power panel -> Gg (1 bought), close (Lv G2 A1 R1, SP 900, keep 300)" in out
+
+
+def test_visit_level_confirmed_tap_does_not_carry_stale_sp(capsys):
+    p, g, inj, perc, saver, clock = make()
+    perc.levels["Growth"] = [1, 1, 2]
+    visit(p, perc, [450], P100)                             # SP shows 450 after the tap too (stale)
+    # 450 - 100 = 350 after the buy; a second buy would leave 250 < keep 300, so there is none
+    assert card_taps(inj) == ["Growth"]
+    assert "power panel -> G (1 bought), close (Lv G2 A1 R1, SP 350, keep 300)" in capsys.readouterr().out
+
+
+def test_visit_level_confirmed_tap_keeps_a_lower_later_read(capsys):
+    p, g, inj, perc, saver, clock = make()
+    perc.levels["Growth"] = [1, 1, 2]
+    visit(p, perc, [1000, 1000, 800], P100)                 # the read is lower than sp0 - price: it wins
+    out = capsys.readouterr().out
+    assert "power panel: Growth tap not confirmed (SP 800 -> 800)" in out
+    assert "power panel -> Gg (1 bought), close (Lv G2 A1 R1, SP 800, keep 300)" in out
 
 
 def test_visit_unconfirmed_tap_stops_and_strikes(capsys):

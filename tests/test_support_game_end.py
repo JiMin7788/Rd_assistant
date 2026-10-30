@@ -135,6 +135,20 @@ def test_result_once_is_not_confirmed(capsys):
     assert p.tick() == "game_over"
 
 
+def test_seen_once_saves_the_result_like_frame():
+    # AI-NOTE: FakeGrabber returns the grab count, so each frame object is distinct and traceable
+    p, inj, perc, saver, clock = make()
+    frames = []
+    saver.frame = lambda frame, path: frames.append((frame, path)) or path
+    p.tick()                                    # frame 1: battle
+    perc.over, perc.battle = True, False
+    p.tick()                                    # frame 2: result-like, pending
+    perc.over, perc.battle = False, True
+    clock.sleep(0.6)
+    p.tick()                                    # frame 3: battle again -> "seen once"
+    assert [x for x in frames if "gameover_once" in x[1]] == [(2, "data/support_runs/G/gameover_once_0.6.png")]
+
+
 def test_seen_once_save_cap():
     p, inj, perc, saver, clock = make()
     p.tick()
@@ -200,7 +214,7 @@ def env(monkeypatch, tmp_path):
 def test_clear_by_max_score(env, capsys):
     r, record = env(5000, None)
     assert r == "clear" and record["result"] == "clear"
-    assert "final_score" not in record
+    assert "final_score" in record and record["final_score"] is None
     assert "support result: clear (max score 5000, last frame -)" in capsys.readouterr().out
 
 
@@ -218,12 +232,12 @@ def test_game_over_below_5000(env, capsys):
 
 def test_game_over_final_score_none(env):
     r, record = env(1200, None)
-    assert r == "game_over" and "final_score" not in record
+    assert r == "game_over" and "final_score" in record and record["final_score"] is None
 
 
 def test_other_results_stay(env):
     r, record = env(5200, 5200, res="timeout")
-    assert r == "timeout" and "final_score" not in record
+    assert r == "timeout" and "final_score" in record and record["final_score"] is None
 
 
 def test_clear_constant():
@@ -235,6 +249,13 @@ def test_build_record_final_score_keyword():
     now = datetime.datetime(2026, 10, 30)
     r = sb.build_record("g", now, now, "clear", "play", {}, ms, None, {}, final_score=5000)
     assert r["final_score"] == 5000
+
+
+def test_build_record_final_score_defaults_to_null():
+    ms = {"max_score": 10, "scores_confirmed": 1, "milestones": {}, "crossings": []}
+    now = datetime.datetime(2026, 10, 30)
+    r = sb.build_record("g", now, now, "clear", "play", {}, ms, None, {})
+    assert "final_score" in r and r["final_score"] is None
 
 
 # ---- judge ----

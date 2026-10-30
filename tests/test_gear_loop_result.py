@@ -86,3 +86,39 @@ def test_report_runs_between_result_line_and_exit(gl, monkeypatch, capsys):
     gl.after_battle("clear", FakeGrabber(), "inj", exit_fn=lambda g, i: order.append("exit"),
                     battle_fn=lambda f: False, report=lambda: order.append("report"))
     assert order == ["report", "exit"]
+
+
+# ---- round start: leave_result_screen ----
+
+class RoundGrabber:
+    def __init__(self):
+        self.grabs = 0
+
+    def grab(self):
+        self.grabs += 1
+        return f"fresh{self.grabs}"
+
+
+def start(gl, monkeypatch, over, battle):
+    monkeypatch.setattr(gl.time, "sleep", lambda s: None)
+    g, calls = RoundGrabber(), []
+    f = gl.leave_result_screen("first", g, "inj", exit_fn=lambda g_, i: calls.append((g_, i)),
+                               over_fn=lambda f_: over, battle_fn=lambda f_: battle)
+    return f, g, calls
+
+
+def test_round_start_game_over_with_battle_does_not_tap(gl, monkeypatch, capsys):
+    f, g, calls = start(gl, monkeypatch, True, True)
+    assert calls == [] and f == "first" and g.grabs == 0
+    assert capsys.readouterr().out.splitlines() == ["battle still on screen -- 로비로 가기 skipped"]
+
+
+def test_round_start_game_over_without_battle_exits_and_regrabs(gl, monkeypatch, capsys):
+    f, g, calls = start(gl, monkeypatch, True, False)
+    assert calls == [(g, "inj")] and f == "fresh1" and g.grabs == 1
+    assert capsys.readouterr().out == ""
+
+
+def test_round_start_no_game_over_does_nothing(gl, monkeypatch, capsys):
+    f, g, calls = start(gl, monkeypatch, False, True)
+    assert calls == [] and f == "first" and g.grabs == 0 and capsys.readouterr().out == ""

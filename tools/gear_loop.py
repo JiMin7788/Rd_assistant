@@ -57,6 +57,19 @@ def after_battle(res, g, inj, exit_fn=exit_to_lobby, battle_fn=is_battle, report
     return False
 
 
+def leave_result_screen(f, g, inj, exit_fn=exit_to_lobby, over_fn=is_game_over, battle_fn=is_battle):
+    """Round start: leave a leftover result screen. Returns the frame to go on with."""
+    if not over_fn(f):
+        return f
+    # AI-NOTE: the game-over colour test also fires on battle frames; exit_to_lobby taps blindly, so
+    # a battle on the same frame means no result screen -- go on without a tap (architecture §7).
+    if battle_fn(f):
+        print("battle still on screen -- 로비로 가기 skipped", flush=True)
+        return f
+    exit_fn(g, inj); time.sleep(3)
+    return g.grab()
+
+
 def main():
     if place_game_window():                              # [target.place] in recorder.toml
         print("game window moved to its set place", flush=True)
@@ -81,8 +94,7 @@ def main():
             if g.window_moved():
                 print("window moved -- stop"); send_status("⛔ 에뮬레이터 창이 움직여서 정지", g.grab()); break
             f = g.grab()
-            if is_game_over(f):
-                exit_to_lobby(g, inj); time.sleep(3); f = g.grab()
+            f = leave_result_screen(f, g, inj)
             # shop/event popups open by themselves on the lobby after a game (재설계 패키지,
             # 2026-10-08): close them with their X before starting a room
             unknown = 0; launches = 0
