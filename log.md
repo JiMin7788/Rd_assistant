@@ -188,3 +188,7 @@
 ## 2026-10-30 · rdf03-m2 · Integration review follow-up
 - gear_loop round start no longer taps the lobby blindly when a battle is on screen (leave_result_screen); round record always has final_score (null if unread); power_visit does not carry a stale panel SP after a level-confirmed buy; gameover_once saves the result-like frame; runbook keeps gameover_*.png.
 - pages: components/support-bot-core.md (updated), components/support-players.md (updated), howto/run-bot.md (updated)
+
+## 2026-10-30 · rdf03-r2-s4 · read_score refuses irregular glyph layouts
+- read_score now needs an even, centred, equal-height glyph row (layout_ok), a 0.12 template margin and the same glyph count at thresholds 170/190/210; painted-over digits give None instead of 667/2367/1980/4910. 1-D input returns None.
+- pages: components/perception-score.md (updated)

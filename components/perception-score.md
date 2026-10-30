@@ -2,7 +2,7 @@
 title: Score reader and generic digit-template kinds
 type: component
 updated: 2026-10-30
-sources: [rdf01-t4, rdT01, rdf02-t1, rdf02-t2, rdf02-i2, rdf03-t3, rdf03-t4]
+sources: [rdf01-t4, rdT01, rdf02-t1, rdf02-t2, rdf02-i2, rdf03-t3, rdf03-t4, rdf03-r2-s4]
 ---
 # Score reader and generic digit-template kinds
 
@@ -13,6 +13,9 @@ sources: [rdf01-t4, rdT01, rdf02-t1, rdf02-t2, rdf02-i2, rdf03-t3, rdf03-t4]
 - A 2-D grey frame is accepted (no colour conversion) and gives None rather than a cv2 error. There is no thousands-separator filter; a synthetic '2,000' returns 2000 or None, never another number (tests/test_support_score.py).
 - The crop uses true 9:16 content width `round(h*9/16)` (same as `gear._content_w`), converts RGB to grey and calls `digits.read_number(gray, "score")`.
 - Returns None when `SCORE_BOX` is None, the crop is empty, the reader refuses, or `digits_score.npz` is missing (`OSError` from the template load is caught).
+- Layout guard (rdf03-r2-s4): a flat shape painted over some digits leaves glyphs that still look like another digit (cut 4 reads 1, cut 6 reads 3) or a run missing its first digit (2667 -> 667). `read_score` therefore passes `layout_ok` and `min_margin=MIN_MARGIN` (0.12, default 0.08) to `digits.read_number`, and afterwards requires `views_agree`. `layout_ok(geom, w, h)` wants all tops and all bottoms within `EDGE_TOL` (0.05 x crop height), every centre gap within `PITCH_TOL` (0.12) of the mean gap, and the mean centre within `CENTRE_TOL` (0.04 x width) of the crop centre. `views_agree` wants the glyph count at thresholds 170, 190 and 210 to be the same as the read's digit count. A refused layout counts like an unsure glyph, so `_read_once` returns None and `read_number` may still try another threshold. Geometry only, no colour.
+- `digits.glyphs(..., geom=[])` fills the list with one `(centre x, top y, bottom y)` per glyph, because the square-padded glyph images no longer show the layout; `_read_once` takes optional `layout_ok` and `min_margin`. Other kinds (sp, cost, hp) pass neither, so they are unchanged.
+- A 1-D frame (`np.array([])`) used to raise IndexError in the crop slice; `read_score` now returns None for `ndim < 2`. Cost: some true reads now give None (exact-or-None, never wrong).
 - Tests need no `data/`: they render digits with `cv2.putText`, build templates into `tmp_path`, then monkeypatch `digits._TPL`, clear `digits._cache` and set `SCORE_BOX`.
 
 ## ScoreTracker
@@ -59,4 +62,5 @@ sources: [rdf01-t4, rdT01, rdf02-t1, rdf02-t2, rdf02-i2, rdf03-t3, rdf03-t4]
 - commit `ad02bed` (branch task/rdf02-i2) — tools/check_support_assets.py: `--out-dir` default None resolved in `main()` to `<data-dir>/support_frames/_check`; tests/test_support_assets_score.py `test_main_default_out_dir_is_support_frames_check`.
 - commit `0313471` (branch task/rdf03-t3) — src/rdom/perception/sp.py (boxes, ranges, icon/popup comments), tools/check_support_assets.py (`_check_digits`, `_fits_box`, docstring run), tools/support_dryrun.py, assets/templates/digits_sp.npz and digits_cost.npz, tests/test_support_sp.py.
 - commit `6ed8856` (branch task/rdf03-t4) — src/rdom/perception/sp.py (`PANEL_SP_BOX`, `PRICE_BOX`, `read_panel_sp`, `read_price`, `min_channel`, negative-start guard), tools/build_digit_templates.py (`_min_channel` for price), tools/check_support_assets.py (panel sp / price / power level lines and run), assets/templates/digits_{panelsp,price,powerlv}.npz, tests/test_support_panel_readers.py.
+- commit `33c44e4` (branch task/rdf03-r2-s4) — src/rdom/perception/score.py (`layout_ok`, `views_agree`, `EDGE_TOL`/`PITCH_TOL`/`CENTRE_TOL`/`MIN_MARGIN`, ndim guard), src/rdom/perception/digits.py (`glyphs(geom=)`, `_read_once(layout_ok, min_margin)`), tests/test_support_score.py (real QA crops in tests/fixtures/score_s4_*.png, painted-digit sweep, `layout_ok` unit test).
 - commit `29b2651` (branch task/rdf01-t4, not yet merged into this checkout when written) — adds perception/score.py (`SCORE_BOX`, `read_score` guards, `ScoreTracker.update` None handling) and tests/test_support_score.py (synthetic-glyph tests for reader, tracker and build helper).
