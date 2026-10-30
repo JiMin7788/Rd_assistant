@@ -23,11 +23,39 @@ from rdom.perception import digits
 SCORE_BOX = (0.36, 0.099, 0.64, 0.126)
 GLYPH_KW = dict(merge_x=True, vis=0.7)                  # a cut digit falls apart into pieces; see digits.glyphs
 MAX_SCORE = 99999
+# AI-NOTE: a flat shape painted over some digits leaves glyphs that still look like another digit (a cut 4 reads as 1, a cut 6 as 3)
+# or a run that lost its first digit (2667 -> 667). A real score is one centred row of equally tall glyphs on an even pitch
+# (clean H1 crops: tops/bottoms within 1 px of 100, pitch 115-136 around 126, run centre within 0.02 of the box centre), so a
+# read is only trusted when the layout is that regular. Geometry only, no colour.
+EDGE_TOL = 0.05                                          # tops (and bottoms) of all glyphs agree within this x crop height
+PITCH_TOL = 0.12                                         # every gap between glyph centres within this x the mean gap
+CENTRE_TOL = 0.04                                        # mean glyph centre vs crop centre, x crop width
+MIN_MARGIN = 0.12                                        # AI-NOTE: best-vs-runner-up template gap; a 5 cut at the top left was read as 3 at a gap of 0.09 (default 0.08)
+
+
+def layout_ok(geom, w, h):
+    """geom = [(centre x, top y, bottom y)] left to right for a crop normalised to w x h."""
+    xs, y0, y1 = zip(*geom)
+    if max(y0) - min(y0) > EDGE_TOL * h or max(y1) - min(y1) > EDGE_TOL * h:
+        return False
+    if abs(sum(xs) / len(xs) - w / 2) > CENTRE_TOL * w:
+        return False
+    gaps = [b - a for a, b in zip(xs, xs[1:])]
+    mean = sum(gaps) / len(gaps) if gaps else 0
+    return all(abs(g - mean) <= PITCH_TOL * mean for g in gaps)
+
+
+def views_agree(gray, n):
+    """True when every binarisation threshold read_number tries finds exactly n glyphs (or none at all, but the lowest does).
+    AI-NOTE: a bright flat shape can be the only thing left at a high threshold (read as '1') or add pieces at a lower one
+    (a cut 5 read as 3 while the lower threshold sees 5 glyphs); digits seen differently at different thresholds are not a clean read."""
+    counts = [len(g) if g else 0 for g in (digits.glyphs(gray, t, **GLYPH_KW) for t in (170, 190, 210))]
+    return counts[0] == n
 
 
 def read_score(frame_rgb):
     """Score as int, or None when unreadable (also while SCORE_BOX is unset or digits_score.npz is missing)."""
-    if SCORE_BOX is None:
+    if SCORE_BOX is None or frame_rgb.ndim < 2:         # AI-NOTE: np.array([]) is 1-D and made the crop slice raise IndexError
         return None
     h = frame_rgb.shape[0]; W = round(h * 9 / 16)       # true 9:16 content width, as gear._content_w
     u0, v0, u1, v1 = SCORE_BOX
@@ -36,10 +64,10 @@ def read_score(frame_rgb):
         return None
     gray = crop if crop.ndim == 2 else cv2.cvtColor(crop, cv2.COLOR_RGB2GRAY)   # AI-NOTE: a 2-D grey frame must give None, not a cv2 error
     try:
-        r = digits.read_number(gray, "score", **GLYPH_KW)
+        r = digits.read_number(gray, "score", layout_ok=layout_ok, min_margin=MIN_MARGIN, **GLYPH_KW)
     except OSError:                                      # no digits_score.npz yet
         return None
-    return int(r) if r else None
+    return int(r) if r and views_agree(gray, len(r)) else None
 
 
 class ScoreTracker:

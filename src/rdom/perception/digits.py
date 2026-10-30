@@ -67,13 +67,14 @@ def hp_mask(bgr):
     return m
 
 
-def glyphs(gray, thr=170, min_h=0.30, max_h=0.95, merge_x=False, vis=1.0):
+def glyphs(gray, thr=170, min_h=0.30, max_h=0.95, merge_x=False, vis=1.0, geom=None):
     """White glyphs of a dark-background crop, left->right, each GHxGW float in 0..1.
     `gray` may also be a ready binary mask (0/255). Returns None if something that
     is not a glyph (blob, occluder) is in the way.
     merge_x: components whose x-ranges overlap by >= half of the narrower one are one glyph (a digit whose
     top was cut off by the crop falls apart into pieces); vis: visible fraction of a digit's height
-    (the typical glyph width is 0.8 x the full digit height, so 0.8 / vis x the visible height)."""
+    (the typical glyph width is 0.8 x the full digit height, so 0.8 / vis x the visible height).
+    geom: optional list, filled with one (centre x, top y, bottom y) per returned glyph."""
     gray = normalise(gray); h = gray.shape[0]
     _, b = cv2.threshold(gray, thr, 255, cv2.THRESH_BINARY)
     n, lab, st, _ = cv2.connectedComponentsWithStats(b)
@@ -114,8 +115,11 @@ def glyphs(gray, thr=170, min_h=0.30, max_h=0.95, merge_x=False, vis=1.0):
             ph, pw = part.shape; side = max(ph, pw)
             part = cv2.copyMakeBorder(part, (side-ph)//2, side-ph-(side-ph)//2, (side-pw)//2, side-pw-(side-pw)//2,
                                       cv2.BORDER_CONSTANT, value=0)
-            out.append((x0 + j * w / k, cv2.resize(part, (GW, GH), interpolation=cv2.INTER_AREA)))
-    return [g for _, g in sorted(out, key=lambda t: t[0])]
+            out.append((x0 + j * w / k, cv2.resize(part, (GW, GH), interpolation=cv2.INTER_AREA), (x0 + (j + 0.5) * w / k, y0, y1)))
+    out.sort(key=lambda t: t[0])
+    if geom is not None:                           # AI-NOTE: where each glyph sat (centre x, top y, bottom y, in normalised crop px) lets callers check the layout, which the square-padded glyph images no longer show
+        geom[:] = [t[2] for t in out]
+    return [t[1] for t in out]
 
 
 def _templates(kind):
@@ -135,13 +139,16 @@ def classify(g, T, min_score=0.80, min_margin=0.08):
     return int(o[0]), float(s[o[0]])
 
 
-def _read_once(gray, kind, n_digits, thr, **gkw):
-    gs = glyphs(gray, thr, **gkw)
+def _read_once(gray, kind, n_digits, thr, layout_ok=None, min_margin=0.08, **gkw):
+    geom = []
+    gs = glyphs(gray, thr, geom=geom, **gkw)
     if not gs or (n_digits and len(gs) != n_digits):
+        return None
+    if layout_ok and not layout_ok(geom, int(gray.shape[1] * NORM_H / gray.shape[0]), NORM_H):   # AI-NOTE: refused like an unsure glyph, so another threshold may still read cleanly
         return None
     T = _templates(kind); ds = []
     for g in gs:
-        d, _ = classify(g, T)
+        d, _ = classify(g, T, min_margin=min_margin)
         if d is None:
             return None
         ds.append(str(d))
