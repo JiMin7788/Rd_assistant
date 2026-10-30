@@ -378,12 +378,13 @@ class PlayPlayer(BasePlayer):
                 reads.append(r)
         sp0 = min(reads) if len(reads) >= 2 else None
         keep = None if self.cost is None else power_keep(self.cost, self.power_cfg)
-        if keep is None:
-            print(f"power panel: nothing to buy (SP {'?' if sp0 is None else sp0}, keep ?) -- closed", flush=True)
-            self.close_panel()
-            return
+        # AI-NOTE: an unreadable SP is checked before the unknown keep so it always gives the R7 'SP unreadable' line.
         if sp0 is None:
             print("power panel: SP unreadable -- closed", flush=True)
+            self.close_panel()
+            return
+        if keep is None:
+            print(f"power panel: nothing to buy (SP {sp0}, keep ?) -- closed", flush=True)
             self.close_panel()
             return
         base = dict(read)                      # last level read per card, to see a rise after a tap

@@ -158,6 +158,7 @@ H1 과 rdF02 보정(점수, 덱 바, 파워 카드, LV_BOX)은 모두 끝났다.
   - `power panel ->`
   - `Lv check:`
   - `tap not confirmed` (줄 형태: `power panel: <카드> tap not confirmed (SP ...)`)
+  - `power panel: SP unreadable -- closed` (패널 SP 를 못 읽음; 소환 비용을 몰라도 이 줄이 먼저 나옴), `power panel: nothing to buy (SP <n>, keep ?) -- closed` (SP 는 읽혔고 소환 비용을 모름)
   - `support result:`
   - `game-over look-alike`
   - `game-over screen seen once`

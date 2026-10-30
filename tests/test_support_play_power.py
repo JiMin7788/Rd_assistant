@@ -332,12 +332,21 @@ def test_visit_sp_popup_fades_then_reads(capsys):
     assert "SP unreadable" not in out and "SP 900" in out    # sp0 is the lower of the two numbers read
 
 
-@pytest.mark.parametrize("sps,shown", [([1000, 1000], "1000"), ([None], "?")])
-def test_visit_with_unknown_keep_closes(capsys, sps, shown):
+def test_visit_with_unknown_keep_closes(capsys):
+    p, g, inj, perc, saver, clock = make()
+    visit(p, perc, [1000, 1000], P100, cost=None)
+    assert "power panel: nothing to buy (SP 1000, keep ?) -- closed" in capsys.readouterr().out
+    assert card_taps(inj) == []
+
+
+@pytest.mark.parametrize("sps", [[None], [1000, None]])
+def test_visit_unreadable_sp_with_unknown_cost_gives_sp_unreadable(capsys, sps):
+    """AI-NOTE: SP unreadable wins over the unknown keep (R7 line, not 'nothing to buy ... keep ?')."""
     p, g, inj, perc, saver, clock = make()
     visit(p, perc, sps, P100, cost=None)
-    assert f"power panel: nothing to buy (SP {shown}, keep ?) -- closed" in capsys.readouterr().out
-    assert card_taps(inj) == []
+    out = capsys.readouterr().out
+    assert "power panel: SP unreadable -- closed" in out and "keep ?" not in out
+    assert card_taps(inj) == [] and inj.taps == [UI["power_close"]]
 
 
 def test_visit_confirms_by_sp_drop_of_half_the_price(capsys):
