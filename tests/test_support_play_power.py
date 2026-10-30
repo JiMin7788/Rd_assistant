@@ -315,12 +315,21 @@ def test_visit_nothing_to_buy_line(capsys):
     assert card_taps(inj) == [] and inj.taps == [UI["power_close"]]
 
 
-@pytest.mark.parametrize("sps", [[None, 1000], [1000, None], [None]])
+@pytest.mark.parametrize("sps", [[1000, None], [None]])
 def test_visit_sp_unreadable(capsys, sps):
     p, g, inj, perc, saver, clock = make()
     visit(p, perc, sps, P100)
     assert "power panel: SP unreadable -- closed" in capsys.readouterr().out
     assert card_taps(inj) == [] and inj.taps == [UI["power_close"]]
+    assert sum(s == sp.PANEL_SP_RETRY_WAIT for s in p.sleeps) == round(sp.PANEL_SP_RETRY_FOR / sp.PANEL_SP_RETRY_WAIT)
+
+
+def test_visit_sp_popup_fades_then_reads(capsys):
+    """A '+30' popup covers the panel SP on the first reads; later grabs read it and the visit goes on."""
+    p, g, inj, perc, saver, clock = make()
+    visit(p, perc, [None, None, 900, 1000], P100)
+    out = capsys.readouterr().out
+    assert "SP unreadable" not in out and "SP 900" in out    # sp0 is the lower of the two numbers read
 
 
 @pytest.mark.parametrize("sps,shown", [([1000, 1000], "1000"), ([None], "?")])
