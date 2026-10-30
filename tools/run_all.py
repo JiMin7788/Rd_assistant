@@ -20,7 +20,9 @@ SHOW = ("===", "room code", "someone joined", "battle result", "game over", "로
         "게임이 꺼져", "팝업", "modal", "unknown screen", "!!", "Traceback", "Error",
         "stopping", "loop done", "초월", "discord bot ready", "tick:", "dm failed",
         "milestone", "deck route", "support deck", "frame not saved", "power panel", "power card",
-        "unreadable", "board changed without our action")
+        "unreadable", "board changed without our action",
+        "power-up", "Lv check", "look-alike", "game-over screen", "support result",
+        "battle still on screen")
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--no-game", action="store_true")
