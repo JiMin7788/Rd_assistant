@@ -161,8 +161,14 @@ try:
                     f"실패 {st.get('fails', 0)}회 · 서포터 {st.get('support', 0)}회 · "
                     f"필드 완성 {'O' if st.get('complete') else 'X'}")
         if res == "moved": break
-        if res == "game_over":
-            time.sleep(3.0); print("로비로 가기:", exit_to_lobby(g, inj), flush=True); time.sleep(3.0)
+        if res in ("game_over", "clear"):
+            time.sleep(3.0)
+            # AI-NOTE: exit_to_lobby taps blindly; a battle still on screen (false game over) must not be left.
+            if is_battle(g.grab()):
+                print("battle still on screen -- 로비로 가기 skipped", flush=True)
+            else:
+                print("로비로 가기:", exit_to_lobby(g, inj), flush=True)
+            time.sleep(3.0)
 finally:
     g.close()
 print("loop done", flush=True)

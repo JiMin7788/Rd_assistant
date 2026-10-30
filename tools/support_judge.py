@@ -25,7 +25,7 @@ def _exclusion(rec):
     gates = rec.get("gates") or {}
     if mode != "play" or not (gates.get("type") and gates.get("pip")):
         return "gate"
-    return None if rec.get("result") == "game_over" else "abnormal"
+    return None if rec.get("result") in ("game_over", "clear") else "abnormal"
 
 
 def _passed(rec):
