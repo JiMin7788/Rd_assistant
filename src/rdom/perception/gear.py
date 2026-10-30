@@ -516,7 +516,12 @@ def _dark_frac(frame_rgb, v0, v1, thr=60):
 
 
 # bands of the dice info panel: title/description (top), stat rows (mid-top), lower effect box.
+# Each entry is (v0, v1, threshold): band 1 v 0.03-0.15 needs >= 0.40, band 2 v 0.20-0.28 needs
+# >= 0.60, band 3 v 0.52-0.585 needs >= 0.70 (dice_info_panel compares with '>=', not '>').
+# A band's score is the share of pixels with HSV V < 60 (_dark_frac) in u 0.08-0.92.
 # The middle (v 0.30-0.51) is deliberately unused: a boss banner can cover it.
+# Band 2 overlaps the field-effect banner band (BANNER_BOX v 0.165-0.265, below): a banner alone
+# scores 0.48-0.59 there (measured, see dice_info_panel) against the 0.60 threshold, a narrow margin.
 _INFO_BANDS = ((0.03, 0.15, 0.40), (0.20, 0.28, 0.60), (0.52, 0.585, 0.70))
 
 

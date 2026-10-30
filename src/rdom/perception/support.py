@@ -26,7 +26,12 @@ NO_PIP = ("empty", "junk", "Crystal", "Bomb")
 TYPE_FILE = "support_type_cnn.pt"
 PIP_FILES = tuple(f"support_pip_pat_e{i}.pt" for i in (1, 2, 3))
 STAR_FILES = tuple(f"support_star_e{i}.pt" for i in (1, 2, 3))
-STAR_THRESHOLD = 0.7     # star = pip 7 when p > this; measured on the H2 holdout 2026-10-30 (0.5: precision 0.838, 0.7: 0.954)
+# star = pip 7 when p > STAR_THRESHOLD. Evidence: data/support_gate.json (gate re-run after rdT04,
+# 2026-10-30, at 0.7): pip PASS, Res/Align 0.985, star recall 0.984, star precision 0.954, n=599,
+# stars=63. At 0.5 the star precision was 0.838 (measured by the Master on the same holdouts).
+# No cause for the false stars is established here. Changing STAR_THRESHOLD leaves every model
+# sha256 unchanged, so tools/support_gate.py must be re-run before gate_state() reflects it.
+STAR_THRESHOLD = 0.7
 GATE_FILE = "support_gate.json"
 GEAR_PIP_SINGLE = "gear_pip_pat.pt"
 
