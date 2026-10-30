@@ -326,7 +326,7 @@ class PlayPlayer(BasePlayer):
         self._hist = {}                        # cell -> last BUFF_STEADY reads
         self._banned = {}                      # (from, to) -> (from type, to type, expiry)
         self._pending = None                   # [from, to, {cell: (type, pip)} at the swipe, undecided ticks]
-        self.memory = CellMemory(support.READ_CONF_MIN)
+        self.memory = CellMemory(support.READ_CONF_MIN, empty_conf_min=support.EMPTY_CONF_MIN)
         self.burster = Burster(self)
         self._unk_logged = set()               # cells whose 'occupied, unknown' line was printed
         self.stats.update(bursts=0, burst_hits=0, mem_ticks=0, forgets=0)
@@ -488,8 +488,9 @@ class PlayPlayer(BasePlayer):
         mem, conf_min = self.memory, support.READ_CONF_MIN
         before = {c: mem.memory(c) for c in cells}
         kept, reads, grabs = self.burster.run(f, cells, self.pip_source)
-        results = {c: burst_result(reads[c], conf_min) for c in cells}
-        self.burster.done(now, cells, results, reads, conf_min)
+        ecm = support.EMPTY_CONF_MIN
+        results = {c: burst_result(reads[c], conf_min, empty_conf_min=ecm) for c in cells}
+        self.burster.done(now, cells, results, reads, conf_min, ecm)
         self.stats["bursts"] += 1
         toks = []
         for c in cells:
@@ -522,7 +523,8 @@ class PlayPlayer(BasePlayer):
     def _verify_merge(self, f, raw_by, bc, now):
         """R7.1: judge the last merge on RAW reads against the effective values at the swipe."""
         fr, to, before, tries = self._pending
-        verdict = merge_verdict(raw_by[fr], raw_by[to], before[fr], before[to], support.READ_CONF_MIN)
+        verdict = merge_verdict(raw_by[fr], raw_by[to], before[fr], before[to], support.READ_CONF_MIN,
+                              support.EMPTY_CONF_MIN)
         if verdict == "undecided":
             tries += 1
             if tries < VERIFY_TICKS:
@@ -656,13 +658,13 @@ class Burster:
                 out.append(c)
         return out
 
-    def done(self, now, cells, results, reads, conf_min):
+    def done(self, now, cells, results, reads, conf_min, empty_conf_min=0.0):
         """Book a finished burst. results {cell: accepted (type, pip) | None}, reads {cell: [raw read, ...]}."""
         self.last_any = now
         for c in cells:
             self.last_burst[c] = now
             # AI-NOTE: same predicate as CellMemory, so a NaN conf is not a confident read and does not reset the backoff
-            confident = any(not _unreadable(d, conf_min) for d in reads.get(c, []))
+            confident = any(not _unreadable(d, conf_min, empty_conf_min) for d in reads.get(c, []))
             self.fails[c] = 0 if results.get(c) is not None or confident else self.fails.get(c, 0) + 1
 
     def run(self, f, cells, pip_source="auto"):
