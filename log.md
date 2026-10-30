@@ -143,3 +143,7 @@
 ## 2026-10-30 · rdT04 · Support star threshold 0.7 shared constant
 - support.STAR_THRESHOLD = 0.7 replaces the 0.5 literals in read_cells_support and support_gate._predict; 0.5 gave star precision 0.838 on the H2 holdout (pip-1 Resonance false stars), 0.7 gives 0.954 at recall 0.984.
 - pages: components/perception-support.md (updated), components/training-support.md (updated)
+
+## 2026-10-30 · rdf03-t2 · Confirmed game over, clear at 5000
+- Support game stops only after 2 ticks of result look with battle UI gone (H2 06:39 false stop); look-alikes are logged/saved; a game_over with score >= 5000 is recorded as "clear" (+final_score); gear_loop skips the lobby tap if a battle is on screen; judge accepts clear.
+- pages: components/support-players.md (updated), components/support-bot-core.md (updated)
