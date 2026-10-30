@@ -147,3 +147,7 @@
 ## 2026-10-30 · rdf03-t2 · Confirmed game over, clear at 5000
 - Support game stops only after 2 ticks of result look with battle UI gone (H2 06:39 false stop); look-alikes are logged/saved; a game_over with score >= 5000 is recorded as "clear" (+final_score); gear_loop skips the lobby tap if a battle is on screen; judge accepts clear.
 - pages: components/support-players.md (updated), components/support-bot-core.md (updated)
+
+## 2026-10-30 · rdf03-t3 · Battle SP and summon-cost readers
+- perception/sp.py reads battle SP and the 소환 button cost exact-or-None with its own digits_sp/digits_cost templates; 2-digit costs read None because the Ø icon intrudes the box; the check tool skips crops cut with other boxes.
+- pages: components/perception-score.md (updated)

@@ -1,8 +1,8 @@
 ---
 title: Score reader and generic digit-template kinds
 type: component
-updated: 2026-10-29
-sources: [rdf01-t4, rdT01, rdf02-t1, rdf02-t2, rdf02-i2]
+updated: 2026-10-30
+sources: [rdf01-t4, rdT01, rdf02-t1, rdf02-t2, rdf02-i2, rdf03-t3]
 ---
 # Score reader and generic digit-template kinds
 
@@ -27,6 +27,13 @@ sources: [rdf01-t4, rdT01, rdf02-t1, rdf02-t2, rdf02-i2]
 - rdf02-t2 added `--out-dir` (default `<data-dir>/support_frames/_check` since rdf02-i2, resolved after parsing because it depends on `--data-dir`; it was a temp folder before, which left the folder named in spec R4 and the runbook empty) and three more lines: `deck bar: support t/n gear-false g/m`, `deck bar excluded: k (names, max 10 then ...)`, `power cards: k/n`, `lv box: drew n overlays to <dir>`. Support frames are `sup*/<t>.png`; ones with the power panel open ("panel") or no battle ("bar hidden") are excluded and listed, `panel_*.png` frames feed power cards and the LV_BOX overlays. A power-cards frame counts only if Growth, Alignment and Resonance sit on three different buttons. H1 run: `deck bar: support 181/181 gear-false 5/5`, `excluded: 0`, `power cards: 5/5`, `lv box: drew 5`. Templates and LV_BOX: [perception-support.md](perception-support.md).
 - Tests (tests/test_support_assets_score.py, tests/test_support_assets_ui.py) use synthetic digits in `tmp_path` and assert the committed npz has `T` of shape (10, GH, GW).
 
+## Battle SP and summon cost (`perception/sp.py`, rdf03-t3)
+- `read_sp(frame)` (0..9_999_999) reads the white digits on the dark pill above 소환; `read_summon_cost(frame)` (1..99_999) reads the digits on the 소환 button. Same recipe as `read_score`: true 9:16 width, grey, `digits.read_number(gray, kind)` with kind `sp` / `cost`; None on missing npz, empty crop, refusal, out of range, 2-D grey, tiny or odd inputs. `read_crop(gray, kind)` is the shared cut-crop reader.
+- `SP_BOX = (0.446, 0.790, 0.600, 0.813)`, `COST_BOX = (0.4745, 0.876, 0.575, 0.897)`. The 'Ø' icon must stay outside: it is fixed for SP (digits start u 0.451) but moves with the digit count on the button, so for a 2-digit cost (10..90, first summons only) a sliver of it is inside and the read is None by design (the 4 none of the check run).
+- Templates `digits_sp.npz` / `digits_cost.npz` come from `data/digits/sp` / `data/digits/cost` via `build_digit_templates.py sp cost`; all ten digits had samples, so no room-template fallback. A cyan '+N' kill popup over the SP digits must read None, never a wrong number.
+- `check_support_assets.py` prints two more lines after the existing ones: `sp: n= correct= none= wrong=` and `summon cost: n= correct= none= wrong=`. Crops in those folders cut with other boxes by earlier tries are skipped (`_fits_box`: pixel size must match the box within 1 px), otherwise pasting them back would stretch the digits. Run 2026-10-30: `sp: n=34 correct=33 none=1 wrong=0`, `summon cost: n=56 correct=52 none=4 wrong=0`.
+- `tools/support_dryrun.py` adds `sp: <n|None>` and `summon cost: <n|None>` after the score line. Not yet used by the bot loop (rdf03-t5/t6).
+
 ## Building templates for a kind
 - `build_kind(kind, src_dir, out, thr, fallback)` reads `<src_dir>/*.png`; the value is the filename part before the first `_` (checked by eye). Non-digit names and unreadable images are skipped.
 - Digits with no sample take `fallback`. The CLI passes the room templates, which share the game font.
@@ -41,4 +48,5 @@ sources: [rdf01-t4, rdT01, rdf02-t1, rdf02-t2, rdf02-i2]
 - commit `9273516` (branch task/rdf02-t1, not yet merged into this checkout when written) — adds tools/check_support_assets.py (`check_score`, `_frame_for_crop`, `check_score_lobby`, docstring with the run on `data/`), tests/test_support_assets_score.py, assets/templates/digits_score.npz, and the box/separator/degenerate-input tests in tests/test_support_score.py.
 - commit `ee3d48d` (branch task/rdf02-t2, not yet merged into this checkout when written) — tools/check_support_assets.py: check_deck_bar, check_power_cards, draw_lv_boxes, --out-dir and the docstring with the H1 run; tests/test_support_assets_ui.py.
 - commit `ad02bed` (branch task/rdf02-i2) — tools/check_support_assets.py: `--out-dir` default None resolved in `main()` to `<data-dir>/support_frames/_check`; tests/test_support_assets_score.py `test_main_default_out_dir_is_support_frames_check`.
+- commit `0313471` (branch task/rdf03-t3) — src/rdom/perception/sp.py (boxes, ranges, icon/popup comments), tools/check_support_assets.py (`_check_digits`, `_fits_box`, docstring run), tools/support_dryrun.py, assets/templates/digits_sp.npz and digits_cost.npz, tests/test_support_sp.py.
 - commit `29b2651` (branch task/rdf01-t4, not yet merged into this checkout when written) — adds perception/score.py (`SCORE_BOX`, `read_score` guards, `ScoreTracker.update` None handling) and tests/test_support_score.py (synthetic-glyph tests for reader, tracker and build helper).
