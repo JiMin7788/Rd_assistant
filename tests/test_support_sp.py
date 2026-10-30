@@ -227,3 +227,26 @@ def test_dimmed_wide_number_is_none(env4):
 
 def test_zero_price_is_none(env4):
     assert sp.read_price(spaced_frame("0", price_box(), 3), PRICE_UV) is None
+
+
+# --- rdf03-r4-s17: price at the support.power_cards uv (about 3 px left of the button centre) ----------------------------
+
+def test_one_column_of_the_last_digit_in_the_strip_is_no_overflow():
+    # AI-NOTE: S17 -- at power_cards' uv the box edge cut the last '0' of 250 and its final column (1 px wide, 16 of 34 px high)
+    # lay in the overflow strip, so read_price gave None; a real next digit is far wider
+    strip = np.zeros((34, 28), np.uint8)
+    strip[10:26, 0] = 255
+    assert not sp._digits_beyond(strip)
+    strip[10:26, :8] = 255
+    assert sp._digits_beyond(strip)
+
+
+PANEL_141449 = "C:/dev/rdom/data/support_frames/sup20261029_141449/panel_121.3.png"
+
+
+@pytest.mark.skipif(not Path(PANEL_141449).exists(), reason="saved panel frame not on this machine")
+def test_price_at_power_cards_uv_on_saved_panel():
+    from rdom.perception import support
+    im = cv2.cvtColor(cv2.imread(PANEL_141449), cv2.COLOR_BGR2RGB)
+    cards = support.power_cards(im)
+    assert [sp.read_price(im, uv) for uv in cards.values()] == [250, 250, 250]
