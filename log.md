@@ -204,3 +204,7 @@
 ## 2026-10-30 · rdf03-r3-s16 · Numbers wider than the reading box read None
 - sp._read checks a one-digit-pitch strip (OVERFLOW_U) right of the box, judged on the weakest channel, and returns None on a digit-sized blob there; before, SP 1234567 read 123456 and price 2500 read 250.
 - pages: components/perception-score.md (updated)
+
+## 2026-10-30 · rdf03-r4-s17 · read_price tolerates the box-cut edge of the last digit
+- support.power_cards uv is ~3 px left of the button centre, so the last digit of 250 was cut and a 1 px column landed in the overflow strip (None). _digits_beyond now ignores blobs <= SLIVER_W (2) px wide; saved panel reads [250, 250, 250].
+- pages: components/perception-score.md (updated)
