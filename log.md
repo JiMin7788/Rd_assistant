@@ -192,3 +192,7 @@
 ## 2026-10-30 · rdf03-r2-s4 · read_score refuses irregular glyph layouts
 - read_score now needs an even, centred, equal-height glyph row (layout_ok), a 0.12 template margin and the same glyph count at thresholds 170/190/210; painted-over digits give None instead of 667/2367/1980/4910. 1-D input returns None.
 - pages: components/perception-score.md (updated)
+
+## 2026-10-30 · rdf03-r2-s18 · SP and cost read on a dimmed battle
+- A dice-info panel dims the battle (digits peak ~70), which made read_sp/read_summon_cost None; sp._undim stretches crops peaking in 40..199 to full range, near-black crops stay None.
+- pages: components/perception-score.md (updated)

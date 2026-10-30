@@ -2,7 +2,7 @@
 title: Score reader and generic digit-template kinds
 type: component
 updated: 2026-10-30
-sources: [rdf01-t4, rdT01, rdf02-t1, rdf02-t2, rdf02-i2, rdf03-t3, rdf03-t4, rdf03-r2-s4]
+sources: [rdf01-t4, rdT01, rdf02-t1, rdf02-t2, rdf02-i2, rdf03-t3, rdf03-t4, rdf03-r2-s4, rdf03-r2-s18]
 ---
 # Score reader and generic digit-template kinds
 
@@ -35,6 +35,7 @@ sources: [rdf01-t4, rdT01, rdf02-t1, rdf02-t2, rdf02-i2, rdf03-t3, rdf03-t4, rdf
 - `SP_BOX = (0.446, 0.790, 0.600, 0.813)`, `COST_BOX = (0.4745, 0.876, 0.575, 0.897)`. The 'Ø' icon must stay outside: it is fixed for SP (digits start u 0.451) but moves with the digit count on the button, so for a 2-digit cost (10..90, first summons only) a sliver of it is inside and the read is None by design (the 4 none of the check run).
 - Templates `digits_sp.npz` / `digits_cost.npz` come from `data/digits/sp` / `data/digits/cost` via `build_digit_templates.py sp cost`; all ten digits had samples, so no room-template fallback. A cyan '+N' kill popup over the SP digits must read None, never a wrong number.
 - `check_support_assets.py` prints two more lines after the existing ones: `sp: n= correct= none= wrong=` and `summon cost: n= correct= none= wrong=`. Crops in those folders cut with other boxes by earlier tries are skipped (`_fits_box`: pixel size must match the box within 1 px), otherwise pasting them back would stretch the digits. Run 2026-10-30: `sp: n=34 correct=33 none=1 wrong=0`, `summon cost: n=56 correct=52 none=4 wrong=0`.
+- Dimmed battle (rdf03-r2-s18): a dice-info panel or popup dims the whole battle, so the white digits peak at ~70 instead of 255 and the fixed 170+ binarisation saw nothing (SP 50630 / cost 480 read None). `sp._read` now passes the grey crop through `_undim`, which scales it by 255/peak when its brightest pixel is in `DIM_PEAK = (40, 200)`; clean crops (peak 255) pass unchanged and crops peaking below 40 are left alone so noise is not amplified (read None). Applies to every `sp._read` reader.
 - `tools/support_dryrun.py` adds `sp: <n|None>` and `summon cost: <n|None>` after the score line. Not yet used by the bot loop (rdf03-t5/t6).
 
 ## Power-panel readers (`perception/sp.py`, rdf03-t4)
@@ -62,5 +63,6 @@ sources: [rdf01-t4, rdT01, rdf02-t1, rdf02-t2, rdf02-i2, rdf03-t3, rdf03-t4, rdf
 - commit `ad02bed` (branch task/rdf02-i2) — tools/check_support_assets.py: `--out-dir` default None resolved in `main()` to `<data-dir>/support_frames/_check`; tests/test_support_assets_score.py `test_main_default_out_dir_is_support_frames_check`.
 - commit `0313471` (branch task/rdf03-t3) — src/rdom/perception/sp.py (boxes, ranges, icon/popup comments), tools/check_support_assets.py (`_check_digits`, `_fits_box`, docstring run), tools/support_dryrun.py, assets/templates/digits_sp.npz and digits_cost.npz, tests/test_support_sp.py.
 - commit `6ed8856` (branch task/rdf03-t4) — src/rdom/perception/sp.py (`PANEL_SP_BOX`, `PRICE_BOX`, `read_panel_sp`, `read_price`, `min_channel`, negative-start guard), tools/build_digit_templates.py (`_min_channel` for price), tools/check_support_assets.py (panel sp / price / power level lines and run), assets/templates/digits_{panelsp,price,powerlv}.npz, tests/test_support_panel_readers.py.
+- commit `1a79274` (branch task/rdf03-r2-s18) — src/rdom/perception/sp.py (`DIM_PEAK`, `_undim`, call in `_read`), tests/test_support_sp.py (`test_dimmed_frame_reads_sp_and_cost` at peak 70, `test_near_black_crop_is_not_amplified` at peak 20).
 - commit `33c44e4` (branch task/rdf03-r2-s4) — src/rdom/perception/score.py (`layout_ok`, `views_agree`, `EDGE_TOL`/`PITCH_TOL`/`CENTRE_TOL`/`MIN_MARGIN`, ndim guard), src/rdom/perception/digits.py (`glyphs(geom=)`, `_read_once(layout_ok, min_margin)`), tests/test_support_score.py (real QA crops in tests/fixtures/score_s4_*.png, painted-digit sweep, `layout_ok` unit test).
 - commit `29b2651` (branch task/rdf01-t4, not yet merged into this checkout when written) — adds perception/score.py (`SCORE_BOX`, `read_score` guards, `ScoreTracker.update` None handling) and tests/test_support_score.py (synthetic-glyph tests for reader, tracker and build helper).
