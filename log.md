@@ -176,3 +176,7 @@
 - CLAUDE_CODE_TODO.md: H2 marked done, H3 rewritten as the R14 acceptance procedure; run_all.py SHOW echoes six more play-mode lines.
 - pages: howto/run-bot.md (updated)
 - pages: components/support-players.md (updated), components/perception-gear.md (updated), components/perception-support.md (updated), components/training-support.md (updated)
+
+## 2026-10-30 · rdf03-i1 · Panel SP read retry
+- power_visit retries the panel SP read (0.25 s steps, up to 1 s) until two numeric reads exist, because a +30 popup hides the digits on most panel frames (2 of 6 readable); otherwise most visits closed as SP unreadable.
+- pages: components/support-players.md (updated)
