@@ -1,5 +1,5 @@
-"""Game end (rdf03-t2): confirmed game over, 'clear' at 5000, judge eligibility, gear_loop guard.
-Fakes only; gear_loop is read as text, never imported."""
+"""Game end (rdf03-t2): confirmed game over, 'clear' at 5000, judge eligibility.
+Fakes only; the gear_loop guard is tested in test_gear_loop_result.py."""
 import datetime
 import json
 import os
@@ -248,12 +248,4 @@ def test_judge_counts_clear_as_eligible():
     assert any(l.startswith("1. c0") for l in lines)
 
 
-# ---- gear_loop: code inspection only (importing it would start the bot) ----
-
-def test_gear_loop_guard_by_inspection():
-    src = (ROOT / "tools" / "gear_loop.py").read_text(encoding="utf-8")
-    m = re.search(r'if res in \("game_over", "clear"\):(.*?)\nfinally:', src, re.S)
-    assert m, "clear must be handled like game_over"
-    body = m.group(1)
-    assert body.index("is_battle(g.grab())") < body.index("exit_to_lobby(g, inj)")
-    assert "battle still on screen -- 로비로 가기 skipped" in body
+# gear_loop's after-battle handling is tested behaviourally in tests/test_gear_loop_result.py

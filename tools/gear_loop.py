@@ -38,138 +38,154 @@ LOG = r"C:\dev\rdom\data\gear_rounds.jsonl"
 PAUSE = r"C:\dev\rdom\data\PAUSE"
 STOP = r"C:\dev\rdom\data\STOP"                    # /종료 (Discord): end cleanly between games
 
-if place_game_window():                              # [target.place] in recorder.toml
-    print("game window moved to its set place", flush=True)
-g = LiveGrabber(); inj = Injector(execute=True)
-fails = 0; rnd = 0
-send_status("▶ 봇 시작")
-try:
-    while True:
-        # pause switch: "봇 일시정지.bat" creates data/PAUSE, "봇 재개.bat" removes it.
-        # Checked only between games, so the game in progress is always finished.
-        if os.path.exists(STOP):
-            os.remove(STOP); send_status("⏹ 종료 요청 -- 봇 종료"); break
-        if os.path.exists(PAUSE):
-            send_status("⏸ 일시정지 -- 판 사이에서 대기 중 (봇 재개.bat 로 재개)")
-            while os.path.exists(PAUSE) and not os.path.exists(STOP):
-                time.sleep(2)
+
+def after_battle(res, g, inj, exit_fn=exit_to_lobby, battle_fn=is_battle, report=None):
+    """Log the battle result, then leave the finished game. Returns True when the loop must stop
+    (res == "moved"). `report` runs right after the result line (room/Discord updates), so the
+    log order stays what it was when this code was inline."""
+    print("battle result:", res, flush=True)
+    if report: report()
+    if res == "moved": return True
+    if res in ("game_over", "clear"):
+        time.sleep(3.0)
+        # AI-NOTE: exit_to_lobby taps blindly; a battle still on screen (false game over) must not be left.
+        if battle_fn(g.grab()):
+            print("battle still on screen -- 로비로 가기 skipped", flush=True)
+        else:
+            print("로비로 가기:", exit_fn(g, inj), flush=True)
+        time.sleep(3.0)
+    return False
+
+
+def main():
+    if place_game_window():                              # [target.place] in recorder.toml
+        print("game window moved to its set place", flush=True)
+    g = LiveGrabber(); inj = Injector(execute=True)
+    fails = 0; rnd = 0
+    send_status("▶ 봇 시작")
+    try:
+        while True:
+            # pause switch: "봇 일시정지.bat" creates data/PAUSE, "봇 재개.bat" removes it.
+            # Checked only between games, so the game in progress is always finished.
             if os.path.exists(STOP):
-                continue
-            send_status("▶ 재개")
-        rnd += 1
-        print(f"=== round {rnd} ({datetime.datetime.now():%H:%M}) ===", flush=True)
-        if g.window_moved():
-            print("window moved -- stop"); send_status("⛔ 에뮬레이터 창이 움직여서 정지", g.grab()); break
-        f = g.grab()
-        if is_game_over(f):
-            exit_to_lobby(g, inj); time.sleep(3); f = g.grab()
-        # shop/event popups open by themselves on the lobby after a game (재설계 패키지,
-        # 2026-10-08): close them with their X before starting a room
-        unknown = 0; launches = 0
-        for _ in range(30):
-            # game closed (emulator on the launcher home screen, 2026-10-11): start it
-            # again; BACK / taps on the home screen would never get back to the lobby
-            if inj.game_in_front() is False:
-                if launches >= 2:
-                    print("game does not start -- give up this round", flush=True); break
-                launches += 1
-                print(f"게임이 꺼져 있음 -- 랜덤다이스 실행 ({launches}/2)", flush=True)
-                send_status("🔄 게임이 꺼져 있어서 다시 실행합니다")
-                inj.launch_game()
-                # wait for a screen we know -- never BACK during splash/loading (it can
-                # close the game again)
-                t_l = time.monotonic()
-                while time.monotonic() - t_l < 120:
-                    time.sleep(3.0); f = g.grab()
-                    if (is_lobby(f) or has_popup_close(f) or has_modal_x(f) or network_error(f)
-                            or is_exit_dialog(f) or is_battle(f) or is_coop_room(f)):
-                        break
-                print(f"  loaded after {time.monotonic() - t_l:.0f}s", flush=True)
-                unknown = 0; continue
-            # popups first: a shop popup's green buy button sits where the lobby's 협동
-            # button is (스텝업 패키지, 2026-10-10), so never decide "lobby" under a popup
-            # the 친구와 하기 menu is a fine start too: open_room_and_wait taps 방 생성 there
-            if (is_battle(f) or is_coop_room(f) or is_friend_menu(f)
-                    or (is_lobby(f) and not has_popup_close(f))):
-                break
-            if network_error(f):
-                # "네트워크 에러가 발생하여 게임을 재시작합니다." -- its only button is 확인;
-                # the game then reloads (shop popups follow), 2026-10-09
-                print("네트워크 에러 -- 확인, waiting for reload", flush=True)
-                inj.tap(0.50, 0.627); time.sleep(8.0); f = g.grab(); continue
-            if is_exit_dialog(f):
-                print("종료 확인창 -- 취소", flush=True); inj.tap(*CANCEL_UV)
-            elif has_popup_close(f):
-                print("팝업 -- X 닫기", flush=True); inj.tap(*CLOSE_X_UV)
-            elif is_game_over(f):
-                exit_to_lobby(g, inj)
-            elif has_modal_x(f) and unknown < 3:
-                unknown += 1                         # BACK does not close these modals
-                print(f"modal -- X 닫기 ({unknown}/3)", flush=True); inj.tap(*MODAL_X_UV)
-            elif unknown < 3:
-                # some other popup / screen without the bottom X: Android BACK closes
-                # game popups (on the lobby it opens the exit dialog, cancelled above).
-                # Never tap blind -- a popup is full of buy buttons.
-                # A loading / transition screen is "unknown" too and BACK there can close
-                # the game (2026-10-11, right after a relaunch): give it 5 s first.
-                time.sleep(5.0); f2 = g.grab()
-                if (is_lobby(f2) or has_popup_close(f2) or has_modal_x(f2) or is_battle(f2)
-                        or is_coop_room(f2) or is_exit_dialog(f2) or network_error(f2)):
-                    f = f2; continue
-                unknown += 1
-                print(f"unknown screen -- BACK ({unknown}/3)", flush=True); inj.back()
-            else:
-                break
-            time.sleep(1.5); f = g.grab()
-        if not is_battle(f):
-            ok = open_room_and_wait(g, inj, timeout=1800)
-            if ok is False:                         # nobody joined: keep waiting, not a fault
-                print("nobody joined -- waiting again", flush=True); continue
-            if not ok:
-                fails += 1; print(f"round did not start ({ok}); fails={fails}", flush=True)
-                if fails >= 3:
-                    print("!! 3 failed rounds in a row -- stopping")
-                    send_status("⛔ 방 만들기 3회 연속 실패 -- 정지. 화면 확인 필요", g.grab()); break
-                time.sleep(5); continue
-            t0 = time.monotonic()
-            while not is_battle(g.grab()):
-                if time.monotonic() - t0 > 90: break
-                time.sleep(1.0)
+                os.remove(STOP); send_status("⏹ 종료 요청 -- 봇 종료"); break
+            if os.path.exists(PAUSE):
+                send_status("⏸ 일시정지 -- 판 사이에서 대기 중 (봇 재개.bat 로 재개)")
+                while os.path.exists(PAUSE) and not os.path.exists(STOP):
+                    time.sleep(2)
+                if os.path.exists(STOP):
+                    continue
+                send_status("▶ 재개")
+            rnd += 1
+            print(f"=== round {rnd} ({datetime.datetime.now():%H:%M}) ===", flush=True)
+            if g.window_moved():
+                print("window moved -- stop"); send_status("⛔ 에뮬레이터 창이 움직여서 정지", g.grab()); break
+            f = g.grab()
+            if is_game_over(f):
+                exit_to_lobby(g, inj); time.sleep(3); f = g.grab()
+            # shop/event popups open by themselves on the lobby after a game (재설계 패키지,
+            # 2026-10-08): close them with their X before starting a room
+            unknown = 0; launches = 0
             for _ in range(30):
-                if read_speed(g.grab()) is not None: break
-                time.sleep(0.5)
-            print("배속 tap (once)", flush=True); inj.tap(*SPEED_UV)
-            send_status(f"🎮 {rnd}판 시작")
-        fails = 0
-        rl = gear.reload_if_changed()
-        if rl: print("models reloaded:", rl, flush=True)
-        rl = support.reload_if_changed()
-        if rl: print("support models reloaded:", rl, flush=True)
-        t_start = time.perf_counter()
-        # AI-NOTE: keyword args -- run_battle's 3rd positional is `minutes`; gear_play=play keeps the
-        # `player is gear_play` hand-over check true for the gear bot.
-        res, player = support_bot.run_battle(g, inj, minutes=40, gear_play=play)
-        t_end = time.perf_counter()
-        st = getattr(player, "stats", {})
-        with open(LOG, "a") as fh:
-            fh.write(json.dumps({"round": rnd, "t_start": t_start, "t_end": t_end, "result": res,
-                                 "wall_end": datetime.datetime.now().isoformat(),
-                                 "stats": {k: st.get(k) for k in ("merges", "fails", "support", "complete")}}) + "\n")
-        print("battle result:", res, flush=True)
-        write_room(None, "closed")                      # reservation turn is over
-        send_status(f"🏁 {rnd}판 종료 · {(t_end - t_start)/60:.1f}분\n합성 {st.get('merges', 0)}회 · "
-                    f"실패 {st.get('fails', 0)}회 · 서포터 {st.get('support', 0)}회 · "
-                    f"필드 완성 {'O' if st.get('complete') else 'X'}")
-        if res == "moved": break
-        if res in ("game_over", "clear"):
-            time.sleep(3.0)
-            # AI-NOTE: exit_to_lobby taps blindly; a battle still on screen (false game over) must not be left.
-            if is_battle(g.grab()):
-                print("battle still on screen -- 로비로 가기 skipped", flush=True)
-            else:
-                print("로비로 가기:", exit_to_lobby(g, inj), flush=True)
-            time.sleep(3.0)
-finally:
-    g.close()
-print("loop done", flush=True)
-send_status("■ 봇 종료 (예정 시간 도달)")
+                # game closed (emulator on the launcher home screen, 2026-10-11): start it
+                # again; BACK / taps on the home screen would never get back to the lobby
+                if inj.game_in_front() is False:
+                    if launches >= 2:
+                        print("game does not start -- give up this round", flush=True); break
+                    launches += 1
+                    print(f"게임이 꺼져 있음 -- 랜덤다이스 실행 ({launches}/2)", flush=True)
+                    send_status("🔄 게임이 꺼져 있어서 다시 실행합니다")
+                    inj.launch_game()
+                    # wait for a screen we know -- never BACK during splash/loading (it can
+                    # close the game again)
+                    t_l = time.monotonic()
+                    while time.monotonic() - t_l < 120:
+                        time.sleep(3.0); f = g.grab()
+                        if (is_lobby(f) or has_popup_close(f) or has_modal_x(f) or network_error(f)
+                                or is_exit_dialog(f) or is_battle(f) or is_coop_room(f)):
+                            break
+                    print(f"  loaded after {time.monotonic() - t_l:.0f}s", flush=True)
+                    unknown = 0; continue
+                # popups first: a shop popup's green buy button sits where the lobby's 협동
+                # button is (스텝업 패키지, 2026-10-10), so never decide "lobby" under a popup
+                # the 친구와 하기 menu is a fine start too: open_room_and_wait taps 방 생성 there
+                if (is_battle(f) or is_coop_room(f) or is_friend_menu(f)
+                        or (is_lobby(f) and not has_popup_close(f))):
+                    break
+                if network_error(f):
+                    # "네트워크 에러가 발생하여 게임을 재시작합니다." -- its only button is 확인;
+                    # the game then reloads (shop popups follow), 2026-10-09
+                    print("네트워크 에러 -- 확인, waiting for reload", flush=True)
+                    inj.tap(0.50, 0.627); time.sleep(8.0); f = g.grab(); continue
+                if is_exit_dialog(f):
+                    print("종료 확인창 -- 취소", flush=True); inj.tap(*CANCEL_UV)
+                elif has_popup_close(f):
+                    print("팝업 -- X 닫기", flush=True); inj.tap(*CLOSE_X_UV)
+                elif is_game_over(f):
+                    exit_to_lobby(g, inj)
+                elif has_modal_x(f) and unknown < 3:
+                    unknown += 1                         # BACK does not close these modals
+                    print(f"modal -- X 닫기 ({unknown}/3)", flush=True); inj.tap(*MODAL_X_UV)
+                elif unknown < 3:
+                    # some other popup / screen without the bottom X: Android BACK closes
+                    # game popups (on the lobby it opens the exit dialog, cancelled above).
+                    # Never tap blind -- a popup is full of buy buttons.
+                    # A loading / transition screen is "unknown" too and BACK there can close
+                    # the game (2026-10-11, right after a relaunch): give it 5 s first.
+                    time.sleep(5.0); f2 = g.grab()
+                    if (is_lobby(f2) or has_popup_close(f2) or has_modal_x(f2) or is_battle(f2)
+                            or is_coop_room(f2) or is_exit_dialog(f2) or network_error(f2)):
+                        f = f2; continue
+                    unknown += 1
+                    print(f"unknown screen -- BACK ({unknown}/3)", flush=True); inj.back()
+                else:
+                    break
+                time.sleep(1.5); f = g.grab()
+            if not is_battle(f):
+                ok = open_room_and_wait(g, inj, timeout=1800)
+                if ok is False:                         # nobody joined: keep waiting, not a fault
+                    print("nobody joined -- waiting again", flush=True); continue
+                if not ok:
+                    fails += 1; print(f"round did not start ({ok}); fails={fails}", flush=True)
+                    if fails >= 3:
+                        print("!! 3 failed rounds in a row -- stopping")
+                        send_status("⛔ 방 만들기 3회 연속 실패 -- 정지. 화면 확인 필요", g.grab()); break
+                    time.sleep(5); continue
+                t0 = time.monotonic()
+                while not is_battle(g.grab()):
+                    if time.monotonic() - t0 > 90: break
+                    time.sleep(1.0)
+                for _ in range(30):
+                    if read_speed(g.grab()) is not None: break
+                    time.sleep(0.5)
+                print("배속 tap (once)", flush=True); inj.tap(*SPEED_UV)
+                send_status(f"🎮 {rnd}판 시작")
+            fails = 0
+            rl = gear.reload_if_changed()
+            if rl: print("models reloaded:", rl, flush=True)
+            rl = support.reload_if_changed()
+            if rl: print("support models reloaded:", rl, flush=True)
+            t_start = time.perf_counter()
+            # AI-NOTE: keyword args -- run_battle's 3rd positional is `minutes`; gear_play=play keeps the
+            # `player is gear_play` hand-over check true for the gear bot.
+            res, player = support_bot.run_battle(g, inj, minutes=40, gear_play=play)
+            t_end = time.perf_counter()
+            st = getattr(player, "stats", {})
+            with open(LOG, "a") as fh:
+                fh.write(json.dumps({"round": rnd, "t_start": t_start, "t_end": t_end, "result": res,
+                                     "wall_end": datetime.datetime.now().isoformat(),
+                                     "stats": {k: st.get(k) for k in ("merges", "fails", "support", "complete")}}) + "\n")
+            def report():
+                write_room(None, "closed")                      # reservation turn is over
+                send_status(f"🏁 {rnd}판 종료 · {(t_end - t_start)/60:.1f}분\n합성 {st.get('merges', 0)}회 · "
+                            f"실패 {st.get('fails', 0)}회 · 서포터 {st.get('support', 0)}회 · "
+                            f"필드 완성 {'O' if st.get('complete') else 'X'}")
+            if after_battle(res, g, inj, report=report): break
+    finally:
+        g.close()
+    print("loop done", flush=True)
+    send_status("■ 봇 종료 (예정 시간 도달)")
+
+
+if __name__ == "__main__":
+    main()
