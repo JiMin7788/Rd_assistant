@@ -2,7 +2,7 @@
 title: Run the bot (launchers, dry-run, live)
 type: howto
 updated: 2026-10-30
-sources: [seed, rdf01-t12, rdf01-t13, rdf02-t7, rdf02-m1, rdf03-t8, rdf03-t10]
+sources: [seed, rdf01-t12, rdf01-t13, rdf02-t7, rdf02-m1, rdf03-t8, rdf03-t10, rdf03-m2]
 ---
 # Run the bot (launchers, dry-run, live)
 
@@ -39,7 +39,7 @@ Everything else is a manual / dry-run entry point. Run from `C:\dev\rdom` with `
   `support deck` / `power panel`). After each game read the last `data/support_rounds.jsonl` line: `result`,
   `final_score`, `max_score`, `power.bought`, `power.unconfirmed`, `power.lv_check`; report to the Master if
   `power.bought` stays 0, `unconfirmed` is high, an `lv_check` mismatch appears, or a look-alike/once frame was
-  saved (`data/support_runs/<game_id>/gameover_*.png`). Keep `panel_*.png`.
+  saved (`data/support_runs/<game_id>/gameover_*.png`). Keep `panel_*.png` and `gameover_*.png` (runbook line, rdf03-m2).
 - `python tools/support_dryrun.py --help` (or `-h`) prints the usage line and exits 0; `python
   tools/build_digit_templates.py --help` prints argparse usage. Before, `--help` was taken as a kind name and
   wrote `assets/templates/digits_--help.npz`.
@@ -64,6 +64,7 @@ Everything else is a manual / dry-run entry point. Run from `C:\dev\rdom` with `
 - `dryrun(frame_rgb)` is pure and returns the lines; `main(argv)` loads the PNG via PIL (RGB) and returns 0, or 2 on bad usage.
 
 ## Evidence
+- `CLAUDE_CODE_TODO.md` — H3 runbook keep line now keeps the panel and gameover frames (commit `786b5a7`, task/rdf03-m2)
 - `봇 시작.bat`, `봇 일시정지.bat`, `봇 재개.bat` — exact commands
 - `tools/run_all.py` — docstring, `--no-game`, log paths
 - `tools/supervisor.py`, `tools/gear_loop.py` — loop, PAUSE/STOP, `data/gear_rounds.jsonl`

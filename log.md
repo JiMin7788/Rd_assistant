@@ -184,3 +184,7 @@
 ## 2026-10-30 · rdf03-m1 · gear_loop importable, after_battle tested
 - tools/gear_loop.py: live code moved into main() (run under __main__); end-of-battle handling extracted to after_battle(); tests/test_gear_loop_result.py imports it through a booby-trapped fixture.
 - pages: components/support-bot-core.md (updated)
+
+## 2026-10-30 · rdf03-m2 · Integration review follow-up
+- gear_loop round start no longer taps the lobby blindly when a battle is on screen (leave_result_screen); round record always has final_score (null if unread); power_visit does not carry a stale panel SP after a level-confirmed buy; gameover_once saves the result-like frame; runbook keeps gameover_*.png.
+- pages: components/support-bot-core.md (updated), components/support-players.md (updated), howto/run-bot.md (updated)
