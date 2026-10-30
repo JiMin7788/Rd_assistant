@@ -14,7 +14,14 @@ from rdom.perception import digits
 # Measured on H1 battle frames sup20261029_135038/1075.0.png, sup20261029_145953/912.9.png and
 # sup20261029_152652/1016.5.png (1244x2224): the yellow digit fill spans u 0.396-0.599 (4 digits), v 0.088-0.122;
 # the box adds room for a 5th digit and the outline and stops above the '처치한 몬스터' label (v ~0.127).
-SCORE_BOX = (0.36, 0.083, 0.64, 0.126)
+# AI-NOTE: v0 = 0.099, not 0.083: late in an H2 game a second row of effect icons sits over the first digits
+# (u 0.40-0.47) and its bottom edge reaches v 0.0975, painting over the digit tops (icon bottom measured on
+# sup20261030_061946/1040.9.png 0.094, sup20261030_061946/1071.7.png 0.097, support_runs/sup20261030_061946/end.png and
+# support_runs/sup20261030_063914/end.png 0.096; an orange timer icon merges with the yellow fill). The box starts below
+# that row, so the reader sees the lower ~70 % of every digit (v 0.099-0.122 is icon-free in all of them) and
+# digits_score.npz is built from the same cut (data/digits/score_v2).
+SCORE_BOX = (0.36, 0.099, 0.64, 0.126)
+GLYPH_KW = dict(merge_x=True, vis=0.7)                  # a cut digit falls apart into pieces; see digits.glyphs
 MAX_SCORE = 99999
 
 
@@ -29,7 +36,7 @@ def read_score(frame_rgb):
         return None
     gray = crop if crop.ndim == 2 else cv2.cvtColor(crop, cv2.COLOR_RGB2GRAY)   # AI-NOTE: a 2-D grey frame must give None, not a cv2 error
     try:
-        r = digits.read_number(gray, "score")
+        r = digits.read_number(gray, "score", **GLYPH_KW)
     except OSError:                                      # no digits_score.npz yet
         return None
     return int(r) if r else None

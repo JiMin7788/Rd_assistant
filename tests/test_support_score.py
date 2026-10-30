@@ -129,6 +129,18 @@ def test_covered_digits_refused(templates):
     assert read_score(frame_with(crop)) is None
 
 
+@pytest.mark.parametrize("fill", [255, 0])
+@pytest.mark.parametrize("frac", [0.15, 0.30, 0.50])
+@pytest.mark.parametrize("n", ["61937", "40528"])
+def test_effect_icon_over_first_digit_reads_true_value_or_none(templates, n, frac, fill):
+    """A bright (or dark) icon block over the top part of the first digit: the true number or None, never another number."""
+    crop = render_crop(n)
+    ys, xs = np.where(crop > 0)
+    top, bottom, left = ys.min(), ys.max(), xs.min()
+    crop[:top + int(frac * (bottom - top)), :left + (xs.max() - left) // (2 * len(n)) * 3] = fill
+    assert read_score(frame_with(crop)) in (int(n), None)
+
+
 def test_tracker_confirms_after_two_equal_reads():
     t = ScoreTracker()
     assert t.update(1500) is None and t.value is None

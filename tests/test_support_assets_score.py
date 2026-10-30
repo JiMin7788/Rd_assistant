@@ -34,7 +34,7 @@ def render(text):
 def env(tmp_path, monkeypatch):
     tools = load("build_digit_templates")
     cs = load("check_support_assets")
-    sdir = tmp_path / "data" / "digits" / "score"
+    sdir = tmp_path / "data" / "digits" / "score_v2"
     sdir.mkdir(parents=True)
     for i, n in enumerate(["61937", "40528"]):
         cv2.imwrite(str(sdir / f"{n}_{i}.png"), render(n))

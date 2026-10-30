@@ -6,13 +6,16 @@ whose value was checked by eye (TRUST) feed the templates.
 
   python tools/build_digit_templates.py            # room + hp
   python tools/build_digit_templates.py score ...  # other kinds: data/digits/<kind>/<value>_<any>.png
+  python tools/build_digit_templates.py score=score_v2 --data-dir C:/dev/rdom/data   # kind=<folder under digits/>
 """
 import collections, glob, os, sys
 import numpy as np, cv2
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 from rdom.perception.digits import glyphs, classify, read_number, GW, GH, hp_mask
+from rdom.perception.score import GLYPH_KW as _SCORE_KW
 
 ROOT = os.path.join(os.path.dirname(__file__), "..")
+GLYPH_KW = {"score": _SCORE_KW}                           # per kind: glyph options the reader uses too
 OUT = os.path.join(ROOT, "assets", "templates")
 FIX = {"14352": "14324"}                                   # Tesseract misreads, checked by eye
 TRUST_HP = {"10", "30", "50", "70", "90", "110", "130", "150", "190"}
@@ -22,10 +25,10 @@ def gray(path):
     return cv2.imread(path, cv2.IMREAD_GRAYSCALE)
 
 
-def build(kind, items, thr=170, fallback=None, out=OUT):
+def build(kind, items, thr=170, fallback=None, out=OUT, gkw=None):
     acc = collections.defaultdict(list)
     for g, label in items:
-        gs = glyphs(g, thr)
+        gs = glyphs(g, thr, **(gkw or {}))
         if gs and len(gs) == len(label):
             for d, gl in zip(label, gs):
                 acc[int(d)].append(gl)
@@ -48,7 +51,7 @@ def build_kind(kind, src_dir, out=OUT, thr=170, fallback=None):
         g = gray(p)
         if g is not None and value.isdigit():
             items.append((g, value))
-    return build(kind, items, thr, fallback, out)
+    return build(kind, items, thr, fallback, out, GLYPH_KW.get(kind))
 
 
 def main():
@@ -82,11 +85,13 @@ if __name__ == "__main__":
     # AI-NOTE: every argument used to be a kind name, so '--help' built assets/templates/digits_--help.npz
     import argparse
     ap = argparse.ArgumentParser(description="Build per-digit templates from verified crops (no kind: room + hp).")
-    ap.add_argument("kinds", nargs="*", help="other kinds: data/digits/<kind>/<value>_<any>.png")
-    kinds = ap.parse_args().kinds
+    ap.add_argument("kinds", nargs="*", help="other kinds: data/digits/<kind>/<value>_<any>.png, or kind=<folder>")
+    ap.add_argument("--data-dir", default=os.path.join(ROOT, "data"), help="default <repo>/data (a worktree has none)")
+    args = ap.parse_args(); kinds = args.kinds
     if kinds:
         R = np.load(os.path.join(OUT, "digits_room.npz"))["T"]
         for k in kinds:
-            build_kind(k, os.path.join(ROOT, "data", "digits", k), fallback=R)
+            kind, _, folder = k.partition("=")            # AI-NOTE: score=score_v2 builds digits_score.npz from the re-cut crops
+            build_kind(kind, os.path.join(args.data_dir, "digits", folder or kind), fallback=R)
     else:
         main()
