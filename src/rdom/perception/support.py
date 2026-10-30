@@ -69,6 +69,20 @@ LV_RANGE = (1, 30)
 #   chosen READ_CONF_MIN = 0.90 (largest with kept >= 95%)
 READ_CONF_MIN = 0.90
 
+# An 'empty' read with conf < EMPTY_CONF_MIN is unreadable (support_memory._unreadable). Measured 2026-10-30 with
+# tools/support_conf_report.py --empty --holdout sup20261029_152652,sup20261030_061946 --tags sup2 --data-dir C:/dev/rdom/data:
+#   empty conf >= 0.90: kept 28/31 true empty, rejected 0/1 other read as empty
+#   empty conf >= 0.91: kept 28/31 true empty, rejected 1/1 other read as empty
+#   empty conf >= 0.94: kept 26/31 true empty, rejected 1/1 other read as empty
+#   empty conf >= 0.95: kept 12/31 true empty, rejected 1/1 other read as empty
+#   (0.92, 0.93 as 0.91; 0.96..0.99 keep 2/31 then 0/31, all reject 1/1)
+#   no EMPTY_CONF_MIN separates them -- unchanged
+# AI-NOTE: no T gives c == d with a/b >= 0.98, because 3 of 31 true empties already read below 0.90 (a/b = 0.903 at
+# every T <= 0.93), so the cut stays at READ_CONF_MIN. The white flash (holdout sup20261029_152652 t 1097.2 cell 1,
+# reviewed junk, conf 0.909) is therefore NOT rejected by this setting; a cut of 0.91 would reject it (the one
+# "other" read) without losing any further true empty, but the stated rule does not choose it.
+EMPTY_CONF_MIN = READ_CONF_MIN
+
 _models = {}
 
 

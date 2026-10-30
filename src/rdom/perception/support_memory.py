@@ -20,9 +20,13 @@ def _finite(x):
         return False
 
 
-def _unreadable(d, conf_min):
+def _unreadable(d, conf_min, empty_conf_min=0.0):
     # AI-NOTE: a NaN conf makes `conf < conf_min` False, which would read as confident; a non-finite conf is unreadable
-    return d["type"] == JUNK or not _finite(d["conf"]) or d["conf"] < conf_min
+    # AI-NOTE: empty_conf_min is passed in (callers give support.EMPTY_CONF_MIN) so this module stays pure; a white
+    # flash can read as a confident empty, so an 'empty' read needs the stricter cut. 0.0 = no extra cut.
+    if d["type"] == JUNK or not _finite(d["conf"]) or d["conf"] < conf_min:
+        return True
+    return d["type"] == EMPTY and d["conf"] < empty_conf_min
 
 
 def _value(d):
@@ -40,8 +44,9 @@ def _eff(d, typ, pip, src):
 
 
 class CellMemory:
-    def __init__(self, conf_min, confirm=2):
+    def __init__(self, conf_min, confirm=2, empty_conf_min=0.0):
         self.conf_min = conf_min
+        self.empty_conf_min = empty_conf_min
         self.confirm = confirm
         self._mem = {}      # cell -> (type, pip)
         self._pend = {}     # cell -> (value, count); value may be ("empty", 0)
@@ -51,7 +56,7 @@ class CellMemory:
 
     # ---- queries ----
     def unreadable(self, d):
-        return _unreadable(d, self.conf_min)
+        return _unreadable(d, self.conf_min, self.empty_conf_min)
 
     def memory(self, cell):
         return self._mem.get(cell)
@@ -170,7 +175,7 @@ class CellMemory:
         return _eff(raw, value[0], value[1], "burst"), events
 
 
-def burst_result(reads, conf_min, agree=2):
+def burst_result(reads, conf_min, agree=2, empty_conf_min=0.0):
     """Accepted (type, pip) of one cell's burst, or None.
 
     reads = one raw read per kept grab. AI-NOTE: the caller drops pixel-identical grabs, so each read counts as a
@@ -179,7 +184,7 @@ def burst_result(reads, conf_min, agree=2):
     """
     groups = {}
     for i, d in enumerate(reads):
-        if _unreadable(d, conf_min):
+        if _unreadable(d, conf_min, empty_conf_min):
             continue
         key = (d["type"], d["pip"]) if d["type"] != EMPTY else (EMPTY, 0)
         g = groups.setdefault(key, [i, 0, 0.0])
@@ -189,11 +194,11 @@ def burst_result(reads, conf_min, agree=2):
     return min(ok)[3] if ok else None
 
 
-def merge_verdict(raw_from, raw_to, before_from, before_to, conf_min):
+def merge_verdict(raw_from, raw_to, before_from, before_to, conf_min, empty_conf_min=0.0):
     """'effect' | 'none' | 'undecided' on RAW reads (R7.1). An unreadable read never counts as unchanged."""
     confident = []
     for d, before in ((raw_from, before_from), (raw_to, before_to)):
-        if _unreadable(d, conf_min):
+        if _unreadable(d, conf_min, empty_conf_min):
             confident.append(None)
         else:
             val = (d["type"], d["pip"]) if d["type"] != EMPTY else (EMPTY, 0)

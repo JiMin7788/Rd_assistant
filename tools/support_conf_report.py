@@ -39,11 +39,40 @@ def report(y_true, y_pred, conf):
     return lines, chosen
 
 
+EMPTY_THRESHOLDS = tuple(round(0.90 + 0.01 * i, 2) for i in range(10))
+EMPTY_KEEP_MIN = 0.98
+
+
+def report_empty(y_true, y_pred, conf):
+    """Pure. (lines, chosen T or None): one line per T, then the choice line.
+
+    true empty = label empty and read empty (b); other = label not empty but read empty with conf >= READ_CONF_MIN (d).
+    """
+    yt = np.asarray(y_true, dtype=object)
+    yp = np.asarray(y_pred, dtype=object)
+    conf = np.asarray(conf, dtype=float)
+    true_empty = (yt == "empty") & (yp == "empty")
+    other = (yt != "empty") & (yp == "empty") & (conf >= support.READ_CONF_MIN)
+    b, d = int(true_empty.sum()), int(other.sum())
+    lines, chosen = [], None
+    for t in EMPTY_THRESHOLDS:
+        a = int((true_empty & (conf >= t)).sum())
+        c = int((other & (conf < t)).sum())
+        lines.append(f"empty conf >= {t:.2f}: kept {a}/{b} true empty, rejected {c}/{d} other read as empty")
+        # AI-NOTE: thresholds ascend, so the first T that rejects every other read and keeps >= 98% of true empties wins
+        if chosen is None and c == d and b and a >= EMPTY_KEEP_MIN * b:
+            chosen = t
+    lines.append(f"chosen EMPTY_CONF_MIN = {chosen:.2f}" if chosen is not None
+                 else "no EMPTY_CONF_MIN separates them -- unchanged")
+    return lines, chosen
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--holdout", required=True, help="comma list of held-out game ids")
     ap.add_argument("--tags", default="", help="comma list of support tags; default all")
     ap.add_argument("--data-dir", default=support._DATA)
+    ap.add_argument("--empty", action="store_true", help="report the stricter confidence cut for 'empty' reads")
     a = ap.parse_args(argv)
     holdout = C.split_list(a.holdout)
     used = {g for games in C.read_manifest(a.data_dir).values() for g in games}
@@ -66,7 +95,7 @@ def main(argv=None):
     names, yt = [r[0] for r in rows], [r[1] for r in rows]
     crops = [C.read_rgb(os.path.join(sup_dir, "_raw", n + ".png")) for n in names]
     yp, conf = support.predict_types_support(crops)
-    lines, _ = report(yt, yp, conf)
+    lines, _ = (report_empty if a.empty else report)(yt, yp, conf)
     for ln in lines:
         print(ln)
     return 0
