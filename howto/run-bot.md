@@ -1,8 +1,8 @@
 ---
 title: Run the bot (launchers, dry-run, live)
 type: howto
-updated: 2026-10-29
-sources: [seed, rdf01-t12, rdf01-t13, rdf02-t7, rdf02-m1]
+updated: 2026-10-30
+sources: [seed, rdf01-t12, rdf01-t13, rdf02-t7, rdf02-m1, rdf03-t8]
 ---
 # Run the bot (launchers, dry-run, live)
 
@@ -49,6 +49,7 @@ Everything else is a manual / dry-run entry point. Run from `C:\dev\rdom` with `
   `score: <N|None>`. No game, no input; the module does not import `rdom.input.inject`.
 - Without support models in the data dir all 15 cells read `junk 0`, the plan is `op: wait` and score is `None`
   (the test points `perception.support._DATA` at an empty tmp dir and resets `_models`).
+- `python tools/support_dryrun.py --data-dir <dir> <frame.png>` points both `support._DATA` and `gear._DATA` at `<dir>` (the support nets and the gear pip fallback both read `gear._DATA`) and clears the cached nets; use it in a worktree, where `<repo>/data` is empty. `--data-dir` is only accepted as the first of three args; `--data-dir x` alone or any other arg count prints the usage line and returns 2.
 - `dryrun(frame_rgb)` is pure and returns the lines; `main(argv)` loads the PNG via PIL (RGB) and returns 0, or 2 on bad usage.
 
 ## Evidence
@@ -61,4 +62,5 @@ Everything else is a manual / dry-run entry point. Run from `C:\dev\rdom` with `
 - `tools/gear_loop.py`, `config/deck.toml`, `CLAUDE_CODE_TODO.md` — run_battle call, `force` comment, H1-H3 runbook (commit `e3cf60a`)
 - `tools/run_all.py` (`SHOW` tuple), `CLAUDE_CODE_TODO.md` (H1 done / H2 runbook) — commit `d4aff7c` (not yet merged into the main checkout; also adds test_save_frame_tool.py)
 - commit `2e74942` (branch task/rdf02-m1) — H2 wording in CLAUDE_CODE_TODO.md; `--help` handling in tools/support_dryrun.py and tools/build_digit_templates.py; tests `test_dryrun_help_subprocess_exit_0`, `test_build_digit_templates_help_writes_nothing` in tests/test_support_m1_inputs.py
+- commit `04c74c9` (branch task/rdf03-t8) — tools/support_dryrun.py `--data-dir` and `USAGE`; tests `test_usage_text_and_exit_codes`, `test_data_dir_sets_model_dirs` in tests/test_support_dryrun.py
 - commit `4aa774e` — adds tools/support_dryrun.py (dryrun/main, output lines, support_ready=True, imports) and tests/test_support_dryrun.py (empty-data-dir expectations junk 0 / wait / score None, no-inject check); not yet merged into the main checkout

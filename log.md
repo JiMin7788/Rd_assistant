@@ -164,3 +164,7 @@
 ## 2026-10-30 · rdf03-t6 · PlayPlayer power wiring: SP trigger, confirmed one-at-a-time buying
 - Power panel now opens on SP (2 consecutive reads) >= keep + next price with the cost confirmed on 2 ticks; the complete/idle triggers are removed. power_visit buys one card at a time above the reserve, each tap confirmed by an SP drop >= price/2 or a level rise; an unconfirmed tap ends the visit. BUY_MAX 10, PANEL_SAVE_MAX 20.
 - pages: components/support-players.md (updated)
+
+## 2026-10-30 · rdf03-t8 · rdF02 QA minors: missing-model warning, dry-run --data-dir, grey-safe deck detection
+- read_cells_support warns once when support_type_cnn.pt is absent from _DATA (empty in a worktree); detect_support_deck returns False for non-HxWx3 uint8 input; support_dryrun gained --data-dir (sets support and gear _DATA, clears cached nets).
+- pages: components/perception-support.md (updated), howto/run-bot.md (updated)

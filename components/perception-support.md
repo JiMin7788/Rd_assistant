@@ -2,7 +2,7 @@
 title: Support-deck perception
 type: component
 updated: 2026-10-30
-sources: [rdf01-t5, rdf02-t2, rdf02-t3, rdf02-r2-s12, rdf02-m1, rdT04]
+sources: [rdf01-t5, rdf02-t2, rdf02-t3, rdf02-r2-s12, rdf02-m1, rdT04, rdf03-t8]
 ---
 # Support-deck perception
 
@@ -15,7 +15,7 @@ sources: [rdf01-t5, rdf02-t2, rdf02-t3, rdf02-r2-s12, rdf02-m1, rdT04]
 - Returns 15 dicts `{cell, type, variant, pip, conf}`, cells 1..15. `variant` equals `type`. It is `read_cells_support(frame, range(1, 16), pip_source)`.
 - `read_cells_support(frame, cells, pip_source="auto")` reads only the given cells (1..15) and returns raw dicts in the given order; each equals the same cell's entry in `read_board_support` (the star check uses the real cell number for `hires_cell`, not the batch position). Empty list gives `[]`. Any cell outside 1..15 (0, negative, 16+), a bool (`True` would read cell 1) or a non-integer (`2.5`) raises `ValueError` before anything is read; without that check cell 0 or a negative number indexed the crop list from the end and returned another cell's read under the wrong label.
 - `READ_CONF_MIN = 0.90`: a read is unreadable when its type is junk or `conf < READ_CONF_MIN`. `read_cells_support` does not apply it; callers do. Measured with `tools/support_conf_report.py --holdout sup20261029_152652 --tags sup1`: at conf >= 0.90 kept 1003/1008 (99.5%), accuracy of kept 0.997, 3 wrong kept, 1 wrong dropped; 0.90 is the largest threshold keeping >= 95% of the checked crops. The tool prints one line per T in 0.50..0.95 and refuses a holdout game listed in the train manifest; it loads the type model from `--data-dir`. A tag without `feats_<tag>.npz` prints one `FAIL: no feats file for tag ...` line and exits 1 (no traceback).
-- Without `support_type_cnn.pt` every cell is `junk`, pip 0, conf 0.
+- Without `support_type_cnn.pt` every cell is `junk`, pip 0, conf 0. `read_cells_support` then prints `support models not found in <_DATA> -- every cell reads junk` once per process (`_warned_no_models`). Models are looked up only in `_DATA` (`<repo>/data`), which is empty in a worktree, so a worktree run silently read junk before the warning.
 - A CNN `Bomb` becomes `junk` unless `gear.is_bomb(crop)` (then `Bomb`, conf 1.0), as in gear's `predict_types`. Pip is 0 for empty/junk/Crystal/Bomb.
 - Pip source: `"auto"` uses `support_pip_pat_e1..e3.pt` when all three exist, else the gear ensemble (`gear.PIP_ENSEMBLE`), else the single `gear_pip_pat.pt`, else pip 0. `"gear"` (trial mode) always uses the gear files and loads no support pip or star file.
 - Star (pip 7), `auto` only and only when all three `support_star_e*.pt` exist: mean sigmoid over `hires_cell(frame, cell, 128)` resized to 64; p > `STAR_THRESHOLD` (0.7) gives 7, otherwise a 7 from the ensemble becomes 6. Without star files the ensemble pip is returned as is. `STAR_THRESHOLD` is shared by `read_cells_support` and `tools/support_gate.py _predict`; at 0.5 the H2 holdout gave star precision 0.838 (clean pip-1 Resonance dice, p 0.62-0.67, were false stars), at 0.7 recall 0.984 / precision 0.954 (rdT04, 2026-10-30).
@@ -25,13 +25,13 @@ sources: [rdf01-t5, rdf02-t2, rdf02-t3, rdf02-r2-s12, rdf02-m1, rdT04]
 
 ## Deck, cards, level
 - `force_deck()` returns `force` from `config/deck.toml` if it is a string, else `""`.
-- `detect_support_deck` matches `assets/templates/deck_support.png` in box `(0.55, 0.93, 0.92, 0.99)` with `gear._best` (multi-scale), score >= 0.70; False if the template is missing.
+- `detect_support_deck` matches `assets/templates/deck_support.png` in box `(0.55, 0.93, 0.92, 0.99)` with `gear._best` (multi-scale), score >= 0.70; False if the template is missing. Anything but an `H x W x 3` uint8 ndarray (2-D grey, 4-channel, float) returns False up front; cv2 used to raise on those.
 - `power_cards` searches band `(0, 0.78, 1, 0.96)` for each card template (Alignment has two looks, `_a`/`_b`, best score wins), score >= 0.70, and maps the card to the `gear.power_buttons` centre nearest in u with |du| < 0.06 (slot order is the user's choice, so not deck order). Result has exactly Growth/Alignment/Resonance, None when not found. Two cards on one button: the higher score keeps it.
 - `card_level(frame, button)`: `LV_BOX = (0.0160, -0.0414, 0.0448, -0.0261)` (offsets from the button centre, measured on the five H1 panels in rdf02-t2; starts right of the 'Lv.' dot because a dot in the box makes `digits.glyphs` return None, ends at +56 px for a second digit); crop to grey then `digits.read_number(g, "powerlv")`; None if the box is None, the crop is empty, `digits_powerlv.npz` is missing, or the value is outside 1..30.
 - `reload_if_changed()` drops cached nets whose mtime changed (support and gear pip files) and returns the names; the first call reports every file once.
 
 ## Templates (rdf02-t2)
-`assets/templates/` now holds `deck_support.png` and the card icons `ui_power_res_card.png`, `ui_power_align_card_a.png`, `ui_power_growth_card.png` (icon only, below the dice-count badge, above 'Lv.N'). There is no `ui_power_align_card_b.png`: only one Alignment look is on the panel, the missing `_b` is simply skipped. Card identity was fixed by matching the panel icon to board dice whose labels come from `support_type_cnn`, not by slot order (details in the `CARD_TEMPLATES` comment). `tools/check_support_assets.py` on the H1 data: deck bar support 181/181, gear-false 5/5, power cards 5/5 (see [score page](perception-score.md) for the tool).
+`assets/templates/` now holds `deck_support.png` and the card icons `ui_power_res_card.png`, `ui_power_align_card_a.png`, `ui_power_growth_card.png` (icon only, below the dice-count badge, above 'Lv.N'). There is no `ui_power_align_card_b.png`: only one Alignment look is on the panel, the missing `_b` is simply skipped. Card identity was fixed by matching the panel icon to board dice whose labels come from `support_type_cnn`, not by slot order (details in the `CARD_TEMPLATES` comment). Those board labels are CNN predictions, not reviewed labels; the user then confirmed the templates by eye on the rdF02 sheet (S9/S34 "All correct", 2026-10-30). `tools/check_support_assets.py` on the H1 data: deck bar support 181/181, gear-false 5/5, power cards 5/5 (see [score page](perception-score.md) for the tool).
 
 ## Tests
 `tests/test_support_perception.py` needs no `data/`: fake nets via monkeypatched `_load_net`, synthetic frames, templates and data dirs in `tmp_path` (patch `support._DATA`/`_TPL`/`DECK_FILE`, clear `support._models`).
@@ -43,4 +43,5 @@ sources: [rdf01-t5, rdf02-t2, rdf02-t3, rdf02-r2-s12, rdf02-m1, rdT04]
 - commit `b294b48` (branch task/rdf02-r2-s12) — support.py `read_cells_support` range check (`ValueError` for cells outside 1..15, AI-NOTE explains the negative-index cause); tests/test_support_conf_report.py `test_read_cells_support_rejects_cells_outside_1_15` (0, -1, 16, mixed list raise; valid list unchanged).
 - commit `2e74942` (branch task/rdf02-m1) — bool/non-integer check in `read_cells_support` (perception/support.py) and the missing-feats `FAIL:` line in tools/support_conf_report.py; tests `test_read_cells_support_rejects_bool_and_non_int_cells`, `test_conf_report_missing_feats_tag_is_one_fail_line` in tests/test_support_m1_inputs.py.
 - commit `bd09f61` (branch task/rdT04) — support.py `STAR_THRESHOLD = 0.7` (comment has the 0.5 vs 0.7 holdout numbers), used in `read_cells_support`; tools/support_gate.py `_predict` uses `support.STAR_THRESHOLD`; tests/test_support_star_threshold.py (0.65 gives pip 6, 0.75 gives 7, in both code paths).
+- commit `04c74c9` (branch task/rdf03-t8) — support.py `_warned_no_models` + warning in `read_cells_support`, shape/dtype guard in `detect_support_deck`, `CARD_TEMPLATES` comment; tests/test_support_qa_minor.py (warns once, no warning with a model file, odd arrays give False).
 - `src/rdom/perception/gear.py` — `_pipnet_cls`, `PIP_ENSEMBLE`, `is_bomb`, `power_buttons`, `_best` reused here.
