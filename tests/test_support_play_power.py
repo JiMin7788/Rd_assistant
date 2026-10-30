@@ -420,23 +420,40 @@ def test_visit_price_unreadable_skips_card_and_goes_on(capsys):
     assert "Growth" not in card_taps(inj)
 
 
-def test_visit_uses_the_last_confirmed_price_as_fallback(capsys):
+def test_visit_never_buys_on_the_last_price_when_the_price_is_unreadable(capsys):
+    """rdf03-m4, QA round 5 (log 180): Growth Lv.4 costs 1000 (unread), the last price was 750, SP 2240, keep 1440:
+    buying at the guessed 750 left SP 1240 < keep. An unread price is skipped, whatever the last price was."""
     p, g, inj, perc, saver, clock = make()
-    visit(p, perc, [450, 450, 400, 300], P100)
-    assert p.power.last_price("Growth") == 100
+    p.power.confirmed("Growth", 750)
     inj.taps.clear()
-    visit(p, perc, [450, 450, 400, 300], {c: [None] for c in CARDS})   # price unreadable now
-    assert card_taps(inj) == ["Growth", "Growth"]
-    assert "price unreadable" not in capsys.readouterr().out
-    assert p.power.levels()["Growth"] == 5
+    visit(p, perc, [2240, 2240, 1240], {c: [None] for c in CARDS}, cost=480)   # keep = 3 * 480 = 1440
+    out = capsys.readouterr().out
+    assert card_taps(inj) == []                                # no tap at all
+    assert "power panel: Growth price unreadable -- skipped" in out
+    assert "power panel: nothing to buy (SP 2240, keep 1440) -- closed" in out
+    assert p.power.last_price("Growth") == 750                 # still known for the R6 trigger estimate
 
 
-def test_visit_fallback_price_still_respects_the_reserve(capsys):
+def test_visit_with_a_read_price_keeps_the_reserve(capsys):
     p, g, inj, perc, saver, clock = make()
-    p.power.confirmed("Growth", 200)
-    visit(p, perc, [450, 450], {c: [None] for c in CARDS})  # 450 - 200 < 300
+    visit(p, perc, [2240, 2240], {"Growth": [1000], "Alignment": [1000], "Resonance": [1000]}, cost=480)   # 2240 - 1000 = 1240 < keep 1440
     assert card_taps(inj) == []
-    assert "power panel: nothing to buy (SP 450, keep 300) -- closed" in capsys.readouterr().out
+    assert "power panel: nothing to buy (SP 2240, keep 1440) -- closed" in capsys.readouterr().out
+
+
+def test_visit_unreadable_price_saves_the_panel_frame_with_a_cap(capsys):
+    p, g, inj, perc, saver, clock = make()
+    for _ in range(sp.PRICE_NONE_SAVE_MAX + 3):
+        visit(p, perc, [1000, 1000], {c: [None] for c in CARDS})
+    paths = [path for _, path in saver.saved if "panel_price_none_" in path]
+    assert len(paths) == sp.PRICE_NONE_SAVE_MAX
+    assert paths[0].startswith("data/support_runs/G/panel_price_none_") and paths[0].endswith(".png")
+
+
+def test_visit_readable_prices_save_no_price_none_frame(capsys):
+    p, g, inj, perc, saver, clock = make()
+    visit(p, perc, [1000, 1000, 900], P100)
+    assert not [1 for _, path in saver.saved if "panel_price_none_" in path]
 
 
 def test_visit_all_prices_unreadable_ends_with_nothing_to_buy(capsys):

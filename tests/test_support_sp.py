@@ -195,7 +195,6 @@ CASES = [
     ("sp", lambda f: sp.read_sp(f), sp.SP_BOX, 6, [("123456", 123456), ("1234567", None), ("9999999", None), ("10000000", None)]),
     ("cost", lambda f: sp.read_summon_cost(f), sp.COST_BOX, 5, [("12345", 12345), ("100000", None), ("123456", None)]),
     ("panelsp", lambda f: sp.read_panel_sp(f), sp.PANEL_SP_BOX, 5, [("12345", 12345), ("123456", None), ("10000000", None)]),
-    ("price", lambda f: sp.read_price(f, PRICE_UV), price_box(), 3, [("250", 250), ("2500", None), ("5200", None), ("2500000", None)]),
 ]
 PARAMS = [(k, rd, box, n, t, want) for k, rd, box, n, ts in CASES for t, want in ts]
 
@@ -250,3 +249,118 @@ def test_price_at_power_cards_uv_on_saved_panel():
     im = cv2.cvtColor(cv2.imread(PANEL_141449), cv2.COLOR_BGR2RGB)
     cards = support.power_cards(im)
     assert [sp.read_price(im, uv) for uv in cards.values()] == [250, 250, 250]
+
+
+# --- rdf03-m4: prices of 4+ digits (SYNTHETIC until H3 saves a real panel with one) ----------------------------------------
+# AI-NOTE: the 'Ø' icon and the digits are probably centred on the button as a group, so a longer price moves the icon and
+# the first digit left (4 digits: first digit from x -14, old PRICE_BOX left edge -12). Every case must give the right
+# value or None, never a shorter value (1250 -> 250 would buy below the reserve).
+
+PITCH = 22                                                   # px between digit starts on a real panel (250: 2 at -3, 5 at 19, 0 at 41)
+
+
+def glyph(ch, w=18, h=30):
+    """White digit `ch` as a (h, w) uint8 patch: drawn big, cut to its bounding box and resized to the real panel digit size."""
+    big = np.zeros((90, 90), np.uint8)
+    cv2.putText(big, ch, (15, 65), cv2.FONT_HERSHEY_SIMPLEX, 2.0, 255, 5, cv2.LINE_AA)
+    ys, xs = np.nonzero(big > 100)
+    return cv2.resize(big[ys.min():ys.max() + 1, xs.min():xs.max() + 1], (w, h), interpolation=cv2.INTER_AREA)
+
+
+def price_frame(text, uv, centred=True, fill=0):
+    """Blank frame with an 'Ø'-like icon (30 px wide, 10 px empty gap to the digits) and the digits (18x30 px) at the real
+    pitch, rows as on the saved panel (the PRICE_BOX window is 34 px high, digits 30).
+    centred: the group stays centred where the 3-digit group is (x -43..60 about the button centre); else the first digit stays at x -3."""
+    f = np.full((H, W, 3), fill, np.uint8)
+    cx = int(uv[0] * W)
+    y0 = int((uv[1] + sp.PRICE_BOX[1]) * H) + 2              # top row of the digits
+    n = len(text)
+    d_left = round(8.5 - (30 + 10 + PITCH * n - 4) / 2 + 40) if centred else -3
+    icon = np.zeros((30, 30), np.uint8)
+    cv2.circle(icon, (15, 15), 12, 255, 3, cv2.LINE_AA)
+    cv2.line(icon, (3, 26), (27, 4), 255, 3, cv2.LINE_AA)
+    f[y0:y0 + 30, cx + d_left - 40:cx + d_left - 10] = icon[..., None]
+    for i, ch in enumerate(text):
+        x = cx + d_left + i * PITCH
+        f[y0:y0 + 30, x:x + 18] = glyph(ch)[..., None]
+    return f
+
+
+POWER_UV = (0.8641, 0.9407)                                  # about where support.power_cards puts the Growth button (x 1081 of 1251)
+
+
+@pytest.fixture
+def env_price(tmp_path, monkeypatch):
+    """digits_price.npz built from the glyph() digits laid out like price_frame, so the synthetic prices match the templates."""
+    tools = load("build_digit_templates")
+    out = tmp_path / "tpl"; out.mkdir()
+    d = tmp_path / "data" / "digits" / "price"; d.mkdir(parents=True)
+    x0, y0, x1, y1 = box_px(price_box(POWER_UV))
+    for i, v in enumerate(("123", "456", "789", "0")):
+        cv2.imwrite(str(d / f"{v}_{i}.png"), price_frame(v, POWER_UV, centred=False)[y0:y1, x0:x1])
+    tools.build_kind("price", str(d), out=str(out))
+    monkeypatch.setattr(digits, "_TPL", str(out))
+    monkeypatch.setattr(digits, "_cache", {})
+
+
+@pytest.mark.parametrize("text", ["250", "500", "1000", "1250", "7500", "9999", "12500", "99999"])
+@pytest.mark.parametrize("dx", [0.0, -0.0024])               # exact button centre, and the ~3 px left of it power_cards gives
+def test_price_group_centred_on_button_reads_exactly(env_price, text, dx):
+    uv = (POWER_UV[0] + dx, POWER_UV[1])
+    assert sp.read_price(price_frame(text, uv), uv) == int(text)
+
+
+@pytest.mark.parametrize("text", ["250", "1000", "1250", "9999"])
+def test_price_group_with_first_digit_fixed_reads_exactly(env_price, text):
+    assert sp.read_price(price_frame(text, POWER_UV, centred=False), POWER_UV) == int(text)
+
+
+@pytest.mark.parametrize("text,centred", [("12500", False), ("123456", False), ("1234567", True), ("12345678", True)])
+def test_price_too_wide_for_the_search_window_is_none_not_shorter(env_price, text, centred):
+    r = sp.read_price(price_frame(text, POWER_UV, centred=centred), POWER_UV)
+    assert r is None or r == int(text)
+    assert r != int(text[-3:]) and r != int(text[:3])
+
+
+def test_four_digit_price_first_digit_left_of_old_box_edge_is_not_cut(env_price):
+    # the first digit of a centred 4-digit price starts at x -14, left of the old PRICE_BOX edge (-12)
+    f = price_frame("1250", POWER_UV)
+    cx = int(POWER_UV[0] * W); y = int(POWER_UV[1] * H)
+    assert f[y - 8:y + 8, cx - 14:cx - 12].max() == 255
+    assert sp.read_price(f, POWER_UV) == 1250
+
+
+def test_dimmed_four_digit_price_reads(env_price):
+    f = (price_frame("1250", POWER_UV) * (70 / 255)).astype(np.uint8)
+    assert sp.read_price(f, POWER_UV) == 1250
+
+
+def test_price_with_a_stray_bar_right_of_the_digits_is_not_shortened(env_price):
+    f = price_frame("1250", POWER_UV)
+    cx, y = int(POWER_UV[0] * W), int(POWER_UV[1] * H)
+    f[y - 14:y + 14, cx + 76:cx + 79] = 255                  # a bright bar just right of the digits, wider than the gap
+    assert sp.read_price(f, POWER_UV) in (1250, None)
+
+
+@pytest.mark.skipif(not Path(PANEL_141449).exists(), reason="saved panel frame not on this machine")
+@pytest.mark.parametrize("text", ["250", "2500", "5025", "25000"])
+def test_longer_price_built_from_the_real_panel_glyphs_reads(text):
+    """The real icon and the real '2' '5' '0' cells of the saved panel, re-laid out centred as a 3-5 digit price."""
+    from rdom.perception import support
+    im = cv2.cvtColor(cv2.imread(PANEL_141449), cv2.COLOR_BGR2RGB)
+    uv = support.power_cards(im)["Growth"]
+    cx, cy = int(uv[0] * W), int(uv[1] * H)
+    band = slice(cy - 30, cy + 30)
+    cell = {"2": im[band, cx - 5:cx + 17].copy(), "5": im[band, cx + 17:cx + 39].copy(), "0": im[band, cx + 39:cx + 61].copy()}
+    icon = im[band, cx - 46:cx - 11].copy()
+    blank = im[band, cx + 62:cx + 84].copy()
+    out = im.copy()
+    for x in range(cx - 120, cx + 130, 22):
+        out[band, x:x + 22] = blank
+    n = len(text)
+    left = round(8.5 - (30 + 10 + PITCH * n - 4) / 2)         # icon's left edge
+    out[band, cx + left - 3:cx + left + 32] = icon
+    d_left = left + 40
+    for i, ch in enumerate(text):
+        out[band, cx + d_left - 5 + i * PITCH:cx + d_left - 5 + (i + 1) * PITCH] = cell[ch]
+    assert sp.read_price(out, uv) == int(text)

@@ -33,8 +33,16 @@ MAX_PRICE = 999_999
 PANEL_SP_BOX = (0.4636, 0.7734, 0.6155, 0.7959)
 # Price: offsets (du0, dv0, du1, dv1) from a buy-button centre (gear.power_buttons / support.power_cards). The 'Ø' icon
 # sits left of the digits (x 111-147 with the button centre at x 162); du0 starts at x 150, right of its diagonal spike.
-# Digits '250' / '500' fill x 151-220, y 2084-2114 (centre y 2092). Wider prices are on no saved frame.
+# Digits '250' / '500' fill x 151-220, y 2084-2114 (centre y 2092). PRICE_BOX is the 3-digit box (it also gives the rows
+# and the box of the data/digits/price crops); read_price finds the actual digit group in the wider PRICE_SEARCH_U.
+# AI-NOTE: the 4- and 5-digit case is SYNTHETIC until H3 provides real frames (no saved panel has a price >= 1000). On
+# the six frames the 'Ø' icon (x -43..-14 from the button centre) and the digits (-3..60, pitch ~22) are 10 empty columns
+# apart and the digits 2-4 apart. The 'Ø250' group is probably centred on the button, so with more digits the icon moves
+# left and the first digit may start left of PRICE_BOX: the digit group is therefore found (ink runs merged from the
+# right while the gap is <= PRICE_GAP) instead of assuming a fixed left edge.
 PRICE_BOX = (-0.0096, -0.0045, 0.0496, 0.0108)
+PRICE_SEARCH_U = (-0.072, 0.080)                             # from the button centre: room for 'Ø' + 5 digits centred, or 4 digits left-anchored
+PRICE_GAP = 6                                                # px; widest empty gap inside the digits (icon to first digit is ~10)
 # Room-template fallback (tools/build_digit_templates.py panelsp price powerlv): the six frames only show panel SP
 # 59050 / 14510 / 11530 readable by eye (the other three have a '+30' popup over the digits), prices 250 / 500 and levels
 # 1 / 2. So digits_panelsp.npz has samples for 0 1 3 4 5 9 (2 6 7 8 fall back to the room templates), digits_price.npz
@@ -134,6 +142,23 @@ def read_panel_sp(frame_rgb):
     return _read(frame_rgb, PANEL_SP_BOX, "panelsp", 0, MAX_SP)
 
 
+def _price_group(ink):
+    """(first, last) column of the digit group in a boolean (rows x cols) ink mask, or None when there is no ink or the
+    group touches the mask edge (digits may continue outside). Ink columns are merged from the right while the empty
+    gap is <= PRICE_GAP; the 'Ø' icon lies further left and stays out."""
+    cols = np.flatnonzero(ink.sum(axis=0) >= 2)              # a single lit pixel in a column is noise
+    if cols.size == 0:
+        return None
+    last = first = int(cols[-1])
+    for x in cols[::-1][1:]:
+        if first - int(x) - 1 > PRICE_GAP:
+            break
+        first = int(x)
+    if first == 0 or last == ink.shape[1] - 1:
+        return None
+    return first, last
+
+
 def read_price(frame_rgb, button_uv):
     """Price on the buy button centred at button_uv = (u, v), as gear.power_buttons returns it, int in 1..999_999 or None."""
     try:
@@ -142,5 +167,21 @@ def read_price(frame_rgb, button_uv):
         return None
     if not (math.isfinite(u) and math.isfinite(v)):
         return None
-    du0, dv0, du1, dv1 = PRICE_BOX
-    return _read(frame_rgb, (u + du0, v + dv0, u + du1, v + dv1), "price", 1, MAX_PRICE, min_channel=True)
+    if frame_rgb is None or frame_rgb.ndim < 2 or frame_rgb.shape[0] < 2:
+        return None
+    h = frame_rgb.shape[0]; W = round(h * 9 / 16)
+    dv0, dv1 = PRICE_BOX[1], PRICE_BOX[3]
+    sx0, sx1 = int((u + PRICE_SEARCH_U[0]) * W), int((u + PRICE_SEARCH_U[1]) * W)
+    sy0, sy1 = int((v + dv0) * h), int((v + dv1) * h)
+    if min(sx0, sy0) < 0 or sx1 <= sx0 or sy1 <= sy0:
+        return None
+    win = frame_rgb[sy0:sy1, sx0:sx1]
+    if win.size == 0:
+        return None
+    grey = win if win.ndim == 2 else np.ascontiguousarray(win[..., :3].min(axis=2))
+    grp = _price_group(_undim(grey) > 170)
+    if grp is None:
+        return None
+    # AI-NOTE: the group is cut out for _read with a 2 px margin left and 3 px right (+0.5 px so int() floors onto the pixel)
+    box = ((sx0 + grp[0] - 2 + 0.5) / W, (sy0 + 0.5) / h, (sx0 + grp[1] + 3 + 0.5) / W, (sy1 + 0.5) / h)
+    return _read(frame_rgb, box, "price", 1, MAX_PRICE, min_channel=True)

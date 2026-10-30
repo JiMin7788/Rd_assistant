@@ -43,6 +43,7 @@ VERIFY_TICKS = 3               # undecided merge verifications before it counts 
 POWER_EVERY = 20.0
 BUY_MAX = 10                   # buy taps per panel visit (one card at a time, each confirmed)
 PANEL_SAVE_MAX = 20            # saved power-panel frames per game
+PRICE_NONE_SAVE_MAX = 10       # saved panel frames per game on which a price was unreadable (real 4-digit crops for H3)
 CONFIRM_TRIES = 2              # grabs after a buy tap that look for the confirmation
 CONFIRM_WAIT = 0.5
 LEVEL_REREAD = 0.3
@@ -324,6 +325,7 @@ class PlayPlayer(BasePlayer):
         self._cost_last = None
         self._sp_prev = None
         self._panel_saves = 0
+        self._price_saves = 0
         self.score_tracker = score.ScoreTracker()
         self.milestones = MilestoneTracker()
         self.bonus_until = -1e9
@@ -394,10 +396,15 @@ class PlayPlayer(BasePlayer):
             c = next_card(tracker.levels(), avail, self.power_cfg)
             if c is None:
                 break
-            price = perc.read_price(cur, found[c]) or tracker.last_price(c)
+            # AI-NOTE: never buy on a guessed price (QA round 5: a 1000 price read as None, the stale last price 750 let the
+            # bot buy from SP 2240 down to 1240 < keep 1440); tracker.last_price only serves the R6 trigger estimate.
+            price = perc.read_price(cur, found[c])
             if not price:
                 print(f"power panel: {c} price unreadable -- skipped", flush=True)
                 skipped.add(c)
+                if self._price_saves < PRICE_NONE_SAVE_MAX:
+                    self._price_saves += 1
+                    self.saver.frame(cur, f"data/support_runs/{self.game_id}/panel_price_none_{self.t(now):.1f}.png")
                 continue
             if sp0 - price < keep:
                 break
