@@ -136,3 +136,14 @@ def test_dryrun_prints_sp_and_cost(monkeypatch):
     monkeypatch.setattr(tool, "read_board_support", lambda f: [{"cell": i + 1, "type": "junk", "pip": 0} for i in range(15)])
     lines = tool.dryrun(np.zeros((H, W, 3), np.uint8))
     assert lines[-2:] == ["sp: 50630", "summon cost: None"]
+
+
+def test_dimmed_frame_reads_sp_and_cost(env):
+    # AI-NOTE: S18 -- a dice-info panel dims the battle, the white digits peak at ~70; reading used to give None
+    for text, box, read, want in (("7080", sp.SP_BOX, sp.read_sp, 7080), ("1420", sp.COST_BOX, sp.read_summon_cost, 1420)):
+        dim = (frame_with(text, box) * (70 / 255)).astype(np.uint8)
+        assert read(dim) == want
+
+
+def test_near_black_crop_is_not_amplified(env):
+    assert sp.read_sp((frame_with("7080", sp.SP_BOX) * (20 / 255)).astype(np.uint8)) is None

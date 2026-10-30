@@ -53,6 +53,20 @@ def read_crop(gray, kind):
     return None if r is None else int(r)
 
 
+DIM_PEAK = (40, 200)                                         # a crop whose brightest pixel lies in this range is a dimmed one
+
+
+def _undim(gray):
+    """Stretch a dimmed crop to full range.
+    AI-NOTE: a dice-info panel / popup dims the whole battle (white digits peak at ~70 instead of 255), so the fixed
+    170+ binarisation of digits.glyphs saw nothing and SP / cost read None. Clean crops peak at 255 and pass unchanged;
+    below DIM_PEAK[0] nothing digit-like is there, so noise is not amplified."""
+    peak = int(gray.max())
+    if not DIM_PEAK[0] <= peak < DIM_PEAK[1]:
+        return gray
+    return np.ascontiguousarray(np.minimum(gray.astype(np.float32) * (255.0 / peak), 255).astype(np.uint8))
+
+
 def _read(frame_rgb, box, kind, lo, hi, min_channel=False):
     if frame_rgb is None or frame_rgb.ndim < 2 or frame_rgb.shape[0] < 2:
         return None
@@ -69,6 +83,7 @@ def _read(frame_rgb, box, kind, lo, hi, min_channel=False):
         gray = np.ascontiguousarray(crop[..., :3].min(axis=2))
     else:
         gray = cv2.cvtColor(crop, cv2.COLOR_RGB2GRAY)
+    gray = _undim(gray)
     r = read_crop(gray, kind)
     return r if r is not None and lo <= r <= hi else None
 
