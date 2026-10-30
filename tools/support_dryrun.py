@@ -1,5 +1,5 @@
 """Offline dry run for the support deck: frame -> read board -> evaluate -> plan -> score.
-Nothing is injected and no game is needed. Usage: python tools/support_dryrun.py <frame.png>
+Nothing is injected and no game is needed. Usage: python tools/support_dryrun.py [--data-dir <dir>] <frame.png>
 """
 import os
 import sys
@@ -9,6 +9,9 @@ from rdom.perception.score import read_score
 from rdom.perception.sp import read_sp, read_summon_cost
 from rdom.perception.support import read_board_support
 from rdom.policy.support import evaluate_support, plan_support
+
+
+USAGE = "usage: python tools/support_dryrun.py [--data-dir <dir>] <frame.png>"
 
 
 def dryrun(frame_rgb):
@@ -30,11 +33,19 @@ def dryrun(frame_rgb):
 def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
     if argv in (["--help"], ["-h"]):                # AI-NOTE: otherwise '--help' was opened as an image path
-        print("usage: python tools/support_dryrun.py <frame.png>")
+        print(USAGE)
         return 0
+    data_dir = None
+    if len(argv) == 3 and argv[0] == "--data-dir":
+        data_dir, argv = argv[1], argv[2:]
     if len(argv) != 1:
-        print("usage: python tools/support_dryrun.py <frame.png>")
+        print(USAGE)
         return 2
+    if data_dir is not None:
+        # AI-NOTE: the support nets and the gear pip fallback both read gear._DATA; cached nets of the old dir must go
+        from rdom.perception import gear, support
+        gear._DATA = support._DATA = data_dir
+        support._models.clear()
     import numpy as np
     from PIL import Image
     img = np.array(Image.open(argv[0]).convert("RGB"))

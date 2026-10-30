@@ -42,7 +42,8 @@ POWER_DU = 0.06
 # Card templates: the dice icon only (lower part, below the dice-count badge, above 'Lv.N'),
 # cut from the normalised power-panel frame data/support_frames/sup20261029_135038/panel_121.1.png.
 # Identity comes from matching the card icon with board dice of the same look in that frame, whose
-# labels are support_type_cnn's, not from slot order:
+# labels are support_type_cnn predictions (not reviewed labels), not from slot order. The user then
+# confirmed the templates by eye on the rdF02 sheet (S9/S34 'All correct', 2026-10-30):
 #   Resonance (card 1, u 0.13): white octagon with a green centre dot = board cells 1, 5, 10, 14, 15
 #     of the same frame (CNN: Resonance).
 #   Alignment (card 2, u 0.31): yellow-framed cross-arrow die; the board look of cells 4 and 13 (CNN:
@@ -84,6 +85,7 @@ READ_CONF_MIN = 0.90
 EMPTY_CONF_MIN = READ_CONF_MIN
 
 _models = {}
+_warned_no_models = False      # the missing-type-model warning is printed once per process
 
 
 # ---- models ----
@@ -180,6 +182,11 @@ def read_cells_support(frame_rgb, cells, pip_source="auto"):
            if isinstance(c, bool) or not isinstance(c, numbers.Integral) or not 1 <= c <= 15]
     if bad:
         raise ValueError(f"cells must be in 1..15, got {bad}")
+    global _warned_no_models
+    # AI-NOTE: models are looked up only in _DATA (<repo>/data); in a worktree that is empty and every cell silently read junk
+    if not _warned_no_models and not _exists(TYPE_FILE):
+        _warned_no_models = True
+        print(f"support models not found in {_DATA} -- every cell reads junk")
     all_crops = gear.cell_crops(frame_rgb)
     crops = [all_crops[c - 1] for c in cells]
     labs, conf = predict_types_support(crops)
@@ -272,6 +279,10 @@ def _search(f, box, t):
 
 def detect_support_deck(frame_rgb):
     """True when the support deck's emblem is in the deck bar."""
+    # AI-NOTE: a 2-D grey, 4-channel or float array made cv2 raise; anything but H x W x 3 uint8 is "not the support deck"
+    if not (isinstance(frame_rgb, np.ndarray) and frame_rgb.ndim == 3 and frame_rgb.shape[2] == 3
+            and frame_rgb.dtype == np.uint8):
+        return False
     t = _tpl("deck_support.png")
     if t is None:
         return False
