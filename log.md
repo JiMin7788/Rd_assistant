@@ -208,3 +208,7 @@
 ## 2026-10-30 · rdf03-r4-s17 · read_price tolerates the box-cut edge of the last digit
 - support.power_cards uv is ~3 px left of the button centre, so the last digit of 250 was cut and a 1 px column landed in the overflow strip (None). _digits_beyond now ignores blobs <= SLIVER_W (2) px wide; saved panel reads [250, 250, 250].
 - pages: components/perception-score.md (updated)
+
+## 2026-10-30 · rdf03-m4 · 4-5 digit power prices read; never buy on an unread price
+- read_price finds the digit group inside PRICE_SEARCH_U instead of a fixed 3-digit box (4-5 digit case SYNTHETIC, no saved panel has a price >= 1000). power_visit no longer falls back to tracker.last_price: QA round 5 bought at a guessed 750 when the real price 1000 was unread and left SP below keep. Unread prices save capped panel_price_none_<t>.png frames for H3.
+- pages: components/perception-score.md (updated), components/support-players.md (updated)
