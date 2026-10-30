@@ -125,7 +125,7 @@ def test_main_prints_new_lines_last(env, tmp_path, capsys):
     cs = load("check_support_assets")
     assert cs.main(["--data-dir", str(env), "--out-dir", str(tmp_path / "o")]) == 0
     lines = capsys.readouterr().out.splitlines()
-    assert lines[-2].startswith("sp: n=") and lines[-1].startswith("summon cost: n=")
+    assert lines[-5].startswith("sp: n=") and lines[-4].startswith("summon cost: n=")      # rdf03-t4 adds three lines after
     assert lines[0].startswith("score: n=")
 
 
