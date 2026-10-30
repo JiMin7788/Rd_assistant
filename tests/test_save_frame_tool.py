@@ -48,3 +48,23 @@ def test_claim_exhausted_returns_none(tmp_path):
 def test_run_all_show_has_memory_lines():
     text = (ROOT / "tools" / "run_all.py").read_text(encoding="utf-8")
     assert '"unreadable"' in text and '"board changed without our action"' in text
+
+
+def test_run_all_show_has_play_mode_lines():
+    text = (ROOT / "tools" / "run_all.py").read_text(encoding="utf-8")
+    for s in ("power-up", "Lv check", "look-alike", "game-over screen", "support result",
+              "battle still on screen"):
+        assert f'"{s}"' in text
+
+
+def test_h3_runbook_lines_exist_in_code():
+    # AI-NOTE: every console line quoted in the H3 runbook must be a real log prefix (R14 runbook).
+    code = "".join((ROOT / "tools" / f).read_text(encoding="utf-8")
+                   for f in ("support_players.py", "support_bot.py", "gear_loop.py", "gear_bot.py"))
+    code += (ROOT / "src" / "rdom" / "policy" / "power.py").read_text(encoding="utf-8")
+    todo = (ROOT / "CLAUDE_CODE_TODO.md").read_text(encoding="utf-8")
+    h3 = todo.split("### H3")[1]
+    for s in ("support deck: play mode", "power-up (SP", "power panel ->","Lv check:",
+              "power panel: ", "support result:", "game-over look-alike", "game-over screen seen once",
+              "battle still on screen"):
+        assert s in h3 and s in code, s
