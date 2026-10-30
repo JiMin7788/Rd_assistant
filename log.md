@@ -160,3 +160,7 @@
 - PlayPlayer still counts every tap as confirmed with SP/keep unknown until rdf03-t6.
 - pages: components/policy-power.md (updated)
 - pages: components/perception-score.md (updated)
+
+## 2026-10-30 · rdf03-t6 · PlayPlayer power wiring: SP trigger, confirmed one-at-a-time buying
+- Power panel now opens on SP (2 consecutive reads) >= keep + next price with the cost confirmed on 2 ticks; the complete/idle triggers are removed. power_visit buys one card at a time above the reserve, each tap confirmed by an SP drop >= price/2 or a level rise; an unconfirmed tap ends the visit. BUY_MAX 10, PANEL_SAVE_MAX 20.
+- pages: components/support-players.md (updated)
