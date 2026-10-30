@@ -196,3 +196,7 @@
 ## 2026-10-30 · rdf03-r2-s18 · SP and cost read on a dimmed battle
 - A dice-info panel dims the battle (digits peak ~70), which made read_sp/read_summon_cost None; sp._undim stretches crops peaking in 40..199 to full range, near-black crops stay None.
 - pages: components/perception-score.md (updated)
+
+## 2026-10-30 · rdf03-m3 · Readers re-measured after S4/S18, views_agree, R7 line order
+- views_agree keeps the lowest-threshold check only (n-or-0 at 170/190/210 gave 38 correct / 11 none); score re-measured 49/49 correct, panel sp/price/power level not worse, so sp._undim stays shared. power_visit now reports SP unreadable before an unknown keep; both lines are in the runbook table.
+- pages: components/perception-score.md (updated), components/support-players.md (updated)
