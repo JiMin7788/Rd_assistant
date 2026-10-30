@@ -2,7 +2,7 @@
 title: Support-deck perception
 type: component
 updated: 2026-10-30
-sources: [rdf01-t5, rdf02-t2, rdf02-t3, rdf02-r2-s12, rdf02-m1, rdT04, rdf03-t8]
+sources: [rdf01-t5, rdf02-t2, rdf02-t3, rdf02-r2-s12, rdf02-m1, rdT04, rdf03-t8, rdf03-t9]
 ---
 # Support-deck perception
 
@@ -18,7 +18,7 @@ sources: [rdf01-t5, rdf02-t2, rdf02-t3, rdf02-r2-s12, rdf02-m1, rdT04, rdf03-t8]
 - Without `support_type_cnn.pt` every cell is `junk`, pip 0, conf 0. `read_cells_support` then prints `support models not found in <_DATA> -- every cell reads junk` once per process (`_warned_no_models`). Models are looked up only in `_DATA` (`<repo>/data`), which is empty in a worktree, so a worktree run silently read junk before the warning.
 - A CNN `Bomb` becomes `junk` unless `gear.is_bomb(crop)` (then `Bomb`, conf 1.0), as in gear's `predict_types`. Pip is 0 for empty/junk/Crystal/Bomb.
 - Pip source: `"auto"` uses `support_pip_pat_e1..e3.pt` when all three exist, else the gear ensemble (`gear.PIP_ENSEMBLE`), else the single `gear_pip_pat.pt`, else pip 0. `"gear"` (trial mode) always uses the gear files and loads no support pip or star file.
-- Star (pip 7), `auto` only and only when all three `support_star_e*.pt` exist: mean sigmoid over `hires_cell(frame, cell, 128)` resized to 64; p > `STAR_THRESHOLD` (0.7) gives 7, otherwise a 7 from the ensemble becomes 6. Without star files the ensemble pip is returned as is. `STAR_THRESHOLD` is shared by `read_cells_support` and `tools/support_gate.py _predict`; at 0.5 the H2 holdout gave star precision 0.838 (clean pip-1 Resonance dice, p 0.62-0.67, were false stars), at 0.7 recall 0.984 / precision 0.954 (rdT04, 2026-10-30).
+- Star (pip 7), `auto` only and only when all three `support_star_e*.pt` exist: mean sigmoid over `hires_cell(frame, cell, 128)` resized to 64; p > `STAR_THRESHOLD` (0.7) gives 7, otherwise a 7 from the ensemble becomes 6. Without star files the ensemble pip is returned as is. `STAR_THRESHOLD` is shared by `read_cells_support` and `tools/support_gate.py _predict`; at 0.7 the gate re-run after rdT04 gave pip PASS, star recall 0.984, star precision 0.954 (n=599, stars=63; `data/support_gate.json`, created 2026-10-30T08:28:35, holdout sup20261029_152652 + sup20261030_061946). The `STAR_THRESHOLD` comment in support.py gives the earlier 0.5 star precision as 0.838, measured by the Master on the same holdouts (no repo file holds that run); the comment states that no cause for the false stars is established and that a threshold change needs `tools/support_gate.py` re-run before `gate_state()` reflects it.
 
 ## Gate (Hard Rule R4)
 `gate_state()` returns `{"type": bool, "pip": bool}` from `data/support_gate.json` (`models` = filename to sha256, `type.pass`, `pip.pass`). Both are False when the file is missing/unparseable, a listed file is missing or its sha256 differs, or a present support model (type/pip/star) is not listed. The last rule is stricter than the task spec: a retrained model dropped in unlisted is not live until re-gated.
@@ -43,5 +43,7 @@ sources: [rdf01-t5, rdf02-t2, rdf02-t3, rdf02-r2-s12, rdf02-m1, rdT04, rdf03-t8]
 - commit `b294b48` (branch task/rdf02-r2-s12) — support.py `read_cells_support` range check (`ValueError` for cells outside 1..15, AI-NOTE explains the negative-index cause); tests/test_support_conf_report.py `test_read_cells_support_rejects_cells_outside_1_15` (0, -1, 16, mixed list raise; valid list unchanged).
 - commit `2e74942` (branch task/rdf02-m1) — bool/non-integer check in `read_cells_support` (perception/support.py) and the missing-feats `FAIL:` line in tools/support_conf_report.py; tests `test_read_cells_support_rejects_bool_and_non_int_cells`, `test_conf_report_missing_feats_tag_is_one_fail_line` in tests/test_support_m1_inputs.py.
 - commit `bd09f61` (branch task/rdT04) — support.py `STAR_THRESHOLD = 0.7` (comment has the 0.5 vs 0.7 holdout numbers), used in `read_cells_support`; tools/support_gate.py `_predict` uses `support.STAR_THRESHOLD`; tests/test_support_star_threshold.py (0.65 gives pip 6, 0.75 gives 7, in both code paths).
+- `src/rdom/perception/support.py` — `STAR_THRESHOLD` comment (rdf03-t9): gate numbers at 0.7, the 0.838 at 0.5 with its source, no established cause, re-run note
+- `data/support_gate.json` — `pip.star_recall` 0.9841, `pip.star_precision` 0.9538, `pip.stars` 63, `pip.n` 599, `pip.pass` true (gate re-run after rdT04, holdout listed above)
 - commit `04c74c9` (branch task/rdf03-t8) — support.py `_warned_no_models` + warning in `read_cells_support`, shape/dtype guard in `detect_support_deck`, `CARD_TEMPLATES` comment; tests/test_support_qa_minor.py (warns once, no warning with a model file, odd arrays give False).
 - `src/rdom/perception/gear.py` — `_pipnet_cls`, `PIP_ENSEMBLE`, `is_bomb`, `power_buttons`, `_best` reused here.

@@ -2,7 +2,7 @@
 title: Support-deck trainers and R4 gate
 type: component
 updated: 2026-10-30
-sources: [rdf01-t8, rdT01, rdT04]
+sources: [rdf01-t8, rdT01, rdT04, rdf03-t9]
 ---
 # Support-deck trainers and R4 gate
 
@@ -23,6 +23,7 @@ All take `--data-dir` (default `<repo>/data`), `--tags`, `--exclude-games g1,g2`
 
 ## Gotchas
 - The gate points `support._DATA` at `--data-dir`, so models, gate file and hashes all resolve there.
+- Changing `support.STAR_THRESHOLD` leaves every model file and so every sha256 in `support_gate.json` unchanged, so `gate_state()` keeps reading the old verdict; re-run `tools/support_gate.py` before it reflects the new threshold (rdT04 did this: pip PASS at 0.7, see [support perception](perception-support.md)).
 - A game trained on by any support model blocks it as holdout for good; retrain with `--exclude-games` first.
 
 ## Evidence
@@ -30,5 +31,6 @@ All take `--data-dir` (default `<repo>/data`), `--tags`, `--exclude-games g1,g2`
 - commit `a453e82` (support_gate) — thresholds MIN_ACC/MIN_CLASS/MIN_STARS, line formats, chk filter, star decision rule.
 - commit `bd09f61` (tools/support_gate.py `_predict`) — star cut is `support.STAR_THRESHOLD`, not a literal.
 - commit `a453e82` (train_support_star, train_support_pip) — BCE weighting, 72 px resize, no hue augmentation; PATTERN switch, pip 1..6 filter.
+- `src/rdom/perception/support.py` (`gate_state` compares only file sha256 and the stored pass flags; `STAR_THRESHOLD` is not hashed) and `data/support_gate.json` (`models` lists only the four .pt files) — why a threshold change needs a gate re-run
 - commit `2dd0464` (task/rdT01) — tools/support_gate.py prints the real gate path.
 - [labelling tools](labelling-support.md) — produce the chk tags the gate reads.

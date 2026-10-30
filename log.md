@@ -137,11 +137,11 @@
 - pages: components/support-memory.md (updated), components/support-players.md (updated), components/perception-support.md (updated), howto/run-bot.md (updated)
 
 ## 2026-10-30 · rdT03 · close the dice info panel by tapping 소환
-- Tapping a field die opens the dice info panel, which made every cell unreadable; gear.dice_info_panel (dark share in three bands, skips the banner band) now triggers one 소환 tap (closes only, no summon) in BasePlayer.tick before the tactic check; repeat taps >= 1.0 s apart.
+- Tapping a field die opens the dice info panel, which made every cell unreadable; gear.dice_info_panel (share of V < 60 pixels, u 0.08-0.92, in bands v 0.03-0.15 / 0.20-0.28 / 0.52-0.585, each >= 0.40 / 0.60 / 0.70; middle v 0.30-0.51 left out because a boss banner can cover it; band 2 overlaps the banner band v 0.165-0.265, banner alone 0.48-0.59 vs 0.60; commit 4999025, merged c9f98ce) now triggers one 소환 tap (closes only, no summon) in BasePlayer.tick before the tactic check; repeat taps >= 1.0 s apart.
 - pages: components/support-players.md (updated)
 
 ## 2026-10-30 · rdT04 · Support star threshold 0.7 shared constant
-- support.STAR_THRESHOLD = 0.7 replaces the 0.5 literals in read_cells_support and support_gate._predict; 0.5 gave star precision 0.838 on the H2 holdout (pip-1 Resonance false stars), 0.7 gives 0.954 at recall 0.984.
+- support.STAR_THRESHOLD = 0.7 replaces the 0.5 literals in read_cells_support and support_gate._predict; 0.5 gave star precision 0.838 on the H2 holdout (source: STAR_THRESHOLD comment in support.py), 0.7 gives 0.954 at recall 0.984 (data/support_gate.json, gate re-run after rdT04).
 - pages: components/perception-support.md (updated), components/training-support.md (updated)
 
 ## 2026-10-30 · rdf03-t2 · Confirmed game over, clear at 5000
@@ -168,3 +168,7 @@
 ## 2026-10-30 · rdf03-t8 · rdF02 QA minors: missing-model warning, dry-run --data-dir, grey-safe deck detection
 - read_cells_support warns once when support_type_cnn.pt is absent from _DATA (empty in a worktree); detect_support_deck returns False for non-HxWx3 uint8 input; support_dryrun gained --data-dir (sets support and gear _DATA, clears cached nets).
 - pages: components/perception-support.md (updated), howto/run-bot.md (updated)
+
+## 2026-10-30 · rdf03-t9 · Wiki fixes from the rdT03/rdT04 wiki reviews
+- support-players now states the dice-info bands, `>=` thresholds, V < 60, u 0.08-0.92, the left-out middle band and the banner overlap as in gear.py, with commit 4999025 (merged c9f98ce); perception-gear names dice_info_panel; perception-support drops the uncited false-star cause and cites data/support_gate.json for the 0.7 numbers; training-support notes a STAR_THRESHOLD change needs a gate re-run. The code comments on `_INFO_BANDS` and `STAR_THRESHOLD` now carry the same evidence; the 0.838 at 0.5 is attributed to the Master's measurement on the same holdouts.
+- pages: components/support-players.md (updated), components/perception-gear.md (updated), components/perception-support.md (updated), components/training-support.md (updated)

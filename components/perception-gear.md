@@ -1,8 +1,8 @@
 ---
 title: Gear-deck perception
 type: component
-updated: 2026-10-23
-sources: [seed]
+updated: 2026-10-30
+sources: [seed, rdf03-t9]
 ---
 # Gear-deck perception
 
@@ -20,10 +20,11 @@ field with trained models, finds deck UI buttons by template match, and OCRs fie
 - `banner_text`/`tactic_sp1000_card` use Tesseract (`C:\Program Files\Tesseract-OCR`, repo `tessdata/`).
   Room code and HP use the template digit reader `perception/digits.py` (exact-or-None) because
   Tesseract misread them.
+- `dice_info_panel` / `dice_info_scores` detect the dice info panel (dark-pixel share in three bands); how the support bot uses them is in [support-players](support-players.md).
 - `perception/collect.py` saves live crops + the bot's own labels to `data/crops_gear/` (review before training).
 
 ## Evidence
-- `src/rdom/perception/gear.py` — docstring, `NORM_H`, `TYPES`, `TYPE_CLASSES`, `UI`, `reload_if_changed`, `PIP_ENSEMBLE`, `banner_text`
+- `src/rdom/perception/gear.py` — docstring, `NORM_H`, `TYPES`, `TYPE_CLASSES`, `UI`, `reload_if_changed`, `PIP_ENSEMBLE`, `banner_text`, `dice_info_panel`, `dice_info_scores`, `_INFO_BANDS`
 - `src/rdom/perception/digits.py` — docstring (Tesseract misreads 14324→14352, 150→15)
 - `src/rdom/perception/collect.py` — live crop collection
 - `config/deck.toml` — doom/decay presets
