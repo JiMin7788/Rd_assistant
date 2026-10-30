@@ -38,3 +38,5 @@ power_ratio = [3, 1]
 # power_growth_late: Growth level bought again after power_growth_late_after A/R purchases
 power_growth_late = 8
 power_growth_late_after = 8
+# power_reserve_x: power-ups spend SP only above power_reserve_x * summon cost (kept for summons)
+power_reserve_x = 3

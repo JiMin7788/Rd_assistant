@@ -334,9 +334,9 @@ class PlayPlayer(BasePlayer):
         for c, uv in found.items():
             lv = perc.card_level(f2, uv)
             read[c] = lv if lv is not None and lv == first[c] else None
-        levels, src, lines = tracker.start_visit(read, set(found))
-        for line in lines:
+        for line in tracker.start_visit(read, set(found)):
             print(line, flush=True)
+        levels = tracker.levels()
         avail = [c for c in tracker.available() if c in found]
         seq = plan_visit(levels, avail, self.power_cfg, 6)
         if not seq:
@@ -346,8 +346,11 @@ class PlayPlayer(BasePlayer):
         for c in seq:
             self.inj.tap(*found[c])
             self.sleep(BUY_GAP)
-        tracker.tapped(seq)
-        print(PowerTracker.line(seq, levels, src), flush=True)
+        # AI-NOTE: interim until rdf03-t6 reads SP/prices: every tap counts as a confirmed buy, as
+        # the old tap counting did; SP and keep are unknown here.
+        for c in seq:
+            tracker.confirmed(c, None)
+        print(PowerTracker.line("".join(c[0] for c in seq), levels, None, None, len(seq)), flush=True)
         self.close_panel()
         self._power_last = self.clock()
 

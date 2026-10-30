@@ -152,7 +152,7 @@ def test_power_visit_buys_in_order(capsys):
     p.sleeps.clear()
     ticks(p, 1)
     buys = [e for e in p.log if e[0] == "tap"]
-    want = [CARDS[c] for c in ("Alignment", "Alignment", "Alignment", "Resonance", "Alignment", "Alignment")]
+    want = [CARDS["Growth"]] * 6                  # levels are the purchase count (all Lv 1), not the read G7
     assert [uv for _, uv in buys[:6]] == want
     assert [uv for _, uv in buys[6:]] == [UI["power_close"]]
     # the panel frame is saved before the first buy tap
@@ -162,8 +162,10 @@ def test_power_visit_buys_in_order(capsys):
     assert len(perc.level_calls) == 6 and frames[:3] == [frames[0]] * 3
     assert frames[3] != frames[0] and frames[3:] == [frames[3]] * 3
     assert 0.3 in p.sleeps and p.sleeps.count(0.15) == 6
-    assert "power panel -> AAARAA, close (Lv G7 A1 R1, read)" in capsys.readouterr().out
-    assert p.power.record()["src"] == "read"
+    out = capsys.readouterr().out
+    assert "Lv check: Growth read 7, count 1 (count kept)" in out
+    assert "power panel -> GGGGGG (6 bought), close (Lv G1 A1 R1, SP ?, keep ?)" in out
+    assert p.power.record()["src"] == "count"
 
 
 def test_power_visit_closes_until_closed():
@@ -180,10 +182,10 @@ def test_power_visit_unread_card_is_counted(capsys):
     perc.panel = True
     ticks(p, 1)
     out = capsys.readouterr().out
-    assert "power panel -> AAARAA, close (Lv G7 A1 R1, count)" in out
-    assert p.power.record()["src"] == "count"
-    # taps made in this visit are counted into the next one
-    assert p.power.start_visit({"Growth": 7, "Alignment": None, "Resonance": 1})[0]["Alignment"] == 6      # 1 + 5 A taps
+    assert "Lv check: Growth read 7, count 1 (count kept)" in out
+    assert "power panel -> GGGGGG (6 bought), close (Lv G1 A1 R1, SP ?, keep ?)" in out
+    # the taps made in this visit are counted into the next one
+    assert p.power.levels()["Growth"] == 7
 
 
 def test_power_visit_missing_card_does_not_make_src_count(capsys):
@@ -192,10 +194,9 @@ def test_power_visit_missing_card_does_not_make_src_count(capsys):
     perc.levels = {"Growth": [7], "Alignment": [1], "Resonance": [1]}
     perc.panel = True
     ticks(p, 1)
-    rec = p.power.record()
-    assert rec["src"] == "read"
-    assert rec["levels"] == {"Growth": 7, "Alignment": None, "Resonance": 1}
-    assert "(Lv G7 A- R1, read)" in capsys.readouterr().out
+    assert "Lv check: Growth read 7, count 1 (count kept)" in capsys.readouterr().out
+    assert p.power.record()["lv_check"]["mismatch"] == 1
+    assert CARDS["Alignment"] not in inj.taps
 
 
 def test_power_visit_two_different_reads_are_unread(capsys):
@@ -205,7 +206,8 @@ def test_power_visit_two_different_reads_are_unread(capsys):
     ticks(p, 1)
     out = capsys.readouterr().out
     # Growth was never read, so it counts from Lv 1 and Growth is bought first
-    assert "power panel -> GGGGGG, close (Lv G1 A1 R1, count)" in out
+    assert "Lv check: read G- A1 R1 = count" in out
+    assert "power panel -> GGGGGG (6 bought), close (Lv G1 A1 R1, SP ?, keep ?)" in out
 
 
 def test_power_visit_no_cards_found(capsys):
@@ -234,8 +236,7 @@ def test_power_visit_prints_maxed_line(capsys, monkeypatch):
     real = p.power.start_visit
 
     def start(read, found=None):
-        levels, src, lines = real(read, found)
-        return levels, src, lines + ["power card Growth maxed at Lv 8"]
+        return real(read, found) + ["power card Growth maxed at Lv 8"]
 
     monkeypatch.setattr(p.power, "start_visit", start)
     perc.panel = True
@@ -246,7 +247,8 @@ def test_power_visit_prints_maxed_line(capsys, monkeypatch):
 def test_power_visit_skips_maxed_card(capsys):
     p, g, inj, perc, saver, clock = make()
     perc.levels = {"Growth": [7], "Alignment": [1], "Resonance": [1]}
-    p.power._maxed.add("Alignment")
+    p.power._maxed.append("Alignment")
+    p.power._bought["Growth"] = 6                 # Growth Lv 7: Alignment would come next
     perc.panel = True
     ticks(p, 1)
     assert CARDS["Alignment"] not in inj.taps
@@ -337,7 +339,8 @@ class FakePlay(FakeRunPlayer):
         super().__init__(*a, **kw)
         self.milestones = MilestoneTracker()
         self.power = PowerTracker()
-        self.power.start_visit({"Growth": 7, "Alignment": 2, "Resonance": 1})
+        self.power.confirmed("Alignment", 100)
+        self.power.start_visit({"Growth": 1, "Alignment": 2, "Resonance": 1})
 
 
 @pytest.fixture
@@ -385,8 +388,8 @@ def test_play_modes(run_env, capsys, type_, pip, mode, line):
     if mode == "collect":
         assert rec["power"] is None
     else:
-        assert rec["power"]["levels"] == {"Growth": 7, "Alignment": 2, "Resonance": 1}
-        assert rec["power"]["src"] == "read"
+        assert rec["power"]["levels"] == {"Growth": 1, "Alignment": 2, "Resonance": 1}
+        assert rec["power"]["src"] == "count"
     assert sb.play.stats == {"merges": 3, "fails": 1, "support": 2, "complete": True}
 
 
