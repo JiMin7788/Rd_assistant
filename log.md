@@ -200,3 +200,7 @@
 ## 2026-10-30 · rdf03-m3 · Readers re-measured after S4/S18, views_agree, R7 line order
 - views_agree keeps the lowest-threshold check only (n-or-0 at 170/190/210 gave 38 correct / 11 none); score re-measured 49/49 correct, panel sp/price/power level not worse, so sp._undim stays shared. power_visit now reports SP unreadable before an unknown keep; both lines are in the runbook table.
 - pages: components/perception-score.md (updated), components/support-players.md (updated)
+
+## 2026-10-30 · rdf03-r3-s16 · Numbers wider than the reading box read None
+- sp._read checks a one-digit-pitch strip (OVERFLOW_U) right of the box, judged on the weakest channel, and returns None on a digit-sized blob there; before, SP 1234567 read 123456 and price 2500 read 250.
+- pages: components/perception-score.md (updated)
