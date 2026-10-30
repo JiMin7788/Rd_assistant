@@ -1,8 +1,8 @@
 ---
 title: Support bot core (routing, saver, mode, round record)
 type: component
-updated: 2026-10-29
-sources: [rdf01-t9, rdf01-t16, rdf01-t13, rdf02-t5, rdf03-t2]
+updated: 2026-10-30
+sources: [rdf01-t9, rdf01-t16, rdf01-t13, rdf02-t5, rdf03-t2, rdf03-m1]
 ---
 # Support bot core (routing, saver, mode, round record)
 
@@ -27,12 +27,12 @@ sources: [rdf01-t9, rdf01-t16, rdf01-t13, rdf02-t5, rdf03-t2]
 - `config/deck.toml` has comments for `force = "support"` (H1 collection; empty it afterwards) and the `power_*` buying order. The human steps H1-H3 are in `CLAUDE_CODE_TODO.md` ("rdF01 서포팅덱").
 - Tests: `tests/test_gear_bot_handover.py` loads `tools/gear_bot.py` by path with fakes (not `gear_loop`).
 
-- **gear_loop end handling (rdf03-t2):** `game_over` and `clear` are treated alike: after 3 s a fresh `g.grab()` is checked with `is_battle`; if a battle is on screen it prints `battle still on screen -- 로비로 가기 skipped` and does not call `exit_to_lobby` (which taps the lobby position blindly). `tools/support_judge.py` `_exclusion` counts `clear` as eligible like `game_over`; any other result is `abnormal`.
+- **gear_loop end handling (rdf03-t2, rdf03-m1):** `tools/gear_loop.py` is importable: everything live (window placement, `LiveGrabber`/`Injector`, `send_status`, the loop, final prints) is in `main()`, run only under `if __name__ == "__main__":`. The end handling is the module-level `after_battle(res, g, inj, exit_fn=exit_to_lobby, battle_fn=is_battle, report=None)`: it prints `battle result: <res>`, runs `report()` (write_room closed + Discord round summary), returns True for `moved` (main breaks), and for `game_over`/`clear` sleeps 3 s, then checks a fresh `g.grab()` with `is_battle`; if a battle is on screen it prints `battle still on screen -- 로비로 가기 skipped` and does not call `exit_to_lobby` (which taps the lobby position blindly), else prints `로비로 가기: <result>`. `timeout` only logs. `tools/support_judge.py` `_exclusion` counts `clear` as eligible like `game_over`; any other result is `abnormal`.
 
 ## Invariants and pitfalls
 - No module-level side effects: only imports and constants (no grabber, injector, loop or file I/O).
 - `gear_play` default imports `gear_bot` lazily inside the function. `support_play` default is looked up at call time with `getattr(sys.modules[__name__], "play")`, so tests can run with an explicit `support_play`; `play()` now exists as the default.
-- Tests must never import `tools.gear_loop`, `run_all`, `supervisor` or `discord_bot` (they start the real bot); `tests/test_support_bot_core.py` uses fakes (FakeGrabber, fake detect/force/play callables, fake sleep).
+- Tests must never import `run_all`, `supervisor` or `discord_bot` (they start the real bot). `tools.gear_loop` may be imported only through the `gl` fixture in `tests/test_gear_loop_result.py`, which booby-traps `place_game_window`, `LiveGrabber`, `Injector`, `send_status` and pops the module from `sys.modules` afterwards (other tests assert loop modules were never imported); `after_battle` is driven with fake `exit_fn`/`battle_fn`. `tests/test_support_bot_core.py` uses fakes (FakeGrabber, fake detect/force/play callables, fake sleep).
 - Related: [support perception](perception-support.md) (`detect_support_deck`, `force_deck`, `gate_state`), [capture writers](capture-live.md).
 
 ## Evidence
@@ -43,4 +43,5 @@ sources: [rdf01-t9, rdf01-t16, rdf01-t13, rdf02-t5, rdf03-t2]
 - `C:/dev/_hub/tasks/rdf01-t16/task.json` — spec AC5–AC6 (play record, dry-run CLI)
 - `tools/gear_loop.py`, `tools/gear_bot.py`, `tools/run_all.py`, `config/deck.toml`, `CLAUDE_CODE_TODO.md` — the t13 wiring above (commit `e3cf60a`)
 - commit `0ece85e` — `CLEAR_SCORE`, clear decision and `final_score` in `play`/`build_record` (tools/support_bot.py), the gear_loop battle guard, `_exclusion` change in tools/support_judge.py; cited by commit; spec `C:/dev/_hub/tasks/rdf03-t2/task.json`
+- commit `e6bd06b` — rdf03-m1: gear_loop `main()` / `after_battle` split and tests/test_gear_loop_result.py (replaces the source-text guard test in tests/test_support_game_end.py); cited by commit; spec `C:/dev/_hub/tasks/rdf03-m1/task.json`
 - commit `e3cf60a` adds tests/test_gear_bot_handover.py (cited by commit; not yet in the main checkout) — hand-over on first tick, detect cadence (first tick, then >=10 s)

@@ -180,3 +180,7 @@
 ## 2026-10-30 · rdf03-i1 · Panel SP read retry
 - power_visit retries the panel SP read (0.25 s steps, up to 1 s) until two numeric reads exist, because a +30 popup hides the digits on most panel frames (2 of 6 readable); otherwise most visits closed as SP unreadable.
 - pages: components/support-players.md (updated)
+
+## 2026-10-30 · rdf03-m1 · gear_loop importable, after_battle tested
+- tools/gear_loop.py: live code moved into main() (run under __main__); end-of-battle handling extracted to after_battle(); tests/test_gear_loop_result.py imports it through a booby-trapped fixture.
+- pages: components/support-bot-core.md (updated)
