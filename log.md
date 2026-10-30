@@ -151,3 +151,7 @@
 ## 2026-10-30 · rdf03-t3 · Battle SP and summon-cost readers
 - perception/sp.py reads battle SP and the 소환 button cost exact-or-None with its own digits_sp/digits_cost templates; 2-digit costs read None because the Ø icon intrudes the box; the check tool skips crops cut with other boxes.
 - pages: components/perception-score.md (updated)
+
+## 2026-10-30 · rdf03-t4 · Power-panel readers
+- Added read_panel_sp and read_price (PANEL_SP_BOX, PRICE_BOX); price reads the weakest RGB channel because white digits on the green button grey to ~180, near the 170 threshold; templates are thin (room fallback for most digits) until H3 panel frames.
+- pages: components/perception-score.md (updated)

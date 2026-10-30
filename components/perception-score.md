@@ -2,7 +2,7 @@
 title: Score reader and generic digit-template kinds
 type: component
 updated: 2026-10-30
-sources: [rdf01-t4, rdT01, rdf02-t1, rdf02-t2, rdf02-i2, rdf03-t3]
+sources: [rdf01-t4, rdT01, rdf02-t1, rdf02-t2, rdf02-i2, rdf03-t3, rdf03-t4]
 ---
 # Score reader and generic digit-template kinds
 
@@ -34,6 +34,15 @@ sources: [rdf01-t4, rdT01, rdf02-t1, rdf02-t2, rdf02-i2, rdf03-t3]
 - `check_support_assets.py` prints two more lines after the existing ones: `sp: n= correct= none= wrong=` and `summon cost: n= correct= none= wrong=`. Crops in those folders cut with other boxes by earlier tries are skipped (`_fits_box`: pixel size must match the box within 1 px), otherwise pasting them back would stretch the digits. Run 2026-10-30: `sp: n=34 correct=33 none=1 wrong=0`, `summon cost: n=56 correct=52 none=4 wrong=0`.
 - `tools/support_dryrun.py` adds `sp: <n|None>` and `summon cost: <n|None>` after the score line. Not yet used by the bot loop (rdf03-t5/t6).
 
+## Power-panel readers (`perception/sp.py`, rdf03-t4)
+- `read_panel_sp(frame)` (0..9_999_999) reads the SP pill at the top of the open power panel with `PANEL_SP_BOX = (0.4636, 0.7734, 0.6155, 0.7959)` and kind `panelsp`. A cyan '+30' kill popup over the digits must read None; on the six saved panel frames only 2 give a number (59050, 14510), the other four None, 0 wrong.
+- `read_price(frame, button_uv)` (1..999_999) reads the price on a buy button; `button_uv` is the centre from `gear.power_buttons` / `support.power_cards`, and `PRICE_BOX` is an offset box `(-0.0096, -0.0045, 0.0496, 0.0108)` from it (starts right of the 'Ø' icon spike). Bad `button_uv` (non-numeric, NaN/inf, short) gives None. Only 250 and 500 are on saved frames; wider prices are unmeasured.
+- Pitfall: white digits on the green button grey to ~180, next to the 170 binarisation threshold. `_read(..., min_channel=True)` feeds the weakest RGB channel (~90 on the button) instead, and `build_kind` builds `digits_price.npz` from `min(axis=2)` crops to match. Use the same conversion for any recalibration crops.
+- `_read` returns None for a box with a negative start, since a negative slice index would wrap to the far side of the frame (relevant for buttons near the left/top edge).
+- Card level uses the existing `support.card_level` (`LV_BOX`) with a new `digits_powerlv.npz` built from the panel crops.
+- Templates are thin: `digits_panelsp.npz` has real samples for 0 1 3 4 5 9, `digits_price.npz` for 0 2 5, `digits_powerlv.npz` for 1 2; every other digit is a room-template fallback (same game font). Recalibrate when H3 saves more panel frames: `python tools/build_digit_templates.py panelsp price powerlv`.
+- `check_support_assets.py` prints `panel sp`, `price` and `power level` lines (relative-box crops are pasted back at `PANEL_BUTTON`). Run 2026-10-30: `panel sp: n=3 correct=2 none=1 wrong=0`, `price: n=30 correct=30`, `power level: n=30 correct=30`. Not yet used by the bot loop.
+
 ## Building templates for a kind
 - `build_kind(kind, src_dir, out, thr, fallback)` reads `<src_dir>/*.png`; the value is the filename part before the first `_` (checked by eye). Non-digit names and unreadable images are skipped.
 - Digits with no sample take `fallback`. The CLI passes the room templates, which share the game font.
@@ -49,4 +58,5 @@ sources: [rdf01-t4, rdT01, rdf02-t1, rdf02-t2, rdf02-i2, rdf03-t3]
 - commit `ee3d48d` (branch task/rdf02-t2, not yet merged into this checkout when written) — tools/check_support_assets.py: check_deck_bar, check_power_cards, draw_lv_boxes, --out-dir and the docstring with the H1 run; tests/test_support_assets_ui.py.
 - commit `ad02bed` (branch task/rdf02-i2) — tools/check_support_assets.py: `--out-dir` default None resolved in `main()` to `<data-dir>/support_frames/_check`; tests/test_support_assets_score.py `test_main_default_out_dir_is_support_frames_check`.
 - commit `0313471` (branch task/rdf03-t3) — src/rdom/perception/sp.py (boxes, ranges, icon/popup comments), tools/check_support_assets.py (`_check_digits`, `_fits_box`, docstring run), tools/support_dryrun.py, assets/templates/digits_sp.npz and digits_cost.npz, tests/test_support_sp.py.
+- commit `6ed8856` (branch task/rdf03-t4) — src/rdom/perception/sp.py (`PANEL_SP_BOX`, `PRICE_BOX`, `read_panel_sp`, `read_price`, `min_channel`, negative-start guard), tools/build_digit_templates.py (`_min_channel` for price), tools/check_support_assets.py (panel sp / price / power level lines and run), assets/templates/digits_{panelsp,price,powerlv}.npz, tests/test_support_panel_readers.py.
 - commit `29b2651` (branch task/rdf01-t4, not yet merged into this checkout when written) — adds perception/score.py (`SCORE_BOX`, `read_score` guards, `ScoreTracker.update` None handling) and tests/test_support_score.py (synthetic-glyph tests for reader, tracker and build helper).
