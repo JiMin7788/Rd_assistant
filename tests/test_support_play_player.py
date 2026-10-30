@@ -128,6 +128,18 @@ class FakePerception:
     def power_cards(self, f):
         return {}                    # no card found: the visit only closes
 
+    def read_sp(self, f):
+        return None
+
+    def read_summon_cost(self, f):
+        return None
+
+    def read_panel_sp(self, f):
+        return None
+
+    def read_price(self, f, button_uv):
+        return None
+
     def banner_text(self, f):
         self.banner_texts += 1
         return self.text

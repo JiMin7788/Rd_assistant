@@ -18,9 +18,10 @@ import numpy as np
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 from rdom.input.inject import cell_uv
 from rdom.perception import board, collect, gear, score, support
+from rdom.perception import sp as spread
 from rdom.perception.support_memory import CellMemory, _unreadable, burst_result, merge_verdict
 from rdom.policy.milestones import MilestoneTracker
-from rdom.policy.power import PowerTracker, load_power_config, plan_visit
+from rdom.policy.power import PowerTracker, keep as power_keep, load_power_config, next_card
 from rdom.policy.support import evaluate_support, load_support_deck, plan_support
 
 CELLS_EVERY = 15.0
@@ -40,7 +41,10 @@ BAN_FOR = 90.0
 MAX_JUNK = 3
 VERIFY_TICKS = 3               # undecided merge verifications before it counts as an effect
 POWER_EVERY = 20.0
-BUY_GAP = 0.15
+BUY_MAX = 10                   # buy taps per game (one card at a time, each confirmed)
+PANEL_SAVE_MAX = 20            # saved power-panel frames per game
+CONFIRM_TRIES = 2              # grabs after a buy tap that look for the confirmation
+CONFIRM_WAIT = 0.5
 LEVEL_REREAD = 0.3
 BURST_N = 6                    # tick frame + 5 grabs
 BURST_DT = 0.08
@@ -104,6 +108,18 @@ class Perception:
 
     def read_score(self, f):
         return score.read_score(f)
+
+    def read_sp(self, f):
+        return spread.read_sp(f)
+
+    def read_summon_cost(self, f):
+        return spread.read_summon_cost(f)
+
+    def read_panel_sp(self, f):
+        return spread.read_panel_sp(f)
+
+    def read_price(self, f, button_uv):
+        return spread.read_price(f, button_uv)
 
     def read_cells_support(self, f, cells, pip_source="auto"):
         return support.read_cells_support(f, cells, pip_source)
@@ -299,6 +315,10 @@ class PlayPlayer(BasePlayer):
         self._power_last = -1e9
         self.power_cfg = power_cfg or load_power_config(gear.DECK_FILE)
         self.power = PowerTracker()
+        self.cost = None                       # summon cost read identically on 2 consecutive ticks
+        self._cost_last = None
+        self._sp_prev = None
+        self._panel_saves = 0
         self.score_tracker = score.ScoreTracker()
         self.milestones = MilestoneTracker()
         self.bonus_until = -1e9
@@ -315,18 +335,21 @@ class PlayPlayer(BasePlayer):
         self.power_visit(f)
 
     def power_visit(self, f):
-        """R20 steps 1-8 on the open power panel frame f."""
+        """R7 on the open power panel frame f: one confirmed purchase at a time above the reserve."""
         perc, tracker = self.perc, self.power
         now = self.clock()
         self._power_last = now
-        self.saver.frame(f, f"data/support_frames/{self.game_id}/panel_{self.t(now):.1f}.png")
+        self._sp_prev = None                   # the SP read before the panel is stale after a visit
+        if self._panel_saves < PANEL_SAVE_MAX:
+            self._panel_saves += 1
+            self.saver.frame(f, f"data/support_frames/{self.game_id}/panel_{self.t(now):.1f}.png")
         found = {c: uv for c, uv in perc.power_cards(f).items() if uv}
         if not found:
             print("power panel: cards not found -- closed", flush=True)
             self.close_panel()
             return
-        # AI-NOTE: levels are read only here, twice 0.3 s apart, never after a buy tap -- the number
-        # updates a beat after the tap (HP reader lesson); a level counts only if both reads agree.
+        # AI-NOTE: the count is cross-checked only with levels read here, twice 0.3 s apart (a level
+        # counts if both reads agree); the number updates a beat after a tap (HP reader lesson).
         first = {c: perc.card_level(f, uv) for c, uv in found.items()}
         self.sleep(LEVEL_REREAD)
         f2 = self.g.grab()
@@ -336,21 +359,61 @@ class PlayPlayer(BasePlayer):
             read[c] = lv if lv is not None and lv == first[c] else None
         for line in tracker.start_visit(read, set(found)):
             print(line, flush=True)
-        levels = tracker.levels()
-        avail = [c for c in tracker.available() if c in found]
-        seq = plan_visit(levels, avail, self.power_cfg, 6)
-        if not seq:
-            print("power panel: nothing to buy -- closed", flush=True)
+        a, b = perc.read_panel_sp(f), perc.read_panel_sp(f2)
+        sp0 = None if a is None or b is None else min(a, b)
+        keep = None if self.cost is None else power_keep(self.cost, self.power_cfg)
+        if keep is None:
+            print(f"power panel: nothing to buy (SP {'?' if sp0 is None else sp0}, keep ?) -- closed", flush=True)
             self.close_panel()
             return
-        for c in seq:
+        if sp0 is None:
+            print("power panel: SP unreadable -- closed", flush=True)
+            self.close_panel()
+            return
+        base = dict(read)                      # last level read per card, to see a rise after a tap
+        skipped, taps, bought, cur, ntaps = set(), "", 0, f2, 0
+        while ntaps < BUY_MAX:
+            avail = [c for c in tracker.available() if c in found and c not in skipped]
+            c = next_card(tracker.levels(), avail, self.power_cfg)
+            if c is None:
+                break
+            price = perc.read_price(cur, found[c]) or tracker.last_price(c)
+            if not price:
+                print(f"power panel: {c} price unreadable -- skipped", flush=True)
+                skipped.add(c)
+                continue
+            if sp0 - price < keep:
+                break
             self.inj.tap(*found[c])
-            self.sleep(BUY_GAP)
-        # AI-NOTE: interim until rdf03-t6 reads SP/prices: every tap counts as a confirmed buy, as
-        # the old tap counting did; SP and keep are unknown here.
-        for c in seq:
-            tracker.confirmed(c, None)
-        print(PowerTracker.line("".join(c[0] for c in seq), levels, None, None, len(seq)), flush=True)
+            ntaps += 1
+            ok, sp1 = False, None
+            for _ in range(CONFIRM_TRIES):
+                self.sleep(CONFIRM_WAIT)
+                cur = self.g.grab()
+                sp1 = perc.read_panel_sp(cur)
+                lv = perc.card_level(cur, found[c])
+                # AI-NOTE: this read only confirms the tap; it never sets the count (tracker.levels()).
+                rose = lv is not None and base.get(c) is not None and lv > base[c]
+                if lv is not None:
+                    base[c] = lv if base.get(c) is None else max(base[c], lv)
+                if rose or (sp1 is not None and sp1 <= sp0 - price / 2):
+                    ok = True
+                    break
+            if ok:
+                tracker.confirmed(c, price)
+                taps += c[0]
+                bought += 1
+                sp0 = sp1 if sp1 is not None else sp0 - price
+                continue
+            taps += c[0].lower()
+            print(f"power panel: {c} tap not confirmed (SP {sp0} -> {'?' if sp1 is None else sp1})", flush=True)
+            for line in tracker.not_confirmed(c, affordable=True, sp_known=sp1 is not None):
+                print(line, flush=True)
+            break
+        if not taps:
+            print(f"power panel: nothing to buy (SP {sp0}, keep {keep}) -- closed", flush=True)
+        else:
+            print(PowerTracker.line(taps, tracker.levels(), sp0, keep, bought), flush=True)
         self.close_panel()
         self._power_last = self.clock()
 
@@ -366,8 +429,17 @@ class PlayPlayer(BasePlayer):
             path = self.saver.frame(f, f"data/support_runs/{self.game_id}/{name}")
             self.milestones.set_shot(ev, path)
 
-    def _power_due(self, now):
-        return now - self._power_last >= POWER_EVERY and now > self.hold_power_until
+    def _sp_due(self, now, sp_now, sp_prev):
+        """R6: SP of this and the previous tick both cover keep + the next card's last price."""
+        if self.cost is None or sp_now is None or sp_prev is None:
+            return False
+        if now - self._power_last < POWER_EVERY or now <= self.hold_power_until:
+            return False
+        card = next_card(self.power.levels(), self.power.available(), self.power_cfg)
+        if card is None:
+            return False
+        need = power_keep(self.cost, self.power_cfg) + (self.power.last_price(card) or 0)
+        return min(sp_now, sp_prev) >= need
 
     def _banner(self, f, now):
         if now - self._ocr_last <= OCR_EVERY or not self.perc.banner_present(f):
@@ -477,6 +549,12 @@ class PlayPlayer(BasePlayer):
         confirmed = self.score_tracker.update(self.perc.read_score(f))
         if confirmed is not None:
             self._events(f, self.milestones.on_score(confirmed))
+        sp_now = self.perc.read_sp(f)
+        cost = self.perc.read_summon_cost(f)
+        if cost is not None and cost == self._cost_last:
+            self.cost = cost
+        self._cost_last = cost
+        sp_prev, self._sp_prev = self._sp_prev, sp_now
         raw = self.perc.read_board_support(f, pip_source=self.pip_source)
         raw_by = {d["cell"]: d for d in raw}
         b, mevents = self.memory.update(raw)
@@ -507,6 +585,13 @@ class PlayPlayer(BasePlayer):
         ev = evaluate_support(b, self.deck)
         if ev["complete"]:
             self.stats["complete"] = True
+        # AI-NOTE: the SP trigger needs no stable board; its two-read rule is the SP of this and the
+        # previous tick (R2). The junk guard and a pending merge still block it.
+        if len(unread) <= MAX_JUNK and not self._pending and self._sp_due(now, sp_now, sp_prev):
+            print(f"power-up (SP {sp_now} > keep {power_keep(self.cost, self.power_cfg)})", flush=True)
+            self.tap("power_open")
+            self._power_last = now
+            return
         if not stable and not ev["empty"]:
             return                             # wait for a confirming read
         if len(unread) > MAX_JUNK:
@@ -514,11 +599,6 @@ class PlayPlayer(BasePlayer):
         if stable:
             self._events(f, self.milestones.on_board(
                 {"res7": ev["res7"], "align7": ev["align7"], "bubbles": ev["bubbles"]}))
-        if ev["complete"] and self._power_due(now):
-            print("power-up (complete)", flush=True)
-            self.tap("power_open")
-            self._power_last = now
-            return
         act = plan_support(b, self.deck, support_ready=now - self._support_last >= SUPPORT_CD,
                            banned=set(self._banned), clone_alert=now < self.clone_until)
         op = act["op"]
@@ -546,11 +626,6 @@ class PlayPlayer(BasePlayer):
             self._support_last = now
             self.memory.supported(act["from"])
             self.stats["support"] += 1
-        elif op == "wait" and self._power_due(now):
-            # nothing to do on the board -> spend SP (gear_bot wording)
-            print(f"idle ({act.get('why')}) -> power-up", flush=True)
-            self.tap("power_open")
-            self._power_last = now
 
 
 class Burster:
