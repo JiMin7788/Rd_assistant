@@ -46,6 +46,8 @@ PANEL_SAVE_MAX = 20            # saved power-panel frames per game
 CONFIRM_TRIES = 2              # grabs after a buy tap that look for the confirmation
 CONFIRM_WAIT = 0.5
 LEVEL_REREAD = 0.3
+PANEL_SP_RETRY_WAIT = 0.25     # between extra panel grabs while the SP digits are covered by a popup
+PANEL_SP_RETRY_FOR = 1.0       # give up on the panel SP read after this many seconds
 BURST_N = 6                    # tick frame + 5 grabs
 BURST_DT = 0.08
 BURST_GAP = 3.0                # min seconds between two bursts
@@ -359,8 +361,19 @@ class PlayPlayer(BasePlayer):
             read[c] = lv if lv is not None and lv == first[c] else None
         for line in tracker.start_visit(read, set(found)):
             print(line, flush=True)
-        a, b = perc.read_panel_sp(f), perc.read_panel_sp(f2)
-        sp0 = None if a is None or b is None else min(a, b)
+        # AI-NOTE: a cyan '+30' popup covers the SP digits on most panel frames (2 of 6 readable), so
+        # reads are collected over up to PANEL_SP_RETRY_FOR s until two agree on being numbers; sp0 is
+        # the lower of two, as before. Without it most visits closed with 'SP unreadable'.
+        reads = [r for r in (perc.read_panel_sp(f), perc.read_panel_sp(f2)) if r is not None]
+        waited = 0.0
+        while len(reads) < 2 and waited < PANEL_SP_RETRY_FOR:
+            self.sleep(PANEL_SP_RETRY_WAIT)
+            waited += PANEL_SP_RETRY_WAIT
+            f2 = self.g.grab()
+            r = perc.read_panel_sp(f2)
+            if r is not None:
+                reads.append(r)
+        sp0 = min(reads) if len(reads) >= 2 else None
         keep = None if self.cost is None else power_keep(self.cost, self.power_cfg)
         if keep is None:
             print(f"power panel: nothing to buy (SP {'?' if sp0 is None else sp0}, keep ?) -- closed", flush=True)
