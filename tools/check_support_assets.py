@@ -14,6 +14,8 @@ Prints one line per check; exit 0 (exit 1 only on an exception). Missing inputs 
                                                  on three different buttons
   lv box: drew <n> overlays to <dir>             LV_BOX drawn at every buy button of each panel frame
                                                  (lvbox_<game>_<frame>.png), to check by eye
+  sp: n=<n> correct=<c> none=<k> wrong=<w>       read_sp on data/digits/sp/<value>_<any>.png crops (cut with SP_BOX)
+  summon cost: n=<n> correct=<c> none=<k> wrong=<w>  read_summon_cost on data/digits/cost/<value>_<any>.png crops (COST_BOX)
 
 Run on C:/dev/rdom/data (2026-10-29, H1 only, SCORE_BOX v0 0.083):
   score: n=42 correct=38 none=4 wrong=0
@@ -36,13 +38,20 @@ data/digits/score_v2 = the 42 old crops re-cut from their frames + 7 late H2 cro
 read_score on whole frames: sup20261030_061946/1040.9.png 4683, 1071.7.png 4873, support_runs/sup20261030_061946/end.png 5000,
 sup20261030_063914/1014.5.png 4892, support_runs/sup20261030_063914/end.png 5000 (all checked by eye), sup20261030_063914/984.3.png
 (banner) None. All 52 H2 frames (support_frames/sup2026103*, support_runs end.png) that read were checked by eye: 0 wrong.
+
+Run on C:/dev/rdom/data (2026-10-30, rdf03-t3: SP_BOX / COST_BOX, templates digits_sp.npz / digits_cost.npz built from
+data/digits/sp and data/digits/cost; crops cut with other boxes by earlier tries are skipped, see _fits_box):
+  sp: n=34 correct=33 none=1 wrong=0
+  summon cost: n=56 correct=52 none=4 wrong=0   (the 4 none are 2-digit costs '10', where the 'Ø' icon sticks into the box)
+read_sp / read_summon_cost on the whole source frames of those crops: sp 51 correct, 1 none, 0 wrong; cost 71 correct,
+4 none, 0 wrong (values checked by eye; frames with a '+N' popup over the digits were not used).
 """
 import argparse, glob, os, sys
 import cv2
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 sys.path.insert(0, os.path.join(ROOT, "src"))
-from rdom.perception import board, gear, score, support
+from rdom.perception import board, gear, score, sp, support
 
 
 def check_score(data_dir):
@@ -64,15 +73,50 @@ def check_score(data_dir):
     return f"score: n={n} correct={correct} none={none} wrong={wrong}"
 
 
-def _frame_for_crop(crop_bgr):
-    """Blank RGB frame (9:16, 2224 high like the H1 frames) with the crop pasted at SCORE_BOX, so read_score cuts it back out."""
+def _frame_for_crop(crop_bgr, box=None):
+    """Blank RGB frame (9:16, 2224 high like the H1 frames) with the crop pasted at `box` (default SCORE_BOX), so the reader cuts it back out."""
     import numpy as np
     h = 2224; W = round(h * 9 / 16)
-    u0, v0, u1, v1 = score.SCORE_BOX
+    u0, v0, u1, v1 = box or score.SCORE_BOX
     x0, y0, x1, y1 = int(u0 * W), int(v0 * h), int(u1 * W), int(v1 * h)
     f = np.zeros((h, W, 3), np.uint8)
     f[y0:y1, x0:x1] = cv2.resize(cv2.cvtColor(crop_bgr, cv2.COLOR_BGR2RGB), (x1 - x0, y1 - y0))
     return f
+
+
+def _check_digits(data_dir, kind, box, read, label):
+    """Crops data/digits/<kind>/<value>_<any>.png are cut with `box`, so each is pasted back at the box position of a blank frame for `read`."""
+    n = correct = none = wrong = 0
+    for p in sorted(glob.glob(os.path.join(data_dir, "digits", kind, "*.png"))):
+        value = os.path.basename(p).split("_", 1)[0]
+        img = cv2.imread(p)
+        if img is None or not value.isdigit():            # 0-byte / corrupt file or no value prefix
+            continue
+        if not _fits_box(img, box):                       # AI-NOTE: the folder also holds crops cut with other boxes by earlier tries; pasting them would stretch the digits
+            continue
+        n += 1
+        r = read(_frame_for_crop(img, box))
+        if r is None:
+            none += 1
+        elif r == int(value):
+            correct += 1
+        else:
+            wrong += 1
+    return f"{label}: n={n} correct={correct} none={none} wrong={wrong}"
+
+
+def _fits_box(crop, box):
+    """True when the crop has the pixel size `box` gives on a 2224-high frame (what the cutting tool wrote), within 1 px."""
+    h = 2224; W = round(h * 9 / 16); u0, v0, u1, v1 = box
+    return abs(crop.shape[1] - (int(u1 * W) - int(u0 * W))) <= 1 and abs(crop.shape[0] - (int(v1 * h) - int(v0 * h))) <= 1
+
+
+def check_sp(data_dir):
+    return _check_digits(data_dir, "sp", sp.SP_BOX, sp.read_sp, "sp")
+
+
+def check_summon_cost(data_dir):
+    return _check_digits(data_dir, "cost", sp.COST_BOX, sp.read_summon_cost, "summon cost")
 
 
 def check_score_lobby(data_dir):
@@ -184,6 +228,8 @@ def main(argv=None):
         print(check_deck_bar(a.data_dir))
         print(check_power_cards(a.data_dir))
         print(draw_lv_boxes(a.data_dir, a.out_dir))
+        print(check_sp(a.data_dir))
+        print(check_summon_cost(a.data_dir))
     except Exception as e:                                # AI-NOTE: only an exception is a failure; bad reads are reported in the lines
         print(f"error: {e!r}")
         return 1

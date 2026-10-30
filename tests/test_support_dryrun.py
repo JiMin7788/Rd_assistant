@@ -26,13 +26,14 @@ def empty_data(tmp_path, monkeypatch):
 def test_dryrun_without_models(empty_data):
     frame = np.zeros((1280, 720, 3), np.uint8)
     lines = load_tool().dryrun(frame)
-    assert len(lines) == 6
+    assert len(lines) == 8
     for r in range(3):
         cells = lines[r].split("  ")
         assert cells == [f"#{r * 5 + i} junk 0" for i in range(1, 6)]
     assert lines[3].startswith("evaluate: {") and "'unknown': 15" in lines[3]
     assert lines[4].startswith("planned action: {'op': 'wait'")
     assert lines[5] == "score: None"
+    assert lines[6] == "sp: None" and lines[7] == "summon cost: None"
 
 
 def test_main_reads_png(empty_data, tmp_path, capsys):
