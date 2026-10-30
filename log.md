@@ -171,4 +171,8 @@
 
 ## 2026-10-30 · rdf03-t9 · Wiki fixes from the rdT03/rdT04 wiki reviews
 - support-players now states the dice-info bands, `>=` thresholds, V < 60, u 0.08-0.92, the left-out middle band and the banner overlap as in gear.py, with commit 4999025 (merged c9f98ce); perception-gear names dice_info_panel; perception-support drops the uncited false-star cause and cites data/support_gate.json for the 0.7 numbers; training-support notes a STAR_THRESHOLD change needs a gate re-run. The code comments on `_INFO_BANDS` and `STAR_THRESHOLD` now carry the same evidence; the 0.838 at 0.5 is attributed to the Master's measurement on the same holdouts.
+
+## 2026-10-30 · rdf03-t10 · H3 runbook and console SHOW lines
+- CLAUDE_CODE_TODO.md: H2 marked done, H3 rewritten as the R14 acceptance procedure; run_all.py SHOW echoes six more play-mode lines.
+- pages: howto/run-bot.md (updated)
 - pages: components/support-players.md (updated), components/perception-gear.md (updated), components/perception-support.md (updated), components/training-support.md (updated)

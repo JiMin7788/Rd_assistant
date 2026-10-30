@@ -2,7 +2,7 @@
 title: Run the bot (launchers, dry-run, live)
 type: howto
 updated: 2026-10-30
-sources: [seed, rdf01-t12, rdf01-t13, rdf02-t7, rdf02-m1, rdf03-t8]
+sources: [seed, rdf01-t12, rdf01-t13, rdf02-t7, rdf02-m1, rdf03-t8, rdf03-t10]
 ---
 # Run the bot (launchers, dry-run, live)
 
@@ -29,6 +29,17 @@ Everything else is a manual / dry-run entry point. Run from `C:\dev\rdom` with `
   -> tell the Master); keep `panel_*.png` and `data/crops_support/_burst/`. The H2 section now says in Korean
   that H1 and the rdF02 calibration (score, deck bar, power cards, LV_BOX) are done and H2 starts after rdF02
   is merged. H1 is marked done there (type gate PASS, pip gate FAIL).
+- H3 acceptance runbook (R14, in `CLAUDE_CODE_TODO.md` "H3 — 인수", Korean; H2 is marked done there: 3 trial
+  games, type and pip gates PASS after rdT04): confirm both gates PASS (`support deck: play mode`), `force = ""`,
+  play 5+ play-mode normal coop games, then `python tools/support_judge.py` and the user re-checks the
+  screenshots. Pass = m1/m2/m3 in 4 of the last 5 eligible games (clear/game_over); a fail with matching
+  screenshots goes back to the user for new rules, the criterion is not relaxed. Since rdf03-t10 `SHOW` also
+  echoes `power-up`, `Lv check`, `look-alike`, `game-over screen`, `support result`, `battle still on screen`
+  (the runbook also lists `support deck: play mode`, `power panel ->`, `tap not confirmed`, already shown via
+  `support deck` / `power panel`). After each game read the last `data/support_rounds.jsonl` line: `result`,
+  `final_score`, `max_score`, `power.bought`, `power.unconfirmed`, `power.lv_check`; report to the Master if
+  `power.bought` stays 0, `unconfirmed` is high, an `lv_check` mismatch appears, or a look-alike/once frame was
+  saved (`data/support_runs/<game_id>/gameover_*.png`). Keep `panel_*.png`.
 - `python tools/support_dryrun.py --help` (or `-h`) prints the usage line and exits 0; `python
   tools/build_digit_templates.py --help` prints argparse usage. Before, `--help` was taken as a kind name and
   wrote `assets/templates/digits_--help.npz`.
@@ -63,4 +74,5 @@ Everything else is a manual / dry-run entry point. Run from `C:\dev\rdom` with `
 - `tools/run_all.py` (`SHOW` tuple), `CLAUDE_CODE_TODO.md` (H1 done / H2 runbook) — commit `d4aff7c` (not yet merged into the main checkout; also adds test_save_frame_tool.py)
 - commit `2e74942` (branch task/rdf02-m1) — H2 wording in CLAUDE_CODE_TODO.md; `--help` handling in tools/support_dryrun.py and tools/build_digit_templates.py; tests `test_dryrun_help_subprocess_exit_0`, `test_build_digit_templates_help_writes_nothing` in tests/test_support_m1_inputs.py
 - commit `04c74c9` (branch task/rdf03-t8) — tools/support_dryrun.py `--data-dir` and `USAGE`; tests `test_usage_text_and_exit_codes`, `test_data_dir_sets_model_dirs` in tests/test_support_dryrun.py
+- commit `557bf89` (branch task/rdf03-t10) — `CLAUDE_CODE_TODO.md` H2 done / H3 R14 runbook; `tools/run_all.py` `SHOW` additions; tests `test_run_all_show_has_play_mode_lines`, `test_h3_runbook_lines_exist_in_code` in tests/test_save_frame_tool.py
 - commit `4aa774e` — adds tools/support_dryrun.py (dryrun/main, output lines, support_ready=True, imports) and tests/test_support_dryrun.py (empty-data-dir expectations junk 0 / wait / score None, no-inject check); not yet merged into the main checkout
