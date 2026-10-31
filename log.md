@@ -216,3 +216,7 @@
 ## 2026-11-01 · rdf04-t1 · LDPlayer profile
 - Added rdom/profile.py (ld/gpg profiles, uv overrides, LD COOP_UV 0.497,0.823), config/recorder_ld.toml (measured chrome 16/80/16/8, place, adb keys), InputCfg backend/adb/serial, rdf04 fixtures and tools/check_ld_profile.py; LD detectors hold, invite-popup start_ready and COOP_UV v are OPEN H4 items.
 - pages: components/profiles-ld.md (new)
+
+## 2026-11-01 · rdf04-t2 · AdbInjector + --profile
+- AdbInjector restored (dry-run default, no adb pipes, wm size fallback) on a shared _ActionBase; make_injector picks it by [input] backend; gear_bot/save_frame got --profile, save_frame --every/--minutes.
+- pages: components/input-inject.md (updated), howto/run-bot.md (updated)
