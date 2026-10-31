@@ -1,8 +1,8 @@
 ---
 title: Support-deck perception
 type: component
-updated: 2026-10-30
-sources: [rdf01-t5, rdf02-t2, rdf02-t3, rdf02-r2-s12, rdf02-m1, rdT04, rdf03-t8, rdf03-t9]
+updated: 2026-11-01
+sources: [rdf01-t5, rdf02-t2, rdf02-t3, rdf02-r2-s12, rdf02-m1, rdT04, rdf03-t8, rdf03-t9, rdf04-t6]
 ---
 # Support-deck perception
 
@@ -25,7 +25,7 @@ sources: [rdf01-t5, rdf02-t2, rdf02-t3, rdf02-r2-s12, rdf02-m1, rdT04, rdf03-t8,
 
 ## Deck, cards, level
 - `force_deck()` returns `force` from `config/deck.toml` if it is a string, else `""`.
-- `detect_support_deck` matches `assets/templates/deck_support.png` in box `(0.55, 0.93, 0.92, 0.99)` with `gear._best` (multi-scale), score >= 0.70; False if the template is missing. Anything but an `H x W x 3` uint8 ndarray (2-D grey, 4-channel, float) returns False up front; cv2 used to raise on those.
+- `detect_support_deck` matches `assets/templates/deck_support.png` in box `(0.55, 0.93, 0.92, 0.99)` with `gear._best` (multi-scale), score >= 0.70; False if the template is missing. Anything but an `H x W x 3` uint8 ndarray (2-D grey, 4-channel, float) returns False up front; cv2 used to raise on those. **LD scale (rdf04-t6):** signature is `detect_support_deck(frame_rgb, scales=None, box=None)`; None keeps `gear.UI_SCALES` and `DECK_BAR_BOX`, given `scales` are searched by `support._best_scales` (gear._best unchanged). LDPlayer draws the UI ~1/0.85 of GPG, so `gear_bot` passes `(1.25, 1.2, 1.15, 1.1, 1.05, 1.0)` on the ld profile. Negatives on the 7 LD gear battle frames in `tests/fixtures/ld_gear` score 0.487-0.636 with the LD scales (0.503-0.684 default), all below 0.70. No real LD support-deck frame exists: detection is shown only on a template resized and pasted into an LD frame (at exactly 1/0.85 the default scales still reach 0.762, LD scales 0.966).
 - `power_cards` searches band `(0, 0.78, 1, 0.96)` for each card template (Alignment has two looks, `_a`/`_b`, best score wins), score >= 0.70, and maps the card to the `gear.power_buttons` centre nearest in u with |du| < 0.06 (slot order is the user's choice, so not deck order). Result has exactly Growth/Alignment/Resonance, None when not found. Two cards on one button: the higher score keeps it.
 - `card_level(frame, button)`: `LV_BOX = (0.0160, -0.0414, 0.0448, -0.0261)` (offsets from the button centre, measured on the five H1 panels in rdf02-t2; starts right of the 'Lv.' dot because a dot in the box makes `digits.glyphs` return None, ends at +56 px for a second digit); crop to grey then `digits.read_number(g, "powerlv")`; None if the box is None, the crop is empty, `digits_powerlv.npz` is missing, or the value is outside 1..30.
 - `reload_if_changed()` drops cached nets whose mtime changed (support and gear pip files) and returns the names; the first call reports every file once.
@@ -45,5 +45,6 @@ sources: [rdf01-t5, rdf02-t2, rdf02-t3, rdf02-r2-s12, rdf02-m1, rdT04, rdf03-t8,
 - commit `bd09f61` (branch task/rdT04) — support.py `STAR_THRESHOLD = 0.7` (comment has the 0.5 vs 0.7 holdout numbers), used in `read_cells_support`; tools/support_gate.py `_predict` uses `support.STAR_THRESHOLD`; tests/test_support_star_threshold.py (0.65 gives pip 6, 0.75 gives 7, in both code paths).
 - `src/rdom/perception/support.py` — `STAR_THRESHOLD` comment (rdf03-t9): gate numbers at 0.7, the 0.838 at 0.5 with its source, no established cause, re-run note
 - `data/support_gate.json` — `pip.star_recall` 0.9841, `pip.star_precision` 0.9538, `pip.stars` 63, `pip.n` 599, `pip.pass` true (gate re-run after rdT04, holdout listed above)
+- commit `a452edd` (task/rdf04-t6) — `_best_scales`, `_search(scales)`, `detect_support_deck(scales, box)` and the negative scores in its docstring in src/rdom/perception/support.py; tests/test_rdf04_deck_guard.py, fixtures tests/fixtures/ld_gear/battle_0..6.png
 - commit `04c74c9` (branch task/rdf03-t8) — support.py `_warned_no_models` + warning in `read_cells_support`, shape/dtype guard in `detect_support_deck`, `CARD_TEMPLATES` comment; tests/test_support_qa_minor.py (warns once, no warning with a model file, odd arrays give False).
 - `src/rdom/perception/gear.py` — `_pipnet_cls`, `PIP_ENSEMBLE`, `is_bomb`, `power_buttons`, `_best` reused here.
