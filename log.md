@@ -236,3 +236,7 @@
 ## 2026-11-01 · rdf04-t6 · Deck guard per role
 - run_battle(expect=gear|support) refuses a wrong deck without hand-over; play(duo=True) marks the round record; detect_support_deck takes scales/box and gear_bot uses LD scales on the ld profile (negatives 0.487-0.636 on 7 LD gear frames).
 - pages: components/support-bot-core.md (updated), components/perception-support.md (updated)
+
+## 2026-11-01 · rdf04-t7 · Start check (preflight) + duo_check
+- Added capture/preflight.check (window once, placed, uncovered, LD adb via temp-file wm size, two-window content overlap) with the spec reason texts, and tools/duo_check.py (two concurrent one-frame grab children). Not wired into a loop.
+- pages: components/preflight.md (new)
