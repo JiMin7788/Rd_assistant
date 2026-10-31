@@ -22,7 +22,9 @@ Stops (does nothing) when the frame is not a battle or the window moved.
 import argparse, os, sys, time
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 from rdom.capture.live import LiveGrabber
-from rdom.input.inject import Injector, cell_uv
+from rdom.input.inject import cell_uv, make_injector
+
+PROFILES = {"gpg": "config/recorder.toml", "ld": "config/recorder_ld.toml"}
 from rdom.perception.board import is_battle, is_game_over
 from rdom.perception import collect
 from rdom.perception.gear import buffed_cells
@@ -252,10 +254,13 @@ def main():
     ap.add_argument("--execute", action="store_true", help="really inject input")
     ap.add_argument("--tick", type=float, default=0.6)
     ap.add_argument("--minutes", type=float, default=30)
+    ap.add_argument("--profile", choices=sorted(PROFILES), default="gpg",
+                    help="ld = LDPlayer (adb), gpg = Google Play Games (default)")
     a = ap.parse_args()
-    g = LiveGrabber()
+    cfg = PROFILES[a.profile]
+    g = LiveGrabber(config=cfg)
     try:
-        play(g, Injector(execute=a.execute), a.minutes, a.tick)
+        play(g, make_injector(cfg, execute=a.execute), a.minutes, a.tick)
     finally:
         g.close()
 
