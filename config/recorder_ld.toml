@@ -1,0 +1,75 @@
+# Recorder configuration for the LDPlayer 14 window (gear bot, rdF04 profile "ld").
+# Same layout as recorder.toml (GPG). Anything that affects env_fingerprint must not change mid-session.
+
+[target]
+window_title_re = "^LDPlayer$"   # top window title 'LDPlayer', class LDPlayerMainFrame; must match exactly one
+
+# Window furniture, excluded from the content area. NOT auto-detected.
+# Measured 2026-11-01 on the rdF04 LD whole-window grabs (1154x2082 at 200 % DPI):
+# ld_host_pending_062902.png, ld_host_joined_start_ready_062948.png,
+# ld_invite_popup_20261101_0627.png (C:/dev/_hub/features/rdF04/screens). Per edge:
+#   left   6 px black + 2 px frame + 8 px window background = 16 px, game starts at x 16
+#   top    80 px (invisible border + LDPlayer tab bar), game starts at y 80
+#   bottom 6 px black + 2 px frame = 8 px, game ends at y 2074
+#   right  16 px (8 px background + 2 px frame + 6 px black); game ends at x 1138
+# Resulting content 1122x1994 = 0.5627, 9:16 (0.5625) within 0.04 %.
+# right is what geometry.fit_chrome derives anyway (client.w - left - round(h*9/16));
+# it is written out so the table documents the measured value. The bot's content rect
+# is exactly fit_chrome(client, chrome): for the 1154x2082 window that is 1122x1994.
+# UNVERIFIED until H4: that the client rect equals the window rect that was grabbed
+# (the invisible borders are assumed to be inside the client rect).
+[target.chrome]
+left   = 16
+top    = 80
+right  = 16
+bottom = 8
+
+# Where the bot puts the game window on start (window rect, screen px).
+# Master's per-monitor-DPI-aware SetWindowPos(1736, 2200, 1154, 2082) of 2026-11-01
+# on DISPLAY2 (436,2160 3840x2400 at 200 %): left of the GPG window (x 2900-4284),
+# no overlap (1736+1154 = 2890 < 2900).
+[target.place]
+x      = 1736
+y      = 2200
+width  = 1154
+height = 2082
+
+[capture]
+backend       = "dxcam"
+target_fps    = 30
+out_long_edge = 2059           # native content height (2026-10-07: 1280 made pips ~70px, too small to label)
+codec         = "h264_nvenc"     # auto-falls back to libx264 if unavailable
+crf           = 23
+segment_sec   = 600
+queue_frames  = 120              # ~4s buffer; absorbs ffmpeg process rotation
+monitor_index = 1                # dxcam output index: 1 = DISPLAY2 (3840x2400), where the LDPlayer window sits
+
+[input]
+backend                 = "adb"
+adb                     = "D:\\LDPlayer\\LDPlayer14\\adb.exe"
+serial                  = "127.0.0.1:5555"
+tap_radius_n            = 0.012
+record_moves_while_down = true
+move_throttle_ms        = 8
+
+[calib]
+trials         = 20
+button_uv      = [0.93, 0.05]
+roi_px         = 80
+diff_threshold = 12.0
+max_sigma_ms   = 15.0
+
+[hotkeys]
+episode_toggle = "f9"
+discard        = "f10"
+pause          = "f11"
+stop           = "f12"
+
+[limits]
+max_dup_ratio  = 0.02
+min_disk_gb    = 20
+watchdog_sec   = 5
+fps_warn_ratio = 0.8
+
+[data]
+root = "data/sessions"
