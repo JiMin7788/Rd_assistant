@@ -35,7 +35,8 @@ Read-only; prints the 12 screen detectors, `read_speed`, `slot_pending`/`start_r
 tmp dir, never under `data/`. The module docstring holds the recorded run (6 fixtures + 22 session frames).
 - The screen detectors written on LD hold on LD: lobby, friend menu, coop room, battle, result screen all read
   as expected on the session frames.
-- Known mismatches, all OPEN for H4 / rdf04-t3, none fixed by an override: the invite popup reads
+- Popup and joined-room detection now live in [invite-detect](invite-detect.md) (rdf04-t3).
+- Known mismatches, all OPEN for H4, none fixed by an override: the invite popup reads
   `start_ready` True (its yellow 초대 수락 button sits in the 협동 시작 colour patch); an old 1.1.3 coop room
   reads `is_exit_dialog` True; a battle dimmed by a banner reads `is_battle` False.
 - `gpg_joined_room` reads `is_coop_room` False; that is a GPG item, not an LD one.

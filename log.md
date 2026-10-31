@@ -220,3 +220,7 @@
 ## 2026-11-01 · rdf04-t2 · AdbInjector + --profile
 - AdbInjector restored (dry-run default, no adb pipes, wm size fallback) on a shared _ActionBase; make_injector picks it by [input] backend; gear_bot/save_frame got --profile, save_frame --every/--minutes.
 - pages: components/input-inject.md (updated), howto/run-bot.md (updated)
+
+## 2026-11-01 · rdf04-t3 · Invite popup and joined-room detection
+- Added perception/invite.py: template-only invite_popup and joined_room (threshold 0.80 mid-gap vs measured negatives), Hangul-only invite_name with fuzzy-cover name_matches; three new templates; not wired into a loop.
+- pages: components/invite-detect.md (new), components/profiles-ld.md (updated)
