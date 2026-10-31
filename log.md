@@ -224,3 +224,7 @@
 ## 2026-11-01 · rdf04-t3 · Invite popup and joined-room detection
 - Added perception/invite.py: template-only invite_popup and joined_room (threshold 0.80 mid-gap vs measured negatives), Hangul-only invite_name with fuzzy-cover name_matches; three new templates; not wired into a loop.
 - pages: components/invite-detect.md (new), components/profiles-ld.md (updated)
+
+## 2026-11-01 · rdf04-t4 · Joiner flow wait_and_accept
+- Added input/coop_join.py: invite popup is handled before recover, accept needs 2 consecutive name matches, decline after 5 reads, joining phase skips recover; room_s overrun returns 'failed' (not 'room_timeout'); dry run returns 'stopped' after one decision. Not wired into a loop.
+- pages: components/coop-join.md (new)
