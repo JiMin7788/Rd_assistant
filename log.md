@@ -228,3 +228,7 @@
 ## 2026-11-01 · rdf04-t4 · Joiner flow wait_and_accept
 - Added input/coop_join.py: invite popup is handled before recover, accept needs 2 consecutive name matches, decline after 5 reads, joining phase skips recover; room_s overrun returns 'failed' (not 'room_timeout'); dry run returns 'stopped' after one decision. Not wired into a loop.
 - pages: components/coop-join.md (new)
+
+## 2026-11-01 · rdf04-t5 · Inviter flow invite_and_start
+- Added input/friend_coop.invite_and_start: invites by name, re-invites after 3 s with neither 수락 대기중 nor start_ready, taps 협동 시작 once; start_friend_coop/open_room_and_wait left untouched (gated steps re-implemented on an injectable clock). Not wired into a loop.
+- pages: components/coop-invite.md (new)
