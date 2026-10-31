@@ -26,7 +26,12 @@ NO_PIP = ("empty", "junk", "Crystal", "Bomb")
 TYPE_FILE = "support_type_cnn.pt"
 PIP_FILES = tuple(f"support_pip_pat_e{i}.pt" for i in (1, 2, 3))
 STAR_FILES = tuple(f"support_star_e{i}.pt" for i in (1, 2, 3))
-STAR_THRESHOLD = 0.7     # star = pip 7 when p > this; measured on the H2 holdout 2026-10-30 (0.5: precision 0.838, 0.7: 0.954)
+# star = pip 7 when p > STAR_THRESHOLD. Evidence: data/support_gate.json (gate re-run after rdT04,
+# 2026-10-30, at 0.7): pip PASS, Res/Align 0.985, star recall 0.984, star precision 0.954, n=599,
+# stars=63. At 0.5 the star precision was 0.838 (measured by the Master on the same holdouts).
+# No cause for the false stars is established here. Changing STAR_THRESHOLD leaves every model
+# sha256 unchanged, so tools/support_gate.py must be re-run before gate_state() reflects it.
+STAR_THRESHOLD = 0.7
 GATE_FILE = "support_gate.json"
 GEAR_PIP_SINGLE = "gear_pip_pat.pt"
 
@@ -42,7 +47,8 @@ POWER_DU = 0.06
 # Card templates: the dice icon only (lower part, below the dice-count badge, above 'Lv.N'),
 # cut from the normalised power-panel frame data/support_frames/sup20261029_135038/panel_121.1.png.
 # Identity comes from matching the card icon with board dice of the same look in that frame, whose
-# labels are support_type_cnn's, not from slot order:
+# labels are support_type_cnn predictions (not reviewed labels), not from slot order. The user then
+# confirmed the templates by eye on the rdF02 sheet (S9/S34 'All correct', 2026-10-30):
 #   Resonance (card 1, u 0.13): white octagon with a green centre dot = board cells 1, 5, 10, 14, 15
 #     of the same frame (CNN: Resonance).
 #   Alignment (card 2, u 0.31): yellow-framed cross-arrow die; the board look of cells 4 and 13 (CNN:
@@ -69,7 +75,22 @@ LV_RANGE = (1, 30)
 #   chosen READ_CONF_MIN = 0.90 (largest with kept >= 95%)
 READ_CONF_MIN = 0.90
 
+# An 'empty' read with conf < EMPTY_CONF_MIN is unreadable (support_memory._unreadable). Measured 2026-10-30 with
+# tools/support_conf_report.py --empty --holdout sup20261029_152652,sup20261030_061946 --tags sup2 --data-dir C:/dev/rdom/data:
+#   empty conf >= 0.90: kept 28/31 true empty, rejected 0/1 other read as empty
+#   empty conf >= 0.91: kept 28/31 true empty, rejected 1/1 other read as empty
+#   empty conf >= 0.94: kept 26/31 true empty, rejected 1/1 other read as empty
+#   empty conf >= 0.95: kept 12/31 true empty, rejected 1/1 other read as empty
+#   (0.92, 0.93 as 0.91; 0.96..0.99 keep 2/31 then 0/31, all reject 1/1)
+#   no EMPTY_CONF_MIN separates them -- unchanged
+# AI-NOTE: no T gives c == d with a/b >= 0.98, because 3 of 31 true empties already read below 0.90 (a/b = 0.903 at
+# every T <= 0.93), so the cut stays at READ_CONF_MIN. The white flash (holdout sup20261029_152652 t 1097.2 cell 1,
+# reviewed junk, conf 0.909) is therefore NOT rejected by this setting; a cut of 0.91 would reject it (the one
+# "other" read) without losing any further true empty, but the stated rule does not choose it.
+EMPTY_CONF_MIN = READ_CONF_MIN
+
 _models = {}
+_warned_no_models = False      # the missing-type-model warning is printed once per process
 
 
 # ---- models ----
@@ -166,6 +187,11 @@ def read_cells_support(frame_rgb, cells, pip_source="auto"):
            if isinstance(c, bool) or not isinstance(c, numbers.Integral) or not 1 <= c <= 15]
     if bad:
         raise ValueError(f"cells must be in 1..15, got {bad}")
+    global _warned_no_models
+    # AI-NOTE: models are looked up only in _DATA (<repo>/data); in a worktree that is empty and every cell silently read junk
+    if not _warned_no_models and not _exists(TYPE_FILE):
+        _warned_no_models = True
+        print(f"support models not found in {_DATA} -- every cell reads junk")
     all_crops = gear.cell_crops(frame_rgb)
     crops = [all_crops[c - 1] for c in cells]
     labs, conf = predict_types_support(crops)
@@ -258,6 +284,10 @@ def _search(f, box, t):
 
 def detect_support_deck(frame_rgb):
     """True when the support deck's emblem is in the deck bar."""
+    # AI-NOTE: a 2-D grey, 4-channel or float array made cv2 raise; anything but H x W x 3 uint8 is "not the support deck"
+    if not (isinstance(frame_rgb, np.ndarray) and frame_rgb.ndim == 3 and frame_rgb.shape[2] == 3
+            and frame_rgb.dtype == np.uint8):
+        return False
     t = _tpl("deck_support.png")
     if t is None:
         return False

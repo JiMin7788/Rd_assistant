@@ -146,7 +146,7 @@ def test_window_moved(capsys):
 
 
 def test_game_over(capsys):
-    p, g, inj, *_ = make(Probe, lambda n: {"over": n >= 3})
+    p, g, inj, *_ = make(Probe, lambda n: {"over": n >= 3, "battle": n < 3})
     assert p.run(1) == "game_over"
     assert "game over" in capsys.readouterr().out
 

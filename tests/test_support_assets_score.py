@@ -34,7 +34,7 @@ def render(text):
 def env(tmp_path, monkeypatch):
     tools = load("build_digit_templates")
     cs = load("check_support_assets")
-    sdir = tmp_path / "data" / "digits" / "score"
+    sdir = tmp_path / "data" / "digits" / "score_v2"
     sdir.mkdir(parents=True)
     for i, n in enumerate(["61937", "40528"]):
         cv2.imwrite(str(sdir / f"{n}_{i}.png"), render(n))
@@ -94,7 +94,10 @@ def test_main_without_inputs_prints_zero_lines(env, tmp_path, capsys, sub):
     assert capsys.readouterr().out.splitlines() == [
         "score: n=0 correct=0 none=0 wrong=0", "score lobby: none=0/0",
         "deck bar: support 0/0 gear-false 0/0", "deck bar excluded: 0",
-        "power cards: 0/0", f"lv box: drew 0 overlays to {ov}"]
+        "power cards: 0/0", f"lv box: drew 0 overlays to {ov}",
+        "sp: n=0 correct=0 none=0 wrong=0", "summon cost: n=0 correct=0 none=0 wrong=0",
+        "panel sp: n=0 correct=0 none=0 wrong=0", "price: n=0 correct=0 none=0 wrong=0",
+        "power level: n=0 correct=0 none=0 wrong=0"]
 
 
 def test_main_default_out_dir_is_support_frames_check(env, tmp_path, capsys):
@@ -103,7 +106,7 @@ def test_main_default_out_dir_is_support_frames_check(env, tmp_path, capsys):
     d.mkdir()
     assert cs.main(["--data-dir", str(d)]) == 0
     expected = d / "support_frames" / "_check"
-    assert capsys.readouterr().out.splitlines()[-1] == f"lv box: drew 0 overlays to {expected}"
+    assert capsys.readouterr().out.splitlines()[-6] == f"lv box: drew 0 overlays to {expected}"
 
 
 def test_main_exit_1_on_exception(env, monkeypatch, capsys):

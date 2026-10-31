@@ -116,6 +116,12 @@ class FakePerception:
     def read_score(self, f):
         return None
 
+    def read_sp(self, f):
+        return None
+
+    def read_summon_cost(self, f):
+        return None
+
     def frames_equal(self, a, b):
         return a == b
 

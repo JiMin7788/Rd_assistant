@@ -129,6 +129,68 @@ def test_covered_digits_refused(templates):
     assert read_score(frame_with(crop)) is None
 
 
+@pytest.mark.parametrize("fill", [255, 0])
+@pytest.mark.parametrize("frac", [0.15, 0.30, 0.50])
+@pytest.mark.parametrize("n", ["61937", "40528"])
+def test_effect_icon_over_first_digit_reads_true_value_or_none(templates, n, frac, fill):
+    """A bright (or dark) icon block over the top part of the first digit: the true number or None, never another number."""
+    crop = render_crop(n)
+    ys, xs = np.where(crop > 0)
+    top, bottom, left = ys.min(), ys.max(), xs.min()
+    crop[:top + int(frac * (bottom - top)), :left + (xs.max() - left) // (2 * len(n)) * 3] = fill
+    assert read_score(frame_with(crop)) in (int(n), None)
+
+
+@pytest.mark.parametrize("shape", [(0,), (0, 0), (0, 5, 3), (5, 0, 3), (1,), (7,), (10, 10), (10, 10, 3)])
+def test_degenerate_shapes_never_raise(shape):
+    """np.array([]) is 1-D: slicing it as a frame used to raise IndexError."""
+    assert read_score(np.zeros(shape, np.uint8)) is None
+
+
+FIXTURES = Path(__file__).resolve().parent / "fixtures"
+
+
+def real_crop_frame(name):
+    """Full frame (2224 high, like the H1 captures) with a real score-box crop in place; committed digits_score.npz is used."""
+    crop = cv2.cvtColor(cv2.imread(str(FIXTURES / name)), cv2.COLOR_BGR2RGB)
+    h = 2224; w = round(h * 9 / 16)
+    u0, v0, _, _ = REAL_BOX
+    x0, y0 = int(u0 * w), int(v0 * h)
+    f = np.zeros((h, w, 3), np.uint8)
+    f[y0:y0 + crop.shape[0], x0:x0 + crop.shape[1]] = crop
+    return f
+
+
+@pytest.mark.parametrize("name, true", [("score_s4_2667_read667.png", 2667), ("score_s4_2667_read2367.png", 2667),
+                                        ("score_s4_4980_read1980.png", 4980), ("score_s4_4980_read4910.png", 4980)])
+def test_qa_s4_painted_real_crops_true_or_none(name, true):
+    """QA S4 frames: a flat shape painted over some digits (first digit gone / cut 6 / cut 4 / cut 8) used to read as 667, 2367, 1980, 4910."""
+    assert read_score(real_crop_frame(name)) in (true, None)
+
+
+@pytest.mark.parametrize("side", ["left", "right"])
+@pytest.mark.parametrize("part", [0.4, 0.55, 0.7])
+@pytest.mark.parametrize("idx", [0, 1, 2, 3, 4])
+@pytest.mark.parametrize("n", ["61937", "40528"])
+def test_flat_shape_over_part_of_one_digit_true_or_none(templates, n, idx, part, side):
+    """Paint the left/right 40-70 % of one digit over its full height (also middle digits): the true number or None."""
+    crop = render_crop(n)
+    xs = np.where(crop.max(0) > 0)[0]
+    pitch = (xs.max() - xs.min()) / len(n)
+    x0 = xs.min() + idx * pitch
+    a, b = (x0, x0 + part * pitch) if side == "left" else (x0 + (1 - part) * pitch, x0 + pitch)
+    crop[:, int(a):int(b)] = 255 if idx % 2 else 0
+    assert read_score(frame_with(crop)) in (int(n), None)
+
+
+def test_layout_ok_accepts_even_centred_row_and_refuses_irregular_ones():
+    even = [(100, 0, 99), (226, 0, 99), (352, 1, 100), (478, 0, 99)]
+    assert score.layout_ok(even, 578, 120)
+    assert not score.layout_ok([(190, 17, 99)] + even[1:], 578, 120)       # first glyph is a cut piece off the pitch
+    assert not score.layout_ok([(100, 9, 99)] + even[1:], 578, 120)        # top cut away
+    assert not score.layout_ok([(x + 150, a, b) for x, a, b in even[:3]], 578, 120)   # first digit missing: run off centre
+
+
 def test_tracker_confirms_after_two_equal_reads():
     t = ScoreTracker()
     assert t.update(1500) is None and t.value is None

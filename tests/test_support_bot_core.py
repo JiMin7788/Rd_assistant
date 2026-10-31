@@ -95,7 +95,7 @@ def test_build_and_append(tmp_path):
     rec = sb.build_record("sup1", t0, t0, "game_over", "trial", {"type": True, "pip": False},
                           ms, None, {"merges": 3})
     assert set(rec) == {"game_id", "wall_start", "wall_end", "result", "mode", "gates", "max_score",
-                        "scores_confirmed", "milestones", "crossings", "power", "stats"}
+                        "scores_confirmed", "milestones", "crossings", "power", "stats", "final_score"}
     assert rec["power"] is None and rec["max_score"] == 2500
     path = tmp_path / "new" / "r.jsonl"
     sb.append_round(str(path), rec)

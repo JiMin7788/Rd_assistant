@@ -127,26 +127,45 @@ Cowork 샌드박스에서 막힌 항목을 여기 적는다. 사람이 Claude Co
 - [x] 게이트: `python tools/support_gate.py --holdout <holdout> --tags sup1` — 타입 PASS 가 나올 때까지 반복
 - [x] 마스터에게 알려 t14 시작
 
-### H2 — 시험판 게임으로 눈금 데이터 (rdF02 병합 후에 시작)
+### H2 — 시험판 게임으로 눈금 데이터 — 완료
+결과: 시험판 3판 진행. rdT04 이후 게이트: 타입 PASS, 눈금 PASS → H3 는 플레이 모드로 진행. 아래 항목은 모두 완료.
+
 H1 과 rdF02 보정(점수, 덱 바, 파워 카드, LV_BOX)은 모두 끝났다. H2 는 rdF02 가 main 에 병합된 뒤에 시작한다. (`save_frame.py` 는 이제 같은 초에 저장해도 덮어쓰지 않고 `_2`, `_3` … 이름을 쓴다.)
-- [ ] `config/deck.toml` 의 `force` 를 `""` 로 비운다
-- [ ] 봇이 시험판 3판 이상 진행. 콘솔에서 확인할 줄 5가지:
+- [x] `config/deck.toml` 의 `force` 를 `""` 로 비운다
+- [x] 봇이 시험판 3판 이상 진행. 콘솔에서 확인할 줄 5가지:
   - `deck route: support (deck bar)`
   - 시험판 모드 줄 `support deck: trial mode (type gate PASS, pip gate FAIL)`
   - `power panel -> ...` (카드가 찾아졌는지 확인)
   - `cell … unreadable` 줄
   - `board changed without our action` 줄
-- [ ] 판이 끝날 때마다 `data/support_rounds.jsonl` 의 마지막 줄에서 stats 의 `bursts` / `burst_hits` / `forgets` 를 확인한다. bursts 는 많은데 burst_hits 가 적으면 마스터에게 보고한다
-- [ ] `burst cells` 줄은 콘솔에 나오지 않는다. 게임 로그 `data/bot_logs/<date>.log` 에서 읽는다
-- [ ] `panel_*.png` 프레임과 `data/crops_support/_burst/` 는 지우지 말고 보관
-- [ ] 새 크롭 검수 (별 후보 포함): `python tools/support_review.py --ambiguous`, 새 홀드아웃 게임: `python tools/support_review.py --holdout <new_game_id> --n 1000`, 시트마다 `ok`
-- [ ] 태그 빌드 후 별 모델 학습 (시드 3개 e1..e3 가 모두 있어야 모델이 쓰인다): `for s in 1 2 3; do python tools/train_support_star.py --seed $s --exclude-games <holdout>; done`
-- [ ] Res/Align 눈금 정확도가 0.9 미만이면 눈금 모델도 (시드 3개 모두): `for s in 1 2 3; do python tools/train_support_pip.py --seed $s --exclude-games <holdout>; done` — 세 시드가 모두 생긴 뒤에 게이트를 다시 돌린다
-- [ ] 게이트: `python tools/support_gate.py --holdout <holdout>` — 눈금 PASS 가 나올 때까지 반복
-- [ ] 마스터에게 알려 rdF03 시작
+- [x] 판이 끝날 때마다 `data/support_rounds.jsonl` 의 마지막 줄에서 stats 의 `bursts` / `burst_hits` / `forgets` 를 확인한다. bursts 는 많은데 burst_hits 가 적으면 마스터에게 보고한다
+- [x] `burst cells` 줄은 콘솔에 나오지 않는다. 게임 로그 `data/bot_logs/<date>.log` 에서 읽는다
+- [x] `panel_*.png` 프레임과 `data/crops_support/_burst/` 는 지우지 말고 보관
+- [x] 새 크롭 검수 (별 후보 포함): `python tools/support_review.py --ambiguous`, 새 홀드아웃 게임: `python tools/support_review.py --holdout <new_game_id> --n 1000`, 시트마다 `ok`
+- [x] 태그 빌드 후 별 모델 학습 (시드 3개 e1..e3 가 모두 있어야 모델이 쓰인다): `for s in 1 2 3; do python tools/train_support_star.py --seed $s --exclude-games <holdout>; done`
+- [x] Res/Align 눈금 정확도가 0.9 미만이면 눈금 모델도 (시드 3개 모두): `for s in 1 2 3; do python tools/train_support_pip.py --seed $s --exclude-games <holdout>; done` — 세 시드가 모두 생긴 뒤에 게이트를 다시 돌린다
+- [x] 게이트: `python tools/support_gate.py --holdout <holdout>` — 눈금 PASS 가 나올 때까지 반복
+- [x] 마스터에게 알려 rdF03 시작
 
-### H3 — 인수 (rdF03 병합 후)
-- [ ] 두 게이트가 모두 PASS 인 상태에서 플레이 모드 5판 이상 진행
-- [ ] `python tools/support_judge.py` 실행
+### H3 — 인수 (rdF03 병합 후) — R14 인수 절차
+인수 조건 (R14): 두 게이트(타입, 눈금)가 모두 PASS 이고, 플레이 모드 일반 협동 5판 이상을 진행한 뒤, `python tools/support_judge.py` 가 최근 5판(결과가 `clear` 또는 `game_over` 인 판)을 판정한다. 통과 = 5판 중 4판 이상이 m1/m2/m3 (2000/3000/4000) 를 모두 달성. 사용자가 스크린샷을 다시 확인한다. 실패이고 스크린샷도 일치하면 결과를 사용자에게 가져가 새 규칙을 정한다 (기준은 완화하지 않음).
+- [ ] 두 게이트가 모두 PASS 인지 확인 → 플레이 모드 (`support deck: play mode (type gate PASS, pip gate PASS)`)
+- [ ] `config/deck.toml` 의 `force = ""` 확인
+- [ ] `봇 시작.bat` 으로 플레이 모드 일반 협동 5판 이상 진행
+- [ ] 콘솔에서 볼 줄 (`tools/run_all.py` SHOW 가 보여줌; 전체 로그는 `data/bot_logs/<date>.log`):
+  - `support deck: play mode`
+  - `power-up (SP`
+  - `power panel ->`
+  - `Lv check:`
+  - `tap not confirmed` (줄 형태: `power panel: <카드> tap not confirmed (SP ...)`)
+  - `power panel: SP unreadable -- closed` (패널 SP 를 못 읽음; 소환 비용을 몰라도 이 줄이 먼저 나옴), `power panel: nothing to buy (SP <n>, keep ?) -- closed` (SP 는 읽혔고 소환 비용을 모름)
+  - `support result:`
+  - `game-over look-alike`
+  - `game-over screen seen once`
+  - `battle still on screen`
+- [ ] 판이 끝날 때마다 `data/support_rounds.jsonl` 의 마지막 줄을 읽는다: `result` (clear/game_over), `final_score`, `max_score`, `power.bought`, `power.unconfirmed`, `power.lv_check`
+- [ ] 마스터에게 보고: `power.bought` 가 계속 0, `power.unconfirmed` 가 높음, `power.lv_check` 불일치 발생, 또는 look-alike / once 프레임이 저장됨 (`data/support_runs/<game_id>/gameover_*.png`)
+- [ ] `panel_*.png`, `panel_price_none_*.png` (가격을 못 읽은 패널, 4자리 가격 실측용) 와 `gameover_*.png` 프레임은 지우지 말고 보관
+- [ ] 5판 후 `python tools/support_judge.py` 실행
 - [ ] 스크린샷을 사용자가 다시 확인
 - [ ] `판정: 통과` + 스크린샷 일치 = 완료. `판정: 실패` 이고 스크린샷도 일치하면 결과를 사용자에게 가져가 규칙을 다시 정한다 (기준은 완화하지 않음)
