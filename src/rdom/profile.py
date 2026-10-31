@@ -1,0 +1,55 @@
+"""Capture/bot profiles: LDPlayer (gear bot) and Google Play Games (support bot), rdF04.
+
+A profile names the window config, the bot and the Discord tag. UI tap targets default to the
+shared constants in :mod:`rdom.input.inject` (measured on GPG); ``ui`` holds the per-profile
+overrides, read through :func:`uv`.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from types import MappingProxyType
+
+from rdom.input import inject
+
+__all__ = ["Profile", "PROFILES", "get", "uv"]
+
+
+@dataclass(frozen=True)
+class Profile:
+    name: str
+    bot: str        # "gear" | "support"
+    tag: str        # Discord message tag
+    config: str     # recorder toml, relative to the repo root
+    ui: "MappingProxyType[str, tuple[float, float]]" = field(
+        default_factory=lambda: MappingProxyType({}))
+
+
+# AI-NOTE: keys are the inject.py constant names; only targets that differ from the shared
+# (GPG) value are listed. Checked offline by tools/check_ld_profile.py (docstring = the run).
+_LD_UI = MappingProxyType({
+    # The pre-GPG LDPlayer value, inject.COOP_UV of commit 3a70f61^ (the commit that
+    # re-measured it to 0.745 for GPG). Evidence frame: none on current LD -- the rdF04 LD
+    # fixtures have no lobby. OPEN (H4): in the old LD session lobby frames (e.g.
+    # 2026-10-07_2214_15c8 at 0 s) the green 협동 button spans v 0.699-0.803, so 0.823 would
+    # sit below it; verify on the live LD window before the gear bot uses this.
+    "COOP_UV": (0.497, 0.823),
+})
+
+PROFILES = {
+    "ld": Profile("ld", "gear", "[기어]", "config/recorder_ld.toml", _LD_UI),
+    "gpg": Profile("gpg", "support", "[서폿]", "config/recorder.toml"),
+}
+
+
+def get(name: str) -> Profile:
+    try:
+        return PROFILES[name]
+    except KeyError:
+        raise KeyError(f"unknown profile {name!r}; known: {sorted(PROFILES)}") from None
+
+
+def uv(profile: Profile, key: str) -> tuple[float, float]:
+    """Tap target `key` for `profile`: its override, else the shared inject constant."""
+    if key in profile.ui:
+        return profile.ui[key]
+    return getattr(inject, key)
