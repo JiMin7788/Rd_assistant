@@ -34,6 +34,10 @@ from rdom.perception.gear import (read_board, ui_state, UI, GEAR_VARIANTS,
 from rdom.policy.gear import evaluate, plan_next
 
 SUPPORT_CD = 130.0
+# AI-NOTE: None = detect_support_deck's GPG scales; the loop sets LD_SUPPORT_SCALES for the ld profile
+# (LD draws the UI ~1/0.85 of GPG, where the deck-bar emblem was cut; commit 3a70f61).
+SUPPORT_SCALES = None
+LD_SUPPORT_SCALES = (1.25, 1.2, 1.15, 1.1, 1.05, 1.0)
 POWER_EVERY = 20.0
 POWER_TAPS = 6
 SUMMON_GAP = 0.5
@@ -91,7 +95,8 @@ def play(g, inj, minutes=30, tick=0.6):
         # AI-NOTE: before every other rule -- the support deck must never get the HP->SP rule below
         if now - support_check >= 10.0:
             support_check = now
-            if _sup.detect_support_deck(f):
+            if (_sup.detect_support_deck(f) if SUPPORT_SCALES is None
+                    else _sup.detect_support_deck(f, scales=SUPPORT_SCALES)):
                 print("support deck seen in gear bot -- handing over", flush=True); return "wrong_deck"
         from rdom.perception.gear import tactic_sp1000_card
         card = tactic_sp1000_card(f)                   # card order is random: read it
@@ -258,7 +263,10 @@ def main():
                     help="ld = LDPlayer (adb), gpg = Google Play Games (default)")
     a = ap.parse_args()
     cfg = PROFILES[a.profile]
-    g = LiveGrabber(config=cfg)
+    if a.profile == "ld":
+        global SUPPORT_SCALES
+        SUPPORT_SCALES = LD_SUPPORT_SCALES
+    g =LiveGrabber(config=cfg)
     try:
         play(g, make_injector(cfg, execute=a.execute), a.minutes, a.tick)
     finally:
