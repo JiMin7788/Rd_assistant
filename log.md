@@ -244,3 +244,7 @@
 ## 2026-11-01 · rdf04-t8 · gear_loop roles, exit codes, records, tag
 - gear_loop now has public/inviter/joiner roles, exit codes 0/3/crash, never deletes data/STOP, recover_step reports give-up so a stuck joiner fails rounds instead of relaunching forever.
 - pages: components/gear-loop.md (new), components/coop-join.md (updated), components/safety-guards.md (updated)
+
+## 2026-11-01 · rdf04-t9 · Supervisor duo/gear modes
+- supervisor.py is a Supervisor class (injectable spawn/clock/sleep/notify/screenshot): duo inviter(ld)+joiner(gpg) or gear public child, crash counts per bot, guard stop or 5th crash writes STOP, waits for the other child, exits 1; writes bot_mode.json and (duo) room.json, removes pid/mode/STOP at exit; log per start `<stamp>_<bot>.log`.
+- pages: components/supervisor.md (new), components/safety-guards.md (updated), howto/run-bot.md (updated)

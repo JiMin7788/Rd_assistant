@@ -2,7 +2,7 @@
 title: Run the bot (launchers, dry-run, live)
 type: howto
 updated: 2026-11-01
-sources: [seed, rdf01-t12, rdf01-t13, rdf02-t7, rdf02-m1, rdf03-t8, rdf03-t10, rdf03-m2, rdf04-t2]
+sources: [seed, rdf01-t12, rdf01-t13, rdf02-t7, rdf02-m1, rdf03-t8, rdf03-t10, rdf03-m2, rdf04-t2, rdf04-t9]
 ---
 # Run the bot (launchers, dry-run, live)
 
@@ -14,7 +14,8 @@ Everything else is a manual / dry-run entry point. Run from `C:\dev\rdom` with `
   start the game loop later with Discord `/시작`). One console; closing it stops both.
 - Pause after current game: `봇 일시정지.bat` (creates `data\PAUSE`); resume: `봇 재개.bat` (deletes it).
 - Clean stop: Discord `/종료` (writes `data\STOP`).
-- Logs: `data/bot_logs/YYYYMMDD_HHMM.log`, `data/bot_logs/supervisor.log`, `data/discord_bot.log`;
+- Supervisor modes, per-bot restart and stop-both: [supervisor](../components/supervisor.md).
+- Logs: `data/bot_logs/YYYYMMDD_HHMM_<bot>.log` (supervisor children), `data/bot_logs/supervisor.log`, `data/discord_bot.log`;
   per-round results `data/gear_rounds.jsonl`.
 - Each round goes through `support_bot.run_battle`, so the loop plays either the gear or the support deck
   ([support-bot-core](../components/support-bot-core.md)). `config/deck.toml` `force = "support"` forces the support
