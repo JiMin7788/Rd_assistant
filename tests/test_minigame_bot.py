@@ -35,6 +35,7 @@ COL = {"blue": (77, 154, 253), "purple": (171, 77, 251), "yellow": (250, 210, 48
        "tri": (253, 0, 97), "green": (35, 239, 190)}
 BAR_Y, TRI_Y, BTN_Y = (610, 630), (634, 658), (760, 840)
 BTN_U = (0.30, 0.70)
+AIM = bot.AIM_FRAC / 60.0           # the loop aims this much earlier than the latency estimate (60 fps game)
 
 
 # ---------------------------------------------------------------- the synthetic game
@@ -381,7 +382,7 @@ def test_execute_gpg_press_and_release_times(tmp_path, monkeypatch):
     assert press[2] == pytest.approx((bx[0] + bx[2]) / 2, abs=0.002)
     assert press[3] == pytest.approx((bx[1] + bx[3]) / 2, abs=0.002)
     assert press[4] == pytest.approx(bx, abs=0.002)                  # the clamp is the button box
-    assert all(p.kw["lead_min"] == pytest.approx(0.25 + 0.0 + 0.060 + 0.10) for p in r.plans)
+    assert all(p.kw["lead_min"] == pytest.approx(0.25 + 0.0 + 0.060 + AIM + 0.10, abs=1e-4) for p in r.plans)
     assert r.out.count("게이지 1: 놓음 (지연 60 ms)") == 1
     assert "게이지 1 결과: 노랑 (완벽해) · 누적 노랑 1/1" in r.out
     assert r.out[-1] == "미니게임 봇 종료: 게이지 1개 중 노랑 1개"
@@ -392,7 +393,7 @@ def test_execute_ld_sendevent_uses_ld_lead(tmp_path, monkeypatch):
     r = run(tmp_path, monkeypatch, profile="ld", sim_s=5.5, inj_kw={"press_lead": 0.6},
             game_kw={"latency": 0.198}, cal=bot.LatencyCal(default=0.2))
     assert r.inj.kinds() == ["press", "release"]
-    assert all(p.kw["lead_min"] == pytest.approx(0.9) for p in r.plans)
+    assert all(p.kw["lead_min"] == pytest.approx(0.9 + AIM, abs=1e-4) for p in r.plans)
     rec = r.recs[0]
     release_t = rec["planned_frame_t"] - rec["latency_used"]
     assert r.inj.calls[0][1] == pytest.approx(release_t - 0.6, abs=0.002)
@@ -406,7 +407,7 @@ def test_execute_ld_swipe_calls_release_swipe(tmp_path, monkeypatch):
             inj_kw={"press_lead": 0.6, "start": 0.08, "swipe": True}, game_kw={"latency": 0.198},
             cal=bot.LatencyCal(default=0.2))
     assert r.inj.kinds() == ["press", "spawn"]              # press keeps the point, the swipe is the release
-    assert all(p.kw["lead_min"] == pytest.approx(0.6 + 0.08 + 0.2 + 0.1) for p in r.plans)
+    assert all(p.kw["lead_min"] == pytest.approx(0.6 + 0.08 + 0.2 + AIM + 0.1, abs=1e-4) for p in r.plans)
     spawn = r.inj.calls[1][1]
     assert spawn >= max(p.now for p in r.plans if p.plan is not None and p.now < spawn)
     rec = r.recs[0]

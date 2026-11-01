@@ -102,6 +102,7 @@ CONFIRM_MISSES = 25        # CONFIRM: new-frame timeouts (40 ms each) before fal
 SETTLE_S = 0.3             # CONFIRM: the bar span must not have moved for this long (zoom-in animation)
 SAME_TOL = 0.004           # bar span / yellow interval tolerance (u), spec R3
 HORIZON_PERIODS = 2        # plan_release looks this many sweep periods ahead
+AIM_FRAC = 0.25            # UP is aimed this fraction of a game frame earlier than the latency median says
 MAX_SUFFIX = 99
 PRESS_LEAD = {"gpg": PRESS_LEAD_GPG, "ld": PRESS_LEAD_LD}
 
@@ -287,6 +288,7 @@ class _Gauge:
     plan: object = None              # current candidate plan (re-planned on every iteration)
     planned: object = None           # the plan that was sent (execute) or frozen (dry run / replay)
     latency_used: float = 0.0
+    aim_used: float = 0.0            # the part of latency_used that is AIM_FRAC, not calibration
     ever_planned: bool = False
     warned_unreadable: bool = False
     warned_covered: bool = False
@@ -506,13 +508,19 @@ class GaugeLoop:
         if g.fit is None or g.fc is None:
             g.plan = None
             return self._warn_unreadable(g)
-        latency = 0.0 if self.replay else self.cal.estimate()
+        # AI-NOTE: a sample is "stop frame - UP sent" = true latency + the gap between the UP's arrival and
+        # that frame (0..1 frame), so the median settles where the UP arrives just before the frame: any
+        # input jitter then tips the stop onto the next frame, one frame off = a miss (found by the gauge
+        # sim, tests/test_minigame_sim.py), and the median never reacts to the few late stops. Aim a
+        # quarter frame earlier; _result takes the same aim off the sample so the estimate does not ramp.
+        aim = 0.0 if self.replay else AIM_FRAC * g.fc[0]
+        latency = 0.0 if self.replay else self.cal.estimate() + aim
         lead = lead_min(inj.press_lead, latency, sd)
         g.plan = self._choose(g, now, latency, lead)
         if g.plan is None:
             return self._warn_unreadable(g)
         g.ever_planned = True
-        g.latency_used = latency
+        g.latency_used, g.aim_used = latency, aim
         first_t = g.plan.release_t - inj.press_lead - sd
         if self.clock() + PREP_S < first_t:
             return None                  # more tracking first: the plan is refined on every frame
@@ -567,7 +575,7 @@ class GaugeLoop:
             g.watch = sent_t
             return
         g.planned, g.released_t, g.release_sent_t, g.press_sent_t = plan, sent_t, sent_t, press_t
-        self.out(RELEASED.format(n=g.n, ms=round(g.latency_used * 1000)))
+        self.out(RELEASED.format(n=g.n, ms=round((g.latency_used - g.aim_used) * 1000)))   # the calibrated part
 
     # ----- WOULD (dry run / replay) -----
     def _would_step(self, g, t, new, u):
@@ -607,7 +615,7 @@ class GaugeLoop:
                 sample = latency_sample(g.fit, stop_u, g.release_sent_t)
                 stop_t = g.last_move_t if g.last_move_t is not None else t
                 err = error_ms(g.fit, g.read.yellow, stop_t)
-                if self.cal.add(sample) and self.execute and self.latency_file:
+                if sample is not None and self.cal.add(sample - g.aim_used) and self.execute and self.latency_file:
                     save_latency(self.latency_file, self.cal, self.method)
         elif not cancel_test:
             self.out(RESULT_MANUAL.format(n=g.n, zone=zone))
