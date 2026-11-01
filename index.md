@@ -24,6 +24,7 @@
 - [gear_loop roles, exit codes and records](components/gear-loop.md) — public/inviter/joiner roles, --profile/--execute, exit 0/3/crash, STOP never deleted, recover_step give-up = failed round, per-bot records, tagged status (2026-11-01)
 - [Supervisor (duo / gear modes)](components/supervisor.md) — tools/supervisor.py: duo inviter+joiner or gear public child, per-bot 5-in-30-min restarts, guard stop/5th crash = STOP + wait + exit 1, bot_mode.json/room.json, per-bot logs; started by run_all (2026-11-01)
 - [run_all console (duo / gear-only, tagged tails)](components/run-all.md) — tools/run_all.py: default --mode duo, --gear-only, header from config/duo.toml, [기어]/[서폿]/[디코] tails, new SHOW keys, import side-effect free (2026-11-01)
+- [Discord bot (duo / gear texts, /시작 대상)](components/discord-bot.md) — tools/discord_bot.py mode-aware via duo_texts.mode_now (bot_mode.json), /시작 대상 둘 다·기어만, duo block on /예약 and /방코드, duo card in tick, two screenshots and two log blocks, presence (2026-11-01)
 - [Safety guards and stop switches](components/safety-guards.md) — dry-run, battle/window guards, failure limits, PAUSE/STOP (2026-10-23)
 
 ## Decisions

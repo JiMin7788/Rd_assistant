@@ -252,3 +252,7 @@
 ## 2026-11-01 · rdf04-t10 · run_all duo by default, tagged tails
 - run_all passes --mode duo (or gear with --gear-only), prints a header with names from config/duo.toml, follows per-bot logs tagged [기어]/[서폿]/[디코]; decision parts are pure functions and import is side-effect free.
 - pages: components/run-all.md (new), components/supervisor.md (updated), howto/run-bot.md (updated)
+
+## 2026-11-01 · rdf04-t11 · Discord bot duo mode
+- tools/discord_bot.py switches texts, room-code card, presence, /스샷 (two files in duo) and /로그 (one block per bot) on duo_texts.mode_now (bot_mode.json + supervisor alive); /시작 takes 대상 (둘 다 | 기어만) passed as supervisor --mode; duo blocks /예약 and /방코드 and tick() leaves the queue untouched.
+- pages: components/discord-bot.md (new)
