@@ -1,8 +1,8 @@
 ---
 title: Input injection (M2)
 type: component
-updated: 2026-11-01
-sources: [seed, rdf04-t2, rdf04-r1-s5]
+updated: 2026-11-02
+sources: [seed, rdf04-t2, rdf04-r1-s5, rdf05-t3]
 ---
 # Input injection (M2)
 
@@ -42,7 +42,34 @@ render child (`CROSVM_1`); it is dry-run by default and only injects with `execu
 - A hard-coded serial that is not attached made every tap fail silently (2026-10-07), hence `resolve_device`.
 - Restored from `3a70f61^` (the pre-GPG version); its tests fake `subprocess.run` (no real adb).
 
+## Press / release / cancel (rdf05-t3, not wired)
+For the 멈춰 button, which registers on mouse UP. Both injectors expose `press(u, v, clamp=None)` ->
+`perf_counter()` after posting, `release()`, `cancel()`, `press_lead`, `uses_swipe`, `start_delay()` and
+`release_swipe(t_release, clock, sleeper)`. In dry-run each only prints `[dry-run] press/release/cancel`
+and touches neither the window nor adb.
+- **GPG** (`Injector`): `press` posts MOUSEMOVE + LBUTTONDOWN and keeps the point; `release` posts
+  LBUTTONUP at that same point (None if nothing is held); `cancel` posts 6 `MK_LBUTTON` moves down to
+  `v + CANCEL_DV` (0.12), then UP there. `press_lead` = `PRESS_LEAD_GPG` 0.25 s, `start_delay()` 0.
+  `release_swipe` raises NotImplementedError. `_point(..., clamp=(u0,v0,u1,v1))` keeps the jittered
+  point inside that content box.
+- **LD** (`AdbInjector`): `probe_release_method()` (cached) runs read-only `getevent -pl`, picks the first
+  device with ABS_MT_POSITION_X/Y that `test -w` says is writable -> `("sendevent", dev, (max_x, max_y))`,
+  else `("swipe", None, None)`; it also times 5 `adb shell true` calls and keeps the median as
+  `_spawn_delay`. A dry run reports the swipe default without probing or caching. `method_line()` gives
+  the status line `LD 입력 방식: sendevent (<dev>)` or `... input swipe (정확도 낮음)`.
+- sendevent: press/release/cancel each spawn one non-waiting `adb shell "sendevent ...; ..."` (DEVNULL,
+  never PIPE; finished Popens are reaped on the next spawn); cancel = move to `v + CANCEL_DV` then UP in one
+  call. Coordinates scale to the device's own axis max, not `wm size`.
+- swipe fallback: a touch cannot be held, so `press` only stores the point and `release`/`cancel` return
+  None. `release_swipe` spawns `input swipe x y x y 600` (`PRESS_LEAD_LD` 0.6 s) at
+  `t_release - start_delay() - PRESS_LEAD_LD`, sleeping until then, and returns None without sending when
+  that time has already passed. `start_delay()` = `_spawn_delay` only on the swipe method.
+- `PRESS_LEAD_GPG` / `PRESS_LEAD_LD` are chosen constants, not measured; calibrate them live (see
+  [policy-minigame](policy-minigame.md) LatencyCal).
+
 ## Evidence
+- `src/rdom/input/inject.py` — `Injector.press/release/cancel/release_swipe`, `_point(clamp=)`, `PRESS_LEAD_*`, `CANCEL_DV`; `AdbInjector.probe_release_method/_release_method/press/release/cancel/release_swipe/_spawn`, `parse_getevent`, `method_line` (commit `5152657`, rdf05-t3)
+- commit `5152657` (task/rdf05-t3) — adds the test_inject_press tests: press/release/cancel messages and sendevent/swipe command cases
 - `src/rdom/input/inject.py` — module docstring, `Injector.tap/swipe/back/execute_action`, UV constants
 - `src/rdom/input/inject.py` — `_ActionBase`, `AdbInjector` (`_run`/`_out` comments, `wm size` fallback), `resolve_device`, `parse_wm_size`, `make_injector` (commit `3635c90`, rdf04-t2)
 - commit `3635c90` (task/rdf04-t2) — adds the adb injector tests: dry-run, no-PIPE, wm size, resolve_device, make_injector cases

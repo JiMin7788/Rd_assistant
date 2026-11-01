@@ -288,3 +288,7 @@
 ## 2026-11-02 · rdf05-t2 · Sweep model, frame clock, release planner and latency calibration
 - Added policy/minigame.py: triangle-wave fit with start-up transient trimming (no easing near the bounces), frame_clock, plan_release with a required lead_min, LatencyCal. Prediction on recorded gauges 1/3/7/8: median <= 0.060 %, p95 <= 0.134 % of travel. Latency defaults unverified; not wired.
 - pages: components/policy-minigame.md (new)
+
+## 2026-11-02 · rdf05-t3 · Press / release / cancel input
+- Injector and AdbInjector gained press/release/cancel (GPG DOWN/UP messages; LD sendevent via a probed writable touch node, else timed `input swipe` fallback with release_swipe); lead constants 0.25 s / 0.6 s are unmeasured. Not wired.
+- pages: components/input-inject.md (updated)
