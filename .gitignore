@@ -20,3 +20,6 @@ config/discord.toml
 
 # Local-only project wiki (C:/dev/_hub/shared/skills/wiki)
 wiki/
+
+# throwaway checks
+.scratch/
