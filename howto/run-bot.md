@@ -2,7 +2,7 @@
 title: Run the bot (launchers, dry-run, live)
 type: howto
 updated: 2026-11-01
-sources: [seed, rdf01-t12, rdf01-t13, rdf02-t7, rdf02-m1, rdf03-t8, rdf03-t10, rdf03-m2, rdf04-t2, rdf04-t9, rdf04-t10]
+sources: [seed, rdf01-t12, rdf01-t13, rdf02-t7, rdf02-m1, rdf03-t8, rdf03-t10, rdf03-m2, rdf04-t2, rdf04-t9, rdf04-t10, rdf04-t12]
 ---
 # Run the bot (launchers, dry-run, live)
 
@@ -42,6 +42,19 @@ Everything else is a manual / dry-run entry point. Run from `C:\dev\rdom` with `
   `final_score`, `max_score`, `power.bought`, `power.unconfirmed`, `power.lv_check`; report to the Master if
   `power.bought` stays 0, `unconfirmed` is high, an `lv_check` mismatch appears, or a look-alike/once frame was
   saved (`data/support_runs/<game_id>/gameover_*.png`). Keep `panel_*.png` and `gameover_*.png` (runbook line, rdf03-m2).
+- H4 two-bot acceptance runbook (rdF04, in `CLAUDE_CODE_TODO.md` "H4 — 두 봇 인수", Korean). Pass = one coop
+  game played to the end by both bots with no guard stop and no crash ("한 판만 되면 됨"). Steps: (1)
+  `python tools/duo_check.py`, every `start check:` line OK; (2) LD dry-run while the user plays one gear game:
+  `gear_bot.py --profile ld` plus `save_frame.py --profile ld --every 5 --minutes 20`, then the Master runs
+  `check_ld_profile.py <folder>` and mismatches are fixed before step 3; (3) live duo game with the user watching
+  (`봇 시작.bat`): invite -> accept -> start -> both bots at 2.0x -> game over -> both back in lobby -> second invite;
+  watch the support bot's `power-up` / `power panel ->` lines at 2.0x (SP and power timing were measured at 1.5x);
+  (4) Discord `/종료` must show `■ 봇 종료` for [기어] and [서폿]; `■ 두 봇 모두 정지됨` or `⛔` means guard/crash = fail.
+  On failure send `data/bot_logs/*_gear.log`, `*_support.log` and the Discord screenshots. Open items listed there:
+  LD support-deck detection unverified on a real LD screen, and the rdf04-t1 `check_ld_profile` items.
+  `test_h4_runbook_commands_exist_in_code` (tests/test_save_frame_tool.py) fails if a tool or flag named in the
+  H4 section stops existing. `docs/01_GAME_SPEC.md` emulator section now states both emulators run together
+  (GPG = support bot / PostMessage, LD = gear bot / adb).
 - `python tools/support_dryrun.py --help` (or `-h`) prints the usage line and exits 0; `python
   tools/build_digit_templates.py --help` prints argparse usage. Before, `--help` was taken as a kind name and
   wrote `assets/templates/digits_--help.npz`.
@@ -85,5 +98,6 @@ Everything else is a manual / dry-run entry point. Run from `C:\dev\rdom` with `
 - commit `2e74942` (branch task/rdf02-m1) — H2 wording in CLAUDE_CODE_TODO.md; `--help` handling in tools/support_dryrun.py and tools/build_digit_templates.py; tests `test_dryrun_help_subprocess_exit_0`, `test_build_digit_templates_help_writes_nothing` in tests/test_support_m1_inputs.py
 - commit `04c74c9` (branch task/rdf03-t8) — tools/support_dryrun.py `--data-dir` and `USAGE`; tests `test_usage_text_and_exit_codes`, `test_data_dir_sets_model_dirs` in tests/test_support_dryrun.py
 - commit `557bf89` (branch task/rdf03-t10) — `CLAUDE_CODE_TODO.md` H2 done / H3 R14 runbook; `tools/run_all.py` `SHOW` additions; tests `test_run_all_show_has_play_mode_lines`, `test_h3_runbook_lines_exist_in_code` in tests/test_save_frame_tool.py
+- `CLAUDE_CODE_TODO.md` ("### H4"), `docs/01_GAME_SPEC.md` (rdF04 emulator line), `tests/test_save_frame_tool.py` (`test_h4_runbook_commands_exist_in_code`) — task rdf04-t12, commit `b7efbf8`
 - `tools/gear_bot.py`, `tools/save_frame.py` (`PROFILES`, `run_every`, `main`) — commit `3635c90` (rdf04-t2), which also adds the `save_frame --every` test
 - commit `4aa774e` — adds tools/support_dryrun.py (dryrun/main, output lines, support_ready=True, imports) and tests/test_support_dryrun.py (empty-data-dir expectations junk 0 / wait / score None, no-inject check); not yet merged into the main checkout
