@@ -280,3 +280,7 @@
 ## 2026-11-01 · rdT05 · Invite name read robust on live GPG frames
 - One OCR cut (150) read nothing on live GPG popups; invite.invite_name_matches(f, host) now tries NAME_THRESHOLDS (150,130,170,100,190,210) and matches if any Hangul row passes name_matches; wait_and_accept uses it, invite_name is the longest row for logs only.
 - pages: components/invite-detect.md (updated), components/coop-join.md (updated)
+
+## 2026-11-02 · rdf05-t1 · Minigame gauge recognizer
+- Added perception/minigame.py (read_gauge, read_tip, zone_at, same_gauge, fit_params) with rdf05 fixtures cut from the GPG recording; leave-one-gauge-out 80/80 within 0.005 u, 0 false gauges on 180 negatives. Not wired; full-scale GPG and LD unproven until H5.
+- pages: components/perception-minigame.md (new)
