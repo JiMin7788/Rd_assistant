@@ -283,19 +283,29 @@ def invite_and_start(grab, inj, name, wait_s=300, should_stop=lambda: None, uv=N
     def tap(key):
         inj.tap(*uvs[key])
 
-    if not is_lobby(grab.grab()):
-        print("not on the lobby -- abort round", flush=True)
-        return None
-    print("친구와 하기", flush=True)
-    tap("FRIEND")
-    if _wait_until(grab, is_friend_menu, 5.0, now, sleep) is None:
-        print("친구와 하기 menu did not open -- abort round", flush=True)
-        return None
-    print("방 생성", flush=True)
-    tap("CREATE_ROOM")
-    if _wait_until(grab, is_coop_room, 5.0, now, sleep) is None:
-        print("coop room did not open -- abort round", flush=True)
-        return None
+    # AI-NOTE: gear_loop.recover_step ends on a coop room and on the 친구와 하기 menu (the public
+    # role continues from both), so the inviter must too -- else a crash/restart while waiting in
+    # the room fails every following round at once. Same branching as open_room_and_wait.
+    f0 = grab.grab()
+    if is_coop_room(f0):
+        print("already in an open coop room -- inviting there", flush=True)
+    else:
+        if is_friend_menu(f0):
+            print("친구와 하기 menu already open -- 방 생성", flush=True)
+        elif is_lobby(f0):
+            print("친구와 하기", flush=True)
+            tap("FRIEND")
+            if _wait_until(grab, is_friend_menu, 5.0, now, sleep) is None:
+                print("친구와 하기 menu did not open -- abort round", flush=True)
+                return None
+            print("방 생성", flush=True)
+        else:
+            print("not on the lobby -- abort round", flush=True)
+            return None
+        tap("CREATE_ROOM")
+        if _wait_until(grab, is_coop_room, 5.0, now, sleep) is None:
+            print("coop room did not open -- abort round", flush=True)
+            return None
 
     def invite():
         """One 친구 초대 -> pick `name`; True if the friend row was tapped."""
