@@ -8,7 +8,7 @@ Everyone:
 Admins ("서버 관리" permission):
   /스샷          current emulator screen
   /정지 /재개    pause after the current game / resume   (data/PAUSE)
-  /시작          start the supervisor if it is not running
+  /시작 [대상]   start the supervisor if it is not running (둘 다 = duo, 기어만 = gear)
   /종료          end the bot after the current game      (data/STOP)
 
 Room codes: the game loop writes data/room.json (code + waiting/playing/closed).
@@ -29,6 +29,7 @@ import psutil
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "src"))
 from rdom.notify.room_state import read_room, ALIVE
+from rdom.notify import duo_texts
 
 DATA = os.path.join(ROOT, "data")
 PAUSE, STOP, PID = (os.path.join(DATA, n) for n in ("PAUSE", "STOP", "supervisor.pid"))
@@ -82,6 +83,20 @@ def _save_q():
     os.replace(tmp, QFILE)
 
 
+def mode_now():
+    return duo_texts.mode_now(DATA, running())
+
+
+def newest_log(pattern):
+    logs = glob.glob(os.path.join(DATA, "bot_logs", pattern))
+    return max(logs, key=os.path.getmtime) if logs else None
+
+
+def duo_logs():
+    # AI-NOTE: the supervisor names child logs YYYYMMDD_HHMM_<bot>[_n].log; one newest file per bot.
+    return {"[기어]": newest_log("*_gear*.log"), "[서폿]": newest_log("*_support*.log")}
+
+
 def room_now():
     r = read_room()
     if not running():
@@ -126,7 +141,10 @@ async def notify_positions():
 async def set_card(kind, code=None):
     """One bot message in the room-code channel, edited in place."""
     n = len(Q["queue"])
-    if kind == "public":
+    if kind == "duo":
+        title, desc = duo_texts.card_for("duo", None, n)
+        e = discord.Embed(title=title, colour=0x9B59B6, description=desc)
+    elif kind == "public":
         e = discord.Embed(title="🎲 새 방이 열렸어요", colour=0x5865F2,
                           description=f"## `{code}`\n친구와 하기 → 코드 입력으로 들어오세요")
     elif kind == "private":
@@ -171,6 +189,9 @@ async def purge_webhook_cards():
 
 # ---------------------------------------------------------------- the turn logic
 async def tick():
+    if mode_now() == "duo":                      # queue untouched: no pops, DMs or timeouts
+        await set_card("duo")
+        return
     room = room_now(); code, state = room.get("code"), room.get("state")
     cur = Q["current"]; now = time.time()
     if state == "playing" and cur:
@@ -220,6 +241,9 @@ admin = app_commands.default_permissions(manage_guild=True)
 
 @tree.command(name="예약", description="게임 예약 (순번과 방 코드를 DM으로 보내드려요)")
 async def cmd_reserve(it: discord.Interaction):
+    blocked = duo_texts.reserve_blocked(mode_now())
+    if blocked:                                  # before touching Q: nobody is added in duo
+        return await it.response.send_message(blocked, ephemeral=True)
     async with QLOCK:
         p = place_of(it.user.id)
         if p == 0:
@@ -265,14 +289,10 @@ async def cmd_queue(it: discord.Interaction):
 
 
 def status_embed(with_log):
-    st = "🟢 실행 중" if running() else "⚫ 꺼짐"
-    if os.path.exists(PAUSE):
-        st += " · ⏸ 일시정지(판 사이 대기)"
-    if os.path.exists(STOP):
-        st += " · ⏹ 종료 예약"
+    mode = mode_now()
+    st = duo_texts.status_title(mode, os.path.exists(PAUSE), os.path.exists(STOP))
     room = room_now()
-    lines = [{"waiting": "🚪 방 열림 · 참가자 대기 중", "playing": "🎮 게임 진행 중",
-              "closed": "⏳ 다음 방 준비 중", "off": "방 없음"}.get(room.get("state"), ""),
+    lines = [duo_texts.room_line(mode, room.get("state")),
              f"📋 예약 대기 {len(Q['queue'])}명" + (" · 예약자 차례 진행 중" if Q["current"] else "")]
     try:
         games = [json.loads(l) for l in open(os.path.join(DATA, "gear_rounds.jsonl"), encoding="utf-8") if l.strip()]
@@ -281,7 +301,9 @@ def status_embed(with_log):
         lines.append(f"🎲 오늘 {n}판" + (f" · 마지막 판 {games[-1].get('wall_end', '')[11:16]}" if games else ""))
     except Exception:
         pass
-    if with_log:
+    if with_log and mode == "duo":
+        lines.append(duo_texts.log_blocks(duo_logs(), 6, 1800))
+    elif with_log:
         logs = sorted(glob.glob(os.path.join(DATA, "bot_logs", "*.log")))
         if logs:
             tail = [l for l in open(logs[-1], encoding="utf-8", errors="replace").read().splitlines() if l.strip()][-8:]
@@ -312,7 +334,7 @@ async def cmd_help(it: discord.Interaction):
                 "`/상태` 봇·방 상태\n`/전적` 오늘·최근 판 기록\n`/덱` 봇 덱 소개")
     e.add_field(name="🛡 관리자", inline=False, value=
                 "`/스샷` 화면 · `/로그` 최근 로그\n`/정지` `/재개` 판 끝나고 일시정지·재개\n"
-                "`/시작` 켜기 · `/종료` 판 끝나고 끄기\n`/건너뛰기` 지금 차례 넘기기 · `/예약초기화` 대기열 비우기\n"
+                f"{duo_texts.START_HELP} · `/종료` 판 끝나고 끄기\n`/건너뛰기` 지금 차례 넘기기 · `/예약초기화` 대기열 비우기\n"
                 "`/공지` 안내사항에 공지 올리기")
     e.set_footer(text="🚫 봇 방에서 기적의 돌 터트리기 금지")
     await it.response.send_message(embed=e, ephemeral=True)
@@ -320,14 +342,7 @@ async def cmd_help(it: discord.Interaction):
 
 @tree.command(name="방코드", description="지금 공개된 방 코드 (예약자 차례면 /예약)")
 async def cmd_code(it: discord.Interaction):
-    room = room_now()
-    if room.get("state") != "waiting" or not room.get("code"):
-        msg = {"playing": "🎮 지금은 게임 중이에요. `/예약` 하면 다음 차례에 DM으로 알려드려요.",
-               "off": "⚫ 봇이 꺼져 있어요."}.get(room.get("state"), "⏳ 다음 방 준비 중이에요. `/예약` 으로 줄서기")
-    elif Q["current"] or Q["queue"]:
-        msg = "🔒 지금은 예약자 차례예요. `/예약` 으로 줄서면 차례에 DM으로 코드를 보내드려요."
-    else:
-        msg = f"🎲 방 코드: **`{room['code']}`** (친구와 하기 → 코드 입력)"
+    msg = duo_texts.code_reply(mode_now(), room_now(), bool(Q["current"] or Q["queue"]))
     await it.response.send_message(msg, ephemeral=True)
 
 
@@ -362,6 +377,8 @@ async def cmd_deck(it: discord.Interaction):
 @tree.command(name="로그", description="[관리자] 최근 로그")
 @app_commands.describe(lines="줄 수 (기본 30)")
 async def cmd_log(it: discord.Interaction, lines: int = 30):
+    if mode_now() == "duo":
+        return await it.response.send_message(duo_texts.log_blocks(duo_logs(), max(1, min(lines, 60))), ephemeral=True)
     logs = sorted(glob.glob(os.path.join(DATA, "bot_logs", "*.log")))
     if not logs:
         return await it.response.send_message("로그가 없어요.", ephemeral=True)
@@ -407,14 +424,14 @@ async def cmd_notice(it: discord.Interaction, title: str, text: str):
     await it.response.send_message("공지를 올렸어요.", ephemeral=True)
 
 
-def screencap():
-    """The game content area of the Google Play Games window (no adb on GPG)."""
+def screencap(config="config/recorder.toml"):
+    """The game content area of the window named by that recorder config."""
     from PIL import ImageGrab
     from rdom.recorder.config import load_config
     from rdom.recorder.geometry import Viewport, fit_chrome
     from rdom.recorder.window import WindowState, find_window, set_dpi_awareness
     set_dpi_awareness()
-    cfg = load_config(os.path.join(ROOT, "config", "recorder.toml"))
+    cfg = load_config(os.path.join(ROOT, config))
     client = WindowState.read(find_window(cfg.target.window_title_re)).client
     c = Viewport(client=client, chrome=fit_chrome(client, cfg.target.chrome)).content
     im = ImageGrab.grab(bbox=c.as_tuple(), all_screens=True)
@@ -428,8 +445,10 @@ def screencap():
 async def cmd_shot(it: discord.Interaction):
     await it.response.defer()
     try:
-        jpg = await asyncio.to_thread(screencap)
-        await it.followup.send(file=discord.File(io.BytesIO(jpg), "screen.jpg"))
+        mode = mode_now()
+        files = [discord.File(io.BytesIO(await asyncio.to_thread(screencap, cfg)), name)
+                 for _tag, cfg, name in duo_texts.screens_for(mode)]
+        await it.followup.send(content=duo_texts.SHOT_CONTENT if mode == "duo" else None, files=files)
     except Exception as e:
         await it.followup.send(f"스샷 실패: {e}")
 
@@ -438,7 +457,7 @@ async def cmd_shot(it: discord.Interaction):
 @tree.command(name="정지", description="[관리자] 지금 판이 끝나면 일시정지")
 async def cmd_pause(it: discord.Interaction):
     open(PAUSE, "w").close()
-    await it.response.send_message("⏸ 지금 판이 끝나면 일시정지합니다. (/재개 로 재개)")
+    await it.response.send_message(duo_texts.pause_reply(mode_now()))
 
 
 @admin
@@ -452,7 +471,11 @@ async def cmd_resume(it: discord.Interaction):
 
 @admin
 @tree.command(name="시작", description="[관리자] 봇 켜기 (꺼져 있을 때)")
-async def cmd_start(it: discord.Interaction):
+@app_commands.describe(대상="무엇을 켤지 (기본: 둘 다)")
+@app_commands.choices(대상=[app_commands.Choice(name="둘 다", value="duo"),
+                          app_commands.Choice(name="기어만", value="gear")])
+async def cmd_start(it: discord.Interaction, 대상: app_commands.Choice[str] = None):
+    target = 대상.value if 대상 else "duo"
     if running():
         await it.response.send_message("이미 실행 중입니다.")
         return
@@ -461,9 +484,9 @@ async def cmd_start(it: discord.Interaction):
             os.remove(f)
     # same console as run_all.py (no new window); output goes to a log file
     log = open(os.path.join(DATA, "bot_logs", "supervisor.log"), "a", encoding="utf-8")
-    subprocess.Popen([sys.executable, "-u", "-W", "ignore", os.path.join(ROOT, "tools", "supervisor.py")],
+    subprocess.Popen([sys.executable, "-u", "-W", "ignore", os.path.join(ROOT, "tools", "supervisor.py"), "--mode", target],
                      cwd=ROOT, stdout=log, stderr=subprocess.STDOUT)
-    await it.response.send_message("▶ 봇을 켭니다.")
+    await it.response.send_message(duo_texts.start_reply(target))
 
 
 @admin
@@ -472,8 +495,9 @@ async def cmd_stop(it: discord.Interaction):
     if not running():
         await it.response.send_message("봇이 이미 꺼져 있습니다.")
         return
+    mode = mode_now()
     open(STOP, "w").close()
-    await it.response.send_message("⏹ 지금 판이 끝나면 봇을 종료합니다.")
+    await it.response.send_message(duo_texts.stop_reply(mode))
 
 
 @client.event
@@ -498,12 +522,12 @@ async def presence_loop():
             for l in open(os.path.join(DATA, "gear_rounds.jsonl"), encoding="utf-8"):
                 n += today in l
             q = f" · 대기 {len(Q['queue'])}명" if Q["queue"] else ""
-            if not running():
-                act, st = "꺼짐", discord.Status.idle
+            mode = mode_now()
+            act, st = duo_texts.presence(mode, n, q), discord.Status.online
+            if mode == "off":
+                st = discord.Status.idle
             elif os.path.exists(PAUSE):
                 act, st = f"일시정지 · 오늘 {n}판", discord.Status.idle
-            else:
-                act, st = f"랜다2 협동 · 오늘 {n}판{q}", discord.Status.online
             await client.change_presence(status=st, activity=discord.Game(act))
         except Exception as e:
             print("presence:", e, flush=True)
