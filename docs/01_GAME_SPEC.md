@@ -10,6 +10,7 @@
 - adb 없음 → 입력은 `CROSVM_1`에 PostMessage(마우스/Esc=BACK). 커서 안 움직이고 포커스 불필요
 - 게임 재실행: `googleplaygames://launch/?id=com.percent.aos.randomdice2&lid=2&pid=1` (바탕화면 바로가기와 동일)
 - (이전) LDPlayer 14.0.25.2, adb `127.0.0.1:5555`, `wm size` 1440x2560
+- **rdF04부터 두 에뮬레이터를 동시에 사용**: GPG = 서폿봇(배속봇 계정), 입력은 위의 PostMessage / LDPlayer = 기어봇(대변먹는자 계정), 입력은 adb, 설정 `config/recorder_ld.toml`. 위 GPG 설명은 그대로이며, 두 봇이 같은 협동방에서 함께 플레이한다
 
 ## 게임
 
