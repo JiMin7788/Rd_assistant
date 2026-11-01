@@ -134,7 +134,7 @@ class LiveGrabber:
         """True if the window drifted since construction (invalidates coords)."""
         return self._baseline.drift(WindowState.read(self.hwnd)) is not None
 
-    def _grab_region(self, region):
+    def _grab_region(self, region, retry_sleep=0.008, tries=30, timed=False):
         """The dxcam retry loop (duplicate-frame suppression yields None).
 
         The retries are spaced: 30 back-to-back calls finish in a couple of
@@ -142,18 +142,23 @@ class LiveGrabber:
         change" and the caller falls back to the PREVIOUS frame. That stale frame
         is what made the 배속 check read the speed from before its own tap
         (2026-09-27). A short wait per retry costs nothing and yields a fresh one.
+
+        AI-NOTE: `retry_sleep`/`tries` default to the values grab() has always used.
+        grab_fresh passes a shorter spacing and `timed=True`, which returns
+        (frame, perf_counter taken right after dxcam returned) -- the stamp must be
+        taken here, on the worker thread, not after the watchdog join.
         """
         import time as _t
         cam = self._camera()
-        for k in range(30):
+        for k in range(tries):
             frame = cam.grab(region=region)
             if frame is not None:
-                return frame
+                return (frame, _t.perf_counter()) if timed else frame
             if k:
-                _t.sleep(0.008)                  # ~half a refresh at 60Hz
-        return None
+                _t.sleep(retry_sleep)            # ~half a refresh at 60Hz
+        return (None, _t.perf_counter()) if timed else None
 
-    def _grab_watchdog(self, region):
+    def _grab_watchdog(self, region, **grab_kw):
         """Run the capture on a worker thread and give up on it after
         `grab_timeout`. dxcam can block FOREVER when its duplication device is
         lost (window minimised, display/resolution change): the bot then sits
@@ -165,7 +170,7 @@ class LiveGrabber:
 
         def work():
             try:
-                box["f"] = self._grab_region(region)
+                box["f"] = self._grab_region(region, **grab_kw)
             except BaseException as e:           # noqa: BLE001 - reported to caller
                 box["e"] = e
 
@@ -199,6 +204,39 @@ class LiveGrabber:
             raise RuntimeError("dxcam returned no frame")
         self._last = np.asarray(frame)
         return self._last
+
+    def grab_fresh(self, region_uv=None, retry_sleep=0.001):
+        """Return (frame, t): only a NEW dxcam frame, never the cached `_last`.
+
+        `region_uv` = (u0, v0, u1, v1) in content-normalised coordinates (None = the
+        whole content rect). `t` is time.perf_counter() right after dxcam returned
+        the frame. No new frame within ~40 ms -> (None, t); the caller decides.
+        Hang handling is the same watchdog as grab().
+
+        AI-NOTE: grab() reuses the last frame on None, which is right for a static
+        board but wrong for timing the minigame sweep: a repeated frame would look
+        like a new sample. Hence no fallback here and a 1 ms retry spacing (8 ms
+        would be half a game frame of timestamp error)."""
+        content, _ = self.content_rect()
+        mon = monitor_info(self.hwnd)
+        box = content
+        if region_uv is not None:
+            u0, v0, u1, v1 = region_uv
+            w, h = content.width, content.height
+            x0 = max(content.left, content.left + int(round(u0 * w)))
+            y0 = max(content.top, content.top + int(round(v0 * h)))
+            x1 = min(content.right, content.left + int(round(u1 * w)))
+            y1 = min(content.bottom, content.top + int(round(v1 * h)))
+            if x1 <= x0 or y1 <= y0:
+                raise ValueError(f"empty region {region_uv} in content {content}")
+            box = type(content)(x0, y0, x1, y1)
+        region = box.translated(-mon["rect"][0], -mon["rect"][1]).as_tuple()
+        tries = max(1, int(0.040 / max(retry_sleep, 1e-4)))
+        frame, t = self._grab_watchdog(
+            region, retry_sleep=retry_sleep, tries=tries, timed=True)
+        if frame is None:
+            return None, t
+        return np.asarray(frame), t
 
     def close(self):
         if self._cam is not None:
