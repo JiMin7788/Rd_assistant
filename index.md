@@ -26,6 +26,7 @@
 - [run_all console (duo / gear-only, tagged tails)](components/run-all.md) — tools/run_all.py: default --mode duo, --gear-only, header from config/duo.toml, [기어]/[서폿]/[디코] tails (also same-minute _2 restart logs), new SHOW keys, import side-effect free (2026-11-01)
 - [Discord bot (duo / gear texts, /시작 대상)](components/discord-bot.md) — tools/discord_bot.py mode-aware via duo_texts.mode_now (bot_mode.json), /시작 대상 둘 다·기어만, duo block on /예약 and /방코드, duo card in tick, two screenshots and two log blocks, presence (2026-11-01)
 - [Minigame gauge recognizer (군밀 대청소)](components/perception-minigame.md) — perception/minigame.py read_gauge/read_tip/zone_at/same_gauge/fit_params, RGB-prototype row search at 622 px, leave-one-gauge-out 80/80 within 0.005 u, rdf05 fixtures; GPG half-size only, not wired (2026-11-02)
+- [Minigame release planner (군밀 대청소)](components/policy-minigame.md) — policy/minigame.py SweepModel/Fit triangle fit with transient trim and 1.5-period/0.6 % rms gates, frame_clock, plan_release with required lead_min (largest in-yellow margin, 15 % floor), LatencyCal median of 7, latency_sample, error_ms; defaults gpg 0.06 / ld 0.2 unverified; not wired (2026-11-02)
 - [Safety guards and stop switches](components/safety-guards.md) — dry-run, battle/window guards, failure limits, PAUSE/STOP (2026-10-23)
 
 ## Decisions

@@ -284,3 +284,7 @@
 ## 2026-11-02 · rdf05-t1 · Minigame gauge recognizer
 - Added perception/minigame.py (read_gauge, read_tip, zone_at, same_gauge, fit_params) with rdf05 fixtures cut from the GPG recording; leave-one-gauge-out 80/80 within 0.005 u, 0 false gauges on 180 negatives. Not wired; full-scale GPG and LD unproven until H5.
 - pages: components/perception-minigame.md (new)
+
+## 2026-11-02 · rdf05-t2 · Sweep model, frame clock, release planner and latency calibration
+- Added policy/minigame.py: triangle-wave fit with start-up transient trimming (no easing near the bounces), frame_clock, plan_release with a required lead_min, LatencyCal. Prediction on recorded gauges 1/3/7/8: median <= 0.060 %, p95 <= 0.134 % of travel. Latency defaults unverified; not wired.
+- pages: components/policy-minigame.md (new)
