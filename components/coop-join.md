@@ -2,14 +2,14 @@
 title: Joiner flow (wait_and_accept)
 type: component
 updated: 2026-11-01
-sources: [rdf04-t4]
+sources: [rdf04-t4, rdf04-t8]
 ---
 # Joiner flow (wait_and_accept)
 
-`rdom.input.coop_join.wait_and_accept` is the support bot's lobby side of duo mode: wait for the host's 게임 초대 popup, check the inviter name, accept or decline, join the room and wait for the battle. One function for the loop to call; not wired into `gear_loop` yet (that is rdf04-t8).
+`rdom.input.coop_join.wait_and_accept` is the support bot's lobby side of duo mode: wait for the host's 게임 초대 popup, check the inviter name, accept or decline, join the room and wait for the battle. One function for the loop to call; wired into `gear_loop` as the joiner role (see [gear-loop](gear-loop.md)).
 
 ## Contract
-`wait_and_accept(g, inj, host, should_stop, recover, now, sleep, join_s=20, room_s=120)` returns `'battle' | 'failed' | 'stopped' | 'paused'`. `'room_timeout'` is in the task spec but is never returned: a room that outlives `room_s` is `'failed'` (the loop counts failed rounds). `should_stop()` returns None, `'stop'` or `'pause'`; `recover(f)` is the loop's popup/relaunch step, injected.
+`wait_and_accept(g, inj, host, should_stop, recover, now, sleep, join_s=20, room_s=120)` returns `'battle' | 'failed' | 'stopped' | 'paused'`. `'room_timeout'` is in the task spec but is never returned: a room that outlives `room_s` is `'failed'` (the loop counts failed rounds). `should_stop()` returns None, `'stop'` or `'pause'`; `recover(f)` is the loop's popup/relaunch step, injected; a truthy return means the loop gave up (game will not start) and the wait ends `'failed'` (rdf04-t8).
 
 ## Order per frame (TICK_S 0.5 s, so should_stop is checked well inside 2 s)
 1. `board.is_battle` -> `'battle'`.

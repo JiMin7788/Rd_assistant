@@ -240,3 +240,7 @@
 ## 2026-11-01 · rdf04-t7 · Start check (preflight) + duo_check
 - Added capture/preflight.check (window once, placed, uncovered, LD adb via temp-file wm size, two-window content overlap) with the spec reason texts, and tools/duo_check.py (two concurrent one-frame grab children). Not wired into a loop.
 - pages: components/preflight.md (new)
+
+## 2026-11-01 · rdf04-t8 · gear_loop roles, exit codes, records, tag
+- gear_loop now has public/inviter/joiner roles, exit codes 0/3/crash, never deletes data/STOP, recover_step reports give-up so a stuck joiner fails rounds instead of relaunching forever.
+- pages: components/gear-loop.md (new), components/coop-join.md (updated), components/safety-guards.md (updated)

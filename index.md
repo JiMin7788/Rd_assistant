@@ -21,6 +21,7 @@
 - [Joiner flow (wait_and_accept)](components/coop-join.md) — input/coop_join.py: popup-first order, 2-read name check then accept, 5 reads then decline, join_s/room_s/5 s room-gone failures, dry run returns stopped; not yet wired (2026-11-01)
 - [Inviter flow (invite_and_start)](components/coop-invite.md) — input/friend_coop.py: open room, invite by name, re-invite after 3 s idle, start when ready, wait_s/stop/pause/nav-broke returns; start_friend_coop untouched; not yet wired (2026-11-01)
 - [Start check (preflight) and duo_check](components/preflight.md) — capture/preflight.py check(): window once, placed, uncovered, LD adb, two-window overlap, exact reason texts; tools/duo_check.py concurrent one-frame grabs; not yet wired (2026-11-01)
+- [gear_loop roles, exit codes and records](components/gear-loop.md) — public/inviter/joiner roles, --profile/--execute, exit 0/3/crash, STOP never deleted, recover_step give-up = failed round, per-bot records, tagged status (2026-11-01)
 - [Safety guards and stop switches](components/safety-guards.md) — dry-run, battle/window guards, failure limits, PAUSE/STOP (2026-10-23)
 
 ## Decisions

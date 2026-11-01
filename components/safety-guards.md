@@ -1,8 +1,8 @@
 ---
 title: Safety guards and stop switches
 type: component
-updated: 2026-10-23
-sources: [seed]
+updated: 2026-11-01
+sources: [seed, rdf04-t8]
 ---
 # Safety guards and stop switches
 
@@ -16,7 +16,7 @@ stops instead of looping blindly when something is systematically wrong.
 - **Read stability**: gear bot needs two identical consecutive reads before a board action, and ≥3
   post-초월 gear colours on two reads before treating the field as transcended; a merge whose cells did
   not change is banned until either die changes. Predator bot plans on tracker beliefs, uncertain cells locked.
-- **Failure limits**: `gear_loop.py` stops after 3 consecutive rounds that fail to start (room creation), with a Discord status and screenshot; `supervisor.py` restarts a
+- **Failure limits**: `gear_loop.py` stops after 3 consecutive rounds that fail to start, with a Discord status and screenshot, and exits 3 (guard) vs 0 (clean STOP) vs exception (crash), see [gear-loop](gear-loop.md); `data/STOP` is never deleted by it; `supervisor.py` restarts a
   crashed loop but gives up after 5 crashes in 30 min (Discord status + screenshot).
 - **Pause/stop between games**: `data/PAUSE` (봇 일시정지.bat / Discord /정지) and `data/STOP`
   (/종료) are checked only between games, so a game in progress always finishes.
