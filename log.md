@@ -296,3 +296,7 @@
 ## 2026-11-02 · rdf05-t4 · LiveGrabber.grab_fresh
 - grab_fresh returns (frame|None, perf_counter stamp taken on the worker thread), never the cached _last; 1 ms retries, ~40 ms budget; grab() defaults unchanged.
 - pages: components/capture-live.md (updated)
+
+## 2026-11-02 · rdf05-t5 · minigame_bot gauge loop
+- tools/minigame_bot.py: live / dry run / replay loop with guards, cancel() on stop, gauges.jsonl, per-method latency file and strip PNGs; replay gate 1 of 1 verifiable plans yellow.
+- pages: components/minigame-bot.md (new)
