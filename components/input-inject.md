@@ -2,7 +2,7 @@
 title: Input injection (M2)
 type: component
 updated: 2026-11-01
-sources: [seed, rdf04-t2]
+sources: [seed, rdf04-t2, rdf04-r1-s5]
 ---
 # Input injection (M2)
 
@@ -29,6 +29,8 @@ render child (`CROSVM_1`); it is dry-run by default and only injects with `execu
   `adb -s <serial> shell input ...`; `back()` = `input keyevent 4`; `launch_game()` = `am start -n
   com.percent.aos.randomdice2/com.unity3d.player.UnityPlayerActivity` (`monkey` is missing on LDPlayer 14).
   `game_in_front()` reads `dumpsys window` `mCurrentFocus` -> True/False, `None` in dry-run or on adb failure.
+  `_out` returns `""` (= unknown -> `None`) on `TimeoutExpired` and on `OSError` / `FileNotFoundError`
+  (adb.exe missing or crashing at spawn), so `game_in_front` never raises.
 - adb path and preferred serial come from the config `[input]` keys. With `execute=True` the constructor runs
   `resolve_device` (preferred serial if attached, else the single attached device, else RuntimeError) and reads
   `wm size` once (an `Override size` line beats `Physical size`); unreadable -> prints
@@ -44,5 +46,7 @@ render child (`CROSVM_1`); it is dry-run by default and only injects with `execu
 - `src/rdom/input/inject.py` — module docstring, `Injector.tap/swipe/back/execute_action`, UV constants
 - `src/rdom/input/inject.py` — `_ActionBase`, `AdbInjector` (`_run`/`_out` comments, `wm size` fallback), `resolve_device`, `parse_wm_size`, `make_injector` (commit `3635c90`, rdf04-t2)
 - commit `3635c90` (task/rdf04-t2) — adds the adb injector tests: dry-run, no-PIPE, wm size, resolve_device, make_injector cases
+- `src/rdom/input/inject.py` — `AdbInjector._out` catches `(TimeoutExpired, OSError)` and returns `""` (rdf04-r1-s5)
+- commit `e24d043` (task/rdf04-r1-s5) — adds `test_game_in_front_none_when_adb_cannot_run` (OSError, FileNotFoundError, Timeout -> None)
 - `docs/01_GAME_SPEC.md` — "adb 없음 → 입력은 CROSVM_1에 PostMessage"
 - `CLAUDE_CODE_TODO.md` — M2 line (original adb tap/swipe, 1440×2560, dry-run default)

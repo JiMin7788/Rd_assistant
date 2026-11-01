@@ -272,3 +272,7 @@
 ## 2026-11-01 · rdf04-r1-s2 · check_ld_profile crops window grabs
 - tools/check_ld_profile.py crops 1154x2082 whole-window grabs with the configured chrome before detecting (room/modalX read 0 on uncropped grabs) and prints chrome insets, content size, aspect, plus the window size that would give 9:16 when off by more than 1%.
 - pages: components/profiles-ld.md (updated)
+
+## 2026-11-01 · rdf04-r1-s5 · game_in_front None when adb cannot start
+- AdbInjector._out also swallows OSError/FileNotFoundError (not only TimeoutExpired), so game_in_front returns None instead of raising when adb.exe is missing or crashes at spawn.
+- pages: components/input-inject.md (updated)

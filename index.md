@@ -2,7 +2,7 @@
 
 ## Components
 - [Live screen capture](components/capture-live.md) — dxcam grab of the content rect, window-move check, hang watchdog, unobscured check + support crop/frame/burst writers, save_frame tool never overwrites (2026-10-29)
-- [Input injection (M2)](components/input-inject.md) — PostMessage taps/swipes to GPG, dry-run default, UI coordinates; AdbInjector for LDPlayer (no adb pipes, wm size, resolve_device), shared _ActionBase, make_injector (2026-11-01)
+- [Input injection (M2)](components/input-inject.md) — PostMessage taps/swipes to GPG, dry-run default, UI coordinates; AdbInjector for LDPlayer (no adb pipes, wm size, resolve_device), shared _ActionBase, make_injector, game_in_front None on adb spawn failure (2026-11-01)
 - [Board perception and cell tracker (Predator deck)](components/perception-board.md) — board.py reads + screen states, Layer A belief tracker (2026-10-23)
 - [Gear-deck perception](components/perception-gear.md) — CNN type/pip models, deck detection, UI templates, OCR banners, dice info panel detector (2026-10-30)
 - [Rule-based policy engines (M3)](components/policy.md) — target.py (Predator) and gear.py (current) rule engines (2026-10-23)
