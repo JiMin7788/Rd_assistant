@@ -49,6 +49,10 @@ ROOM_TITLE_MIN = 0.80    # positive 0.936 (LD host), highest negative 0.565
 # cover and not plain similarity).
 NAME_COVER_MIN = 0.8
 
+# AI-NOTE: each cut reads the name on some live frames and not on others (measured
+# 100..210 on 1252x2232 GPG frames), so invite_name_matches tries them all.
+NAME_THRESHOLDS = (150, 130, 170, 100, 190, 210)
+
 _cache = {}
 
 
@@ -85,12 +89,47 @@ def invite_popup(f):
     return {"accept_uv": accept_uv, "close_uv": CLOSE_UV}
 
 
-def invite_name(f):
-    """Inviter name read from the banner (Hangul only), '' if unreadable."""
-    rows = _rows(_ocr_data(f, NAME_BOX, thresh=150))
+def _hangul(t):
     # AI-NOTE: keep Hangul syllables only; the banner artwork next to the name
     # makes Tesseract emit stray punctuation/digits ('~/1대변먹는자').
-    return "".join(c for t, _ in rows for c in t if "가" <= c <= "힣")
+    return "".join(c for c in t if "가" <= c <= "힣")
+
+
+def _name_rows(f):
+    """Yield the Hangul-only OCR rows of the banner per threshold in NAME_THRESHOLDS."""
+    for th in NAME_THRESHOLDS:
+        yield [_hangul(t) for t, _ in _rows(_ocr_data(f, NAME_BOX, thresh=th))]
+
+
+def invite_name_matches(f, host):
+    """(matched, name_read): True when ANY row at ANY threshold matches `host`.
+
+    name_read is the matching row, else the longest Hangul row seen ('' if none).
+    """
+    best = ""
+    # AI-NOTE: one fixed threshold read nothing on live GPG frames (2026-11-01), so
+    # several are tried; a junk row from the artwork must not hide a good read, and
+    # the first matching read ends the loop (saves OCR time).
+    for rows in _name_rows(f):
+        for r in rows:
+            if name_matches(r, host):
+                return True, r
+            if len(r) > len(best):
+                best = r
+    return False, best
+
+
+def invite_name(f):
+    """Most plausible inviter name read from the banner (Hangul only), '' if unreadable.
+
+    For logging; the accept decision uses invite_name_matches.
+    """
+    best = ""
+    for rows in _name_rows(f):
+        for r in rows:
+            if len(r) > len(best):
+                best = r
+    return best
 
 
 def name_matches(text, host):
