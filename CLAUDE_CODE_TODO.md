@@ -193,3 +193,30 @@ H1 과 rdF02 보정(점수, 덱 바, 파워 카드, LV_BOX)은 모두 끝났다.
 - 미해결 항목 (open items):
   - LD 서포팅덱 감지는 실제 LD 화면으로 검증되지 않았다 (LD 에서 서포팅덱 화면 프레임이 아직 없음)
   - rdf04-t1 `tools/check_ld_profile.py` 의 미해결 항목: 초대 팝업이 `start_ready=1` 로 읽힘, 옛 방 화면 `exit=1`, 어두워진 전투 화면 `battle=0`, `COOP_UV` 값(0.497, 0.823) 확인
+
+## rdF05 미니게임 (군밀 대청소)
+
+### H5 — 미니게임 게이지 봇 (rdF05)
+인수 조건: GPG 는 20게이지 중 **19개 이상 노랑(`완벽해!`)**, LD 는 '최대한' (적중률과 빗나간 원인을 보고하면 사용자가 충분한지 판단). 명령은 `C:\dev\rdom` 에서 `.venv\Scripts\python.exe` 로 실행. 오프라인 시뮬레이터는 회귀 점검일 뿐이라 아래 (2), (4) 의 라이브 점검을 대신하지 못한다.
+- [ ] (1) GPG 드라이런 (입력 없이 화면만 읽음): 사용자가 한 판(2게이지)을 직접 하는 동안 `.venv\Scripts\python.exe tools/minigame_bot.py --profile gpg` 실행
+  - 두 게이지 모두 감지 줄과 `[드라이런]` 줄이 나와야 한다 (GPG 에서 감지기를 실제 크기로 처음 확인하는 것)
+  - 안 나오거나 어긋나면 (2) 로 가지 말고 Claude 에게 보고
+- [ ] (2) GPG 워밍업 (최대 2판, 20게이지에 세지 않음): `.venv\Scripts\python.exe tools/minigame_bot.py --profile gpg --execute --cancel-test`
+  - 첫 게이지에서 취소 후에도 **삼각형이 계속 움직이는지** 눈으로 확인하고, 콘솔에 `취소 점검: 삼각형이 계속 움직여요 (정상)` 이 나오는지 본다
+  - `⚠ 취소 점검` 줄이 나오면 즉시 중단하고 Claude 에게 보고 (고쳐지기 전에는 누르는 중 Ctrl+C 가 안전하지 않다)
+  - `지연 보정` 줄이 `저장값` (샘플 2개 이상) 으로 나올 때까지 계속 (최대 2판)
+  - 그 뒤 `.venv\Scripts\python.exe tools/minigame_report.py --profile gpg` 로 시뮬레이터 가정(지연 지터 ±3 ms, 도착 뒤 첫 게임 프레임에서 멈춤)과 비교한다
+  - 지연 범위(hi - lo) 가 20 ms 초과이거나 |평균 error_ms| 가 8 ms 초과이면 (3) 전에 Claude 에게 보고
+- [ ] (3) GPG 인수: `.venv\Scripts\python.exe tools/minigame_bot.py --profile gpg --execute` 로 10판 = 20게이지
+  - 사용자가 `완벽해!` 개수를 직접 세고 봇의 집계와 일치해야 한다
+  - 합격 = 20게이지 중 19 이상 노랑. 끝나면 `.venv\Scripts\python.exe tools/minigame_report.py --profile gpg`
+- [ ] (4) LD: 먼저 `.venv\Scripts\python.exe tools/minigame_bot.py --profile ld --probe-input` (놓기 방식 확인)
+  - 드라이런: `... --profile ld` 로 한 판 (LD 에서 감지기를 처음 확인; 어긋나면 보고)
+  - 워밍업 (최대 2판): `... --profile ld --execute --cancel-test`, (2) 와 같은 점검·같은 비교 (시뮬레이터 ld60 / ld30 / ld60swipe 케이스 가정 기준)
+  - 20게이지: `... --profile ld --execute` 로 10판
+  - `.venv\Scripts\python.exe tools/minigame_report.py --profile ld` 로 적중률과 빗나간 원인을 사용자에게 보고하면, 충분한지는 사용자가 정한다
+- 참고:
+  - `대청소 시작` 은 매 판 사용자가 직접 누른다 (봇은 게이지만 처리)
+  - 티켓을 쓴다 (승인됨). 워밍업 때문에 플랫폼마다 최대 2판이 더 든다
+  - 같은 창에서 협동 봇을 동시에 돌리면 안 된다
+  - Ctrl+C 로 끝낸다. `⛔` 줄이 나오면 멈추고 보고하며, 다시 시작하지 않는다
