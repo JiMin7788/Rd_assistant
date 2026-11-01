@@ -55,7 +55,8 @@ def detectors(monkeypatch):
     monkeypatch.setattr(board, "is_battle", lambda f: f.get("battle", False))
     monkeypatch.setattr(invite, "invite_popup",
                         lambda f: {"accept_uv": ACCEPT, "close_uv": CLOSE} if f.get("popup") else None)
-    monkeypatch.setattr(invite, "invite_name", lambda f: f.get("name", ""))
+    monkeypatch.setattr(invite, "invite_name_matches",
+                        lambda f, host: (invite.name_matches(f.get("name", ""), host), f.get("name", "")))
     monkeypatch.setattr(invite, "joined_room", lambda f: f.get("room", False))
 
 

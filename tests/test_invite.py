@@ -12,6 +12,8 @@ DATA = "C:/dev/rdom/data"
 HOST = "대변먹는자"
 
 POPUPS = ["gpg_invite_popup", "ld_invite_popup"]
+LIVE = ["gpg_popup_225739", "gpg_popup_225741", "gpg_popup_225751",
+        "gpg_popup_225753", "gpg_popup_225802", "gpg_popup_225814"]   # live GPG frames 2026-11-01 22:57
 ROOMS = ["gpg_joined_room", "ld_host_pending", "ld_host_joined_start_ready"]
 NON_POPUPS = ROOMS + ["gpg_host_invite_pending"]
 
@@ -67,6 +69,25 @@ def test_invite_name_read():
     ld = invite.invite_name(load("ld_invite_popup"))
     assert ld == "배속봇"
     assert not invite.name_matches(ld, HOST)
+
+
+@pytest.mark.parametrize("name", LIVE + ["gpg_invite_popup"])
+def test_invite_name_matches_host_on_gpg_frames(name):
+    ok, read = invite.invite_name_matches(load(name), HOST)
+    assert ok, read
+
+
+def test_invite_name_matches_ld_fixture_is_its_own_name():
+    f = load("ld_invite_popup")
+    assert invite.invite_name_matches(f, "배속봇")[0]
+    assert not invite.invite_name_matches(f, HOST)[0]
+
+
+@pytest.mark.parametrize("other", ["배속봇", "웅로어", "홍길동"])
+@pytest.mark.parametrize("name", LIVE)
+def test_invite_name_matches_declines_other_hosts(name, other):
+    ok, read = invite.invite_name_matches(load(name), other)
+    assert not ok, read
 
 
 def test_name_matches():

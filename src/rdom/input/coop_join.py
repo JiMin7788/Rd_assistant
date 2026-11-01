@@ -62,11 +62,11 @@ def wait_and_accept(g, inj, host, should_stop, recover, now=time.monotonic,
                         tap(popup["close_uv"])
                     return "failed"
             else:
-                name = invite.invite_name(f)
+                matched, name = invite.invite_name_matches(f, host)
                 reads += 1
                 if name:
                     last_name = name
-                streak = streak + 1 if invite.name_matches(name, host) else 0
+                streak = streak + 1 if matched else 0
                 if streak >= NAME_STREAK:
                     _log(f"invite from {name} -- accept")
                     if not inj.execute:
