@@ -260,3 +260,7 @@
 ## 2026-11-01 · rdf04-t12 · H4 two-bot acceptance runbook
 - H4 runbook added to CLAUDE_CODE_TODO.md (duo_check, LD dry-run, live duo game, /종료); emulator section of docs/01_GAME_SPEC.md notes both emulators; a test checks the runbook commands exist.
 - pages: howto/run-bot.md (updated)
+
+## 2026-11-01 · rdf04-i1 · Integration fixes round 1
+- Joiner `recover_step` now takes `stop_on` (invite popup, STOP/PAUSE) and stops before any tap/BACK; run_all tails use `2*_gear*.log` / `2*_support*.log` so same-minute `_2` restart logs are followed.
+- pages: components/gear-loop.md (updated), components/run-all.md (updated)
