@@ -53,8 +53,9 @@ def load_names(root=ROOT):
 def tail_specs(data_dir=DATA):
     """(glob pattern, console tag) per followed log. One Tail per bot, so each bot's newest log is followed."""
     logs = os.path.join(data_dir, "bot_logs")
-    return [(os.path.join(logs, "2*_gear.log"), "기어"),
-            (os.path.join(logs, "2*_support.log"), "서폿"),
+    # the trailing * also matches a same-minute restart: YYYYMMDD_HHMM_gear_2.log (supervisor._log_path)
+    return [(os.path.join(logs, "2*_gear*.log"), "기어"),
+            (os.path.join(logs, "2*_support*.log"), "서폿"),
             (os.path.join(data_dir, "discord_bot.log"), "디코")]
 
 

@@ -138,16 +138,20 @@ def round_start(g, rnd):
     return None
 
 
-def recover_step(f, g, inj, prof):
+def recover_step(f, g, inj, prof, stop_on=None):
     """Get from whatever is on screen to a screen a round can start from (lobby, 친구와 하기
     menu, coop room or battle): relaunch a closed game, close popups, BACK on unknown screens.
     Returns (frame to go on with, gave_up). gave_up is True when the game cannot be relaunched or
     3 BACKs found no known screen: the round is failed. The joiner calls it (via _joiner_recover)
-    on every idle frame of wait_and_accept."""
+    on every idle frame of wait_and_accept.
+    stop_on(frame) -> truthy ends the loop at once with (frame, False), checked on every frame
+    before any tap or BACK (the joiner: invite popup, STOP/PAUSE)."""
     # shop/event popups open by themselves on the lobby after a game (재설계 패키지,
     # 2026-10-08): close them with their X before starting a room
     unknown = 0; launches = 0; gave_up = False
     for _ in range(30):
+        if stop_on is not None and stop_on(f):
+            break
         # game closed (emulator on the launcher home screen, 2026-10-11): start it
         # again; BACK / taps on the home screen would never get back to the lobby
         if inj.game_in_front() is False:
@@ -163,6 +167,8 @@ def recover_step(f, g, inj, prof):
             t_l = time.monotonic()
             while time.monotonic() - t_l < 120:
                 time.sleep(3.0); f = g.grab()
+                if stop_on is not None and stop_on(f):
+                    break
                 if (is_lobby(f) or has_popup_close(f) or has_modal_x(f) or network_error(f)
                         or is_exit_dialog(f) or is_battle(f) or is_coop_room(f)):
                     break
@@ -198,6 +204,8 @@ def recover_step(f, g, inj, prof):
             if (is_lobby(f2) or has_popup_close(f2) or has_modal_x(f2) or is_battle(f2)
                     or is_coop_room(f2) or is_exit_dialog(f2) or network_error(f2)):
                 f = f2; continue
+            if stop_on is not None and stop_on(f2):
+                f = f2; break
             unknown += 1
             print(f"unknown screen -- BACK ({unknown}/3)", flush=True); inj.back()
         else:
@@ -208,7 +216,11 @@ def recover_step(f, g, inj, prof):
 
 def _joiner_recover(f, g, inj, prof):
     """wait_and_accept's recover callback: a truthy return ends the wait as 'failed'."""
-    return recover_step(f, g, inj, prof)[1]
+    # AI-NOTE: wait_and_accept checks the invite popup and STOP/PAUSE only between recover calls,
+    # so recover_step must stop itself on them -- a BACK/MODAL_X would close an incoming invite.
+    def stop_on(fr):
+        return coop_join.invite.invite_popup(fr) is not None or should_stop() is not None
+    return recover_step(f, g, inj, prof, stop_on=stop_on)[1]
 
 
 def _invite_uvs(prof):
