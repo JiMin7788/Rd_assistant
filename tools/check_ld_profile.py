@@ -70,7 +70,10 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from rdom.perception import board, gear  # noqa: E402
 from rdom.input import friend_coop  # noqa: E402
+from rdom.recorder.config import load_config  # noqa: E402
+from rdom.recorder.geometry import GAME_ASPECT, Rect, Viewport, fit_chrome  # noqa: E402
 
+LD_CONFIG = ROOT / "config" / "recorder_ld.toml"
 SESSIONS = "C:/dev/rdom/data/sessions/2026-10-0*"
 COLS = ("lobby", "popupX", "modalX", "friend", "room", "exit", "battle", "over",
         "speed", "pending", "ready", "deck")
@@ -79,6 +82,30 @@ COLS = ("lobby", "popupX", "modalX", "friend", "room", "exit", "battle", "over",
 def read_frame(path):
     bgr = cv2.imread(str(path))
     return None if bgr is None else cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+
+
+def content_of(frame, cfg):
+    """(content frame, report line). A frame the size of the LD window is a whole-window grab
+    and is cropped with the configured chrome; any other size is taken as a content frame."""
+    # AI-NOTE: the detectors expect the content area only (the bot crops by
+    # Viewport(client, fit_chrome(client, chrome)).content), so a window grab must be cropped
+    # here or room/modalX read 0 on the tab bar and frame offsets.
+    h, w = frame.shape[:2]
+    pw, ph = cfg.target.place[2:]
+    if (w, h) != (pw, ph):
+        return frame, f"content frame {w}x{h} aspect {w / h:.4f} (not a {pw}x{ph} window grab, used as is)"
+    client = Rect(0, 0, w, h)
+    ch = fit_chrome(client, cfg.target.chrome)
+    c = Viewport(client, ch).content
+    aspect = c.width / c.height
+    diff = abs(aspect / GAME_ASPECT - 1) * 100
+    line = (f"window {w}x{h} chrome L{ch.left} T{ch.top} R{ch.right} B{ch.bottom} "
+            f"content {c.width}x{c.height} aspect {aspect:.4f} vs 9:16 {GAME_ASPECT:.4f} "
+            f"({diff:.2f}%)")
+    if diff > 1.0:
+        want_w = round((h - ch.top - ch.bottom) * GAME_ASPECT) + ch.left + cfg.target.chrome.right
+        line += f" NOT 9:16: window {want_w}x{h} would give 9:16"
+    return frame[c.top:c.bottom, c.left:c.right], line
 
 
 def run_detectors(frame):
@@ -146,9 +173,15 @@ def main(argv=None):
     if a.sessions:
         tmp = tempfile.mkdtemp(prefix="ld_sessions_")
         files += extract_session_frames(tmp, a.step, a.max)
+    cfg = load_config(LD_CONFIG)
     for f in files:
         fr = read_frame(f)
-        print(f"{f.name}: unreadable" if fr is None else format_row(f.name, run_detectors(fr)))
+        if fr is None:
+            print(f"{f.name}: unreadable")
+            continue
+        fr, info = content_of(fr, cfg)
+        print(f"{f.name}: {info}")
+        print(format_row(f.name, run_detectors(fr)))
     if tmp:
         print(f"session frames in {tmp}")
     return 0
