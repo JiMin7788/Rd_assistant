@@ -122,3 +122,38 @@ def test_ld_room_tap_targets():
     assert r > 200 and g > 150 and r - b > 60                  # yellow 협동 시작 (label text lifts b)
     r, g, b = _patch(pending, profile.uv(profile.get("ld"), "START_COOP_UV"))
     assert abs(r - g) < 40 and abs(g - b) < 40                 # grey while waiting
+
+
+# ---- tools/check_ld_profile.py: whole-window grabs ---------------------------------------
+
+def _tool():
+    import sys
+    sys.path.insert(0, str(ROOT / "tools"))
+    import check_ld_profile
+    return check_ld_profile
+
+
+def test_check_ld_profile_crops_window_grab_and_reports_chrome(capsys, tmp_path):
+    import numpy as np
+    ld = load_config(ROOT / "config" / "recorder_ld.toml")
+    fx = load("ld_host_joined_start_ready")
+    ch = ld.target.chrome
+    pw, ph = ld.target.place[2:]
+    grab = np.zeros((ph, pw, 3), np.uint8)          # black chrome around the content
+    grab[ch.top:ch.top + fx.shape[0], ch.left:ch.left + fx.shape[1]] = fx
+    p = tmp_path / "grab.png"
+    cv2.imwrite(str(p), cv2.cvtColor(grab, cv2.COLOR_RGB2BGR))
+    assert _tool().main([str(p)]) == 0
+    out = capsys.readouterr().out
+    assert "L16 T80 R16 B8" in out and "content 1122x1994" in out
+    assert "room=1" in out and "modalX=1" in out and "ready=1" in out
+
+
+def test_check_ld_profile_reports_window_size_for_off_aspect():
+    import numpy as np
+    from types import SimpleNamespace as NS
+    # AI-NOTE: a window narrower than left + 9:16 width cannot give 9:16 (fit_chrome clamps right
+    # to 0); the tool must then name the window size that would.
+    cfg = NS(target=NS(place=(0, 0, 500, 2082), chrome=NS(left=16, top=80, right=16, bottom=8)))
+    _, line = _tool().content_of(np.zeros((2082, 500, 3), np.uint8), cfg)
+    assert "NOT 9:16" in line and "window 1154x2082 would give 9:16" in line
