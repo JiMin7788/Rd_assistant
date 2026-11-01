@@ -292,3 +292,7 @@
 ## 2026-11-02 · rdf05-t3 · Press / release / cancel input
 - Injector and AdbInjector gained press/release/cancel (GPG DOWN/UP messages; LD sendevent via a probed writable touch node, else timed `input swipe` fallback with release_swipe); lead constants 0.25 s / 0.6 s are unmeasured. Not wired.
 - pages: components/input-inject.md (updated)
+
+## 2026-11-02 · rdf05-t4 · LiveGrabber.grab_fresh
+- grab_fresh returns (frame|None, perf_counter stamp taken on the worker thread), never the cached _last; 1 ms retries, ~40 ms budget; grab() defaults unchanged.
+- pages: components/capture-live.md (updated)

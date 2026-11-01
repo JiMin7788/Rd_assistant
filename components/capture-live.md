@@ -1,8 +1,8 @@
 ---
 title: Live screen capture
 type: component
-updated: 2026-10-29
-sources: [rdf02-t7, seed, rdf01-t6, rdf02-t5]
+updated: 2026-11-02
+sources: [rdf02-t7, seed, rdf01-t6, rdf02-t5, rdf05-t4]
 ---
 # Live screen capture
 
@@ -19,6 +19,20 @@ ndarray, so frame pixels map 1:1 to content-normalised (u,v) — the same space 
   spaced ~8 ms so a fresh frame arrives instead of a stale one.
 - Watchdog: each grab runs on a worker thread; if it hangs > `grab_timeout` (8 s) the camera is
   dropped and rebuilt once; a second hang raises.
+
+## grab_fresh (timestamped, new frames only; rdf05)
+- `grab_fresh(region_uv=None, retry_sleep=0.001)` -> `(ndarray | None, t)`. `region_uv` = (u0, v0, u1, v1) of
+  the content rect (None = whole content), clamped to the content, converted to monitor-relative pixels
+  like `grab()`; an empty box raises `ValueError`.
+- It never returns the cached `_last` (unlike `grab()`): a repeated frame would look like a new sample when
+  timing the minigame sweep. No new frame within ~40 ms (`tries = 0.040 / retry_sleep`) -> `(None, t)`.
+- `t` = `time.perf_counter()` taken inside `_grab_region(timed=True)` right after dxcam returned, i.e. on
+  the worker thread, not after the watchdog join. Spacing is 1 ms because 8 ms would be half a game
+  frame of timestamp error.
+- Runs through `_grab_watchdog(region, **kw)` (same rebuild-once-then-raise hang handling).
+  `_grab_region` defaults (0.008 s, 30 tries) are unchanged, so `grab()` behaves as before.
+- Not yet called by any loop (the minigame loop is a later task); tested with a fake camera only, no live
+  dxcam.
 
 ## Unobscured check and support writers (R5)
 - `LiveGrabber.unobscured()` = `not rects_cover(content, windows_above(hwnd))`; any exception -> `False`
@@ -49,6 +63,8 @@ ndarray, so frame pixels map 1:1 to content-normalised (u,v) — the same space 
 
 ## Evidence
 - `src/rdom/capture/live.py` — `LiveGrabber`, `place_game_window`, `_grab_region` retry spacing, `_grab_watchdog`
+- `src/rdom/capture/live.py` — `grab_fresh`, `_grab_region(retry_sleep, tries, timed)`, `_grab_watchdog(**grab_kw)`
+- commit `6fed322` (task rdf05-t4 branch, not yet merged into the main checkout), test_live_grab_fresh.py — box math with monitor offset, None not `_last`, stamp after frame, grab() fallback + 0.008 spacing, hung camera
 - `src/rdom/capture/live.py` — `rects_cover`, `windows_above`, `LiveGrabber.unobscured`
 - `src/rdom/perception/collect.py` — `save_support_cells`, `save_frame`, `save_burst` (paths, names, jsonl line, covered -> `None`), `_covered_warn`
 - `tools/save_frame.py` — `claim_file` ('xb' exclusive create, `_2`..`_99` suffix), covered check before claiming
