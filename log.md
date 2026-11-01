@@ -264,3 +264,7 @@
 ## 2026-11-01 · rdf04-i1 · Integration fixes round 1
 - Joiner `recover_step` now takes `stop_on` (invite popup, STOP/PAUSE) and stops before any tap/BACK; run_all tails use `2*_gear*.log` / `2*_support*.log` so same-minute `_2` restart logs are followed.
 - pages: components/gear-loop.md (updated), components/run-all.md (updated)
+
+## 2026-11-01 · rdf04-i2 · Integration fixes round 2
+- invite_and_start now continues from an open coop room and from the 친구와 하기 menu (where gear_loop.recover_step ends), not only from the lobby; an unknown screen still returns None.
+- pages: components/coop-invite.md (updated)
