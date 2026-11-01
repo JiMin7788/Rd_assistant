@@ -77,6 +77,15 @@
 숫자 UI 위치 (인식 대상, M1): SP/골드 ~(0.50,0.80), 소환코스트 ~(0.50,0.885),
 타이머 좌하단 ~(0.18,0.86), 웨이브 ~(0.16,0.72). 정밀 크롭 박스는 M1에서 확정.
 
+## 미니게임 — 군밀 대청소 (rdF05)
+
+- Flow: event screen -> `대청소 시작!` (costs a ticket; x1 or x10) -> 2 gauges per run -> reel (stops by itself) -> flight and distance. The user presses `대청소 시작!` by hand; the bot only plays the gauges.
+- Gauge layout: a horizontal bar made of colored segments, a triangle that sweeps along the bar, and a `멈춰` button.
+- Zones and the text shown for a stop: yellow = `완벽해!`, purple = `쿨`, blue = `나이스`. The goal is yellow.
+- The stop registers on UP (finger release), not on DOWN: the bot holds `멈춰` and releases at the planned moment.
+- Speed and the position of the yellow segment are random for every gauge. There is no time limit.
+- On the recording one end-to-end sweep takes 0.38-0.64 s depending on the gauge speed.
+
 ## 열린 항목
 
 1. 상단영역 탭(u~0.4-0.6, v~0.22)의 게임적 의미 — 사용자 플레이 지침에서 정의 예정
