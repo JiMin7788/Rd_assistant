@@ -105,7 +105,9 @@ def wait_and_accept(g, inj, host, should_stop, recover, now=time.monotonic,
                 _log("joined room gone -- failed")
                 return "failed"
         else:
-            recover(f)
+            if recover(f):           # truthy = the loop gave up (game will not start): failed round
+                _log("recover gave up -- failed")
+                return "failed"
             if t - last_log >= WAIT_LOG_S:
                 last_log = t
                 _log(f"still waiting for an invite ({int((t - t0) // 60)} min)")

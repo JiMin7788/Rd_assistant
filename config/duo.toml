@@ -1,0 +1,4 @@
+# Duo mode: the LD gear bot (inviter) and the GPG support bot (joiner) play the same room.
+host = "대변먹는자"      # game name of the inviter (LD account); the joiner accepts only invites from it
+partner = "배속봇"       # game name of the joiner (GPG account); the inviter picks it in the friend list
+invite_wait_s = 300     # how long the inviter keeps the room open and the invite alive per round
