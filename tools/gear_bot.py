@@ -22,7 +22,9 @@ Stops (does nothing) when the frame is not a battle or the window moved.
 import argparse, os, sys, time
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 from rdom.capture.live import LiveGrabber
-from rdom.input.inject import Injector, cell_uv
+from rdom.input.inject import cell_uv, make_injector
+
+PROFILES = {"gpg": "config/recorder.toml", "ld": "config/recorder_ld.toml"}
 from rdom.perception.board import is_battle, is_game_over
 from rdom.perception import collect
 from rdom.perception.gear import buffed_cells
@@ -32,6 +34,10 @@ from rdom.perception.gear import (read_board, ui_state, UI, GEAR_VARIANTS,
 from rdom.policy.gear import evaluate, plan_next
 
 SUPPORT_CD = 130.0
+# AI-NOTE: None = detect_support_deck's GPG scales; the loop sets LD_SUPPORT_SCALES for the ld profile
+# (LD draws the UI ~1/0.85 of GPG, where the deck-bar emblem was cut; commit 3a70f61).
+SUPPORT_SCALES = None
+LD_SUPPORT_SCALES = (1.25, 1.2, 1.15, 1.1, 1.05, 1.0)
 POWER_EVERY = 20.0
 POWER_TAPS = 6
 SUMMON_GAP = 0.5
@@ -89,7 +95,8 @@ def play(g, inj, minutes=30, tick=0.6):
         # AI-NOTE: before every other rule -- the support deck must never get the HP->SP rule below
         if now - support_check >= 10.0:
             support_check = now
-            if _sup.detect_support_deck(f):
+            if (_sup.detect_support_deck(f) if SUPPORT_SCALES is None
+                    else _sup.detect_support_deck(f, scales=SUPPORT_SCALES)):
                 print("support deck seen in gear bot -- handing over", flush=True); return "wrong_deck"
         from rdom.perception.gear import tactic_sp1000_card
         card = tactic_sp1000_card(f)                   # card order is random: read it
@@ -252,10 +259,16 @@ def main():
     ap.add_argument("--execute", action="store_true", help="really inject input")
     ap.add_argument("--tick", type=float, default=0.6)
     ap.add_argument("--minutes", type=float, default=30)
+    ap.add_argument("--profile", choices=sorted(PROFILES), default="gpg",
+                    help="ld = LDPlayer (adb), gpg = Google Play Games (default)")
     a = ap.parse_args()
-    g = LiveGrabber()
+    cfg = PROFILES[a.profile]
+    if a.profile == "ld":
+        global SUPPORT_SCALES
+        SUPPORT_SCALES = LD_SUPPORT_SCALES
+    g =LiveGrabber(config=cfg)
     try:
-        play(g, Injector(execute=a.execute), a.minutes, a.tick)
+        play(g, make_injector(cfg, execute=a.execute), a.minutes, a.tick)
     finally:
         g.close()
 

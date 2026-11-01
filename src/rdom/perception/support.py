@@ -272,18 +272,36 @@ def _tpl(fname):
     return _models[key][1]
 
 
-def _search(f, box, t):
+def _best_scales(roi, t, scales):
+    """Like gear._best, but over the given `scales` (gear._best stays on gear.UI_SCALES)."""
+    best = (0.0, (0, 0), t.shape[1::-1])
+    for s in scales:
+        tt = t if s == 1.0 else cv2.resize(t, None, fx=s, fy=s, interpolation=cv2.INTER_AREA)
+        if roi.shape[0] < tt.shape[0] or roi.shape[1] < tt.shape[1]:
+            continue
+        _, sc, _, loc = cv2.minMaxLoc(cv2.matchTemplate(roi, tt, cv2.TM_CCOEFF_NORMED))
+        if sc > best[0]:
+            best = (float(sc), loc, tt.shape[1::-1])
+    return best
+
+
+def _search(f, box, t, scales=None):
     """(score, centre_u, centre_v) of the best multi-scale match of t in box of normalised frame f."""
     h, W = f.shape[0], gear._content_w(f)
     u0, v0, u1, v1 = box
     x0, y0 = int(u0 * W), int(v0 * h)
     roi = f[y0:int(v1 * h), x0:min(int(u1 * W), f.shape[1])]
-    sc, (mx, my), (tw, th) = gear._best(roi, t)
+    sc, (mx, my), (tw, th) = gear._best(roi, t) if scales is None else _best_scales(roi, t, scales)
     return sc, (x0 + mx + tw / 2) / W, (y0 + my + th / 2) / h
 
 
-def detect_support_deck(frame_rgb):
-    """True when the support deck's emblem is in the deck bar."""
+def detect_support_deck(frame_rgb, scales=None, box=None):
+    """True when the support deck's emblem is in the deck bar. scales/box None = gear.UI_SCALES and
+    DECK_BAR_BOX; given scales are searched instead (LDPlayer draws the UI ~1/0.85 of GPG, where the
+    template was cut). Score >= DECK_BAR_MIN either way.
+    Negatives measured with scales (1.25, 1.2, 1.15, 1.1, 1.05, 1.0) on the 7 LD gear battle frames
+    in tests/fixtures/ld_gear (old LD sessions, 360x640): 0.487 0.488 0.636 0.494 0.636 0.635 0.493
+    (default scales: 0.503 0.502 0.683 0.508 0.684 0.683 0.508) -- all below DECK_BAR_MIN 0.70."""
     # AI-NOTE: a 2-D grey, 4-channel or float array made cv2 raise; anything but H x W x 3 uint8 is "not the support deck"
     if not (isinstance(frame_rgb, np.ndarray) and frame_rgb.ndim == 3 and frame_rgb.shape[2] == 3
             and frame_rgb.dtype == np.uint8):
@@ -291,7 +309,7 @@ def detect_support_deck(frame_rgb):
     t = _tpl("deck_support.png")
     if t is None:
         return False
-    return _search(gear.normalize(frame_rgb), DECK_BAR_BOX, t)[0] >= DECK_BAR_MIN
+    return _search(gear.normalize(frame_rgb), box or DECK_BAR_BOX, t, scales)[0] >= DECK_BAR_MIN
 
 
 def power_cards(frame_rgb):

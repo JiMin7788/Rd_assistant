@@ -67,7 +67,24 @@ def send_room_code(code):
     return _post(_urls().get("code_webhook"), "", embed=embed)
 
 
+_tag = ""
+
+
+def set_tag(tag):
+    """Profile tag ("[기어]") put after the leading emoji of every later status message."""
+    global _tag
+    _tag = tag or ""
+
+
+def _tagged(content):
+    if not _tag:
+        return content
+    # AI-NOTE: the emoji (first char) stays first so the colour lookup and the card layout don't change.
+    return f"{content[:1]} {_tag}{content[1:]}" if content[1:2] == " " else f"{content[:1]} {_tag} {content[1:]}"
+
+
 def send_status(content, frame_rgb=None):
+    content = _tagged(content)
     png = None
     if frame_rgb is not None:
         try:

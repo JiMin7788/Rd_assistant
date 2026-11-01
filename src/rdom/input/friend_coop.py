@@ -20,7 +20,7 @@ import numpy as np
 import cv2
 
 from rdom.input.inject import (FRIEND_UV, CREATE_ROOM_UV, INVITE_FRIEND_UV,
-                               START_COOP_UV, CLOSE_X_UV)
+                               START_COOP_UV, CLOSE_X_UV, MODAL_X_UV)
 
 _TESS = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 _TESSDATA = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "tessdata"))
@@ -242,6 +242,138 @@ def start_friend_coop(grab, inj, name, retry_sec=3.0, max_retries=10, nav_wait=1
         time.sleep(1.0)
     print("협동 시작 never activated", flush=True)
     return False
+
+
+TICK_S = 0.5            # duo wait-loop period; should_stop is checked every tick (<= 2 s required)
+EXPIRED_S = 3.0         # neither 수락 대기중 nor start_ready for this long -> the invite ran out
+ROOM_GONE_S = 5.0       # not in the coop room for this long -> navigation broke
+
+
+def _uv_map(uv):
+    m = {"FRIEND": FRIEND_UV, "CREATE_ROOM": CREATE_ROOM_UV, "INVITE_FRIEND": INVITE_FRIEND_UV,
+         "START_COOP": START_COOP_UV, "CLOSE_X": CLOSE_X_UV, "MODAL_X": MODAL_X_UV}
+    m.update(uv or {})
+    return m
+
+
+def _wait_until(grab, pred, timeout, now, sleep, step=0.3):
+    """_wait_for on an injectable clock: the frame that satisfied pred, or None."""
+    t_end = now() + timeout
+    while now() < t_end:
+        f = grab.grab()
+        if pred(f):
+            return f
+        sleep(step)
+    return None
+
+
+def invite_and_start(grab, inj, name, wait_s=300, should_stop=lambda: None, uv=None,
+                     now=time.monotonic, sleep=time.sleep):
+    """Duo lobby step: 친구와 하기 -> 방 생성 -> invite `name` -> tap 협동 시작 once they are in.
+
+    -> True (start tapped) | False (wait_s over) | None (navigation broke) |
+       'stopped' / 'paused' (should_stop() said 'stop' / 'pause'; the room is left with MODAL_X).
+    The invite is kept alive: when the slot shows neither 수락 대기중 nor a ready start for
+    EXPIRED_S the invite has expired and is sent again. No room code is read or published.
+    """
+    from rdom.perception.board import (is_lobby, is_friend_menu, is_coop_room,
+                                       has_popup_close)
+    uvs = _uv_map(uv)
+
+    def tap(key):
+        inj.tap(*uvs[key])
+
+    # AI-NOTE: gear_loop.recover_step ends on a coop room and on the 친구와 하기 menu (the public
+    # role continues from both), so the inviter must too -- else a crash/restart while waiting in
+    # the room fails every following round at once. Same branching as open_room_and_wait.
+    f0 = grab.grab()
+    if is_coop_room(f0):
+        print("already in an open coop room -- inviting there", flush=True)
+    else:
+        if is_friend_menu(f0):
+            print("친구와 하기 menu already open -- 방 생성", flush=True)
+        elif is_lobby(f0):
+            print("친구와 하기", flush=True)
+            tap("FRIEND")
+            if _wait_until(grab, is_friend_menu, 5.0, now, sleep) is None:
+                print("친구와 하기 menu did not open -- abort round", flush=True)
+                return None
+            print("방 생성", flush=True)
+        else:
+            print("not on the lobby -- abort round", flush=True)
+            return None
+        tap("CREATE_ROOM")
+        if _wait_until(grab, is_coop_room, 5.0, now, sleep) is None:
+            print("coop room did not open -- abort round", flush=True)
+            return None
+
+    def invite():
+        """One 친구 초대 -> pick `name`; True if the friend row was tapped."""
+        print("친구 초대", flush=True)
+        tap("INVITE_FRIEND")
+        if _wait_until(grab, has_popup_close, 4.0, now, sleep) is None:
+            print("friend list did not open", flush=True)
+            return False
+        sleep(0.5)                                           # list rows settle
+        who = None
+        for _ in range(4):                                   # OCR is per-frame flaky
+            who = find_friend_in_popup(grab.grab(), name)
+            if who:
+                break
+            sleep(0.5)
+        if not who:
+            print(f"{name} not online / not found", flush=True)
+            if has_popup_close(grab.grab()):
+                tap("CLOSE_X")
+            return False
+        print(f"select {name} at {who}", flush=True)
+        inj.tap(*who)
+        sleep(1.5)                                           # invite -> back to room
+        return True
+
+    t0 = now()
+    invited = False
+    # AI-NOTE: start_friend_coop is left untouched on purpose (its 60 s wait and retry caps are
+    # live-tested); the duo step re-implements the gated steps on an injectable clock.
+    idle_since = t0          # since when the slot shows neither pending nor ready
+    away_since = None
+    while True:
+        stop = should_stop()
+        if stop in ("stop", "pause"):
+            tap("MODAL_X")
+            return "stopped" if stop == "stop" else "paused"
+        t = now()
+        if t - t0 >= wait_s:
+            print("invite wait over -- leaving the room", flush=True)
+            tap("MODAL_X")
+            return False
+        f = grab.grab()
+        if start_ready(f):
+            print("협동 시작", flush=True)
+            tap("START_COOP")
+            return True
+        if not is_coop_room(f):
+            away_since = t if away_since is None else away_since
+            if t - away_since >= ROOM_GONE_S:
+                print("left the coop room while waiting -- abort round", flush=True)
+                return None
+            sleep(TICK_S)
+            continue
+        away_since = None
+        if slot_pending(f):
+            idle_since = None
+        else:
+            idle_since = t if idle_since is None else idle_since
+            if not invited or t - idle_since >= EXPIRED_S:
+                if invited:
+                    print("invite expired -- inviting again", flush=True)
+                if invite():
+                    invited = True
+                else:
+                    sleep(EXPIRED_S)                         # same pause as start_friend_coop's retry
+                idle_since = now()
+                continue
+        sleep(TICK_S)
 
 
 def open_room_and_wait(grab, inj, timeout=1800.0, nav_wait=1.5):

@@ -45,6 +45,11 @@ class InputCfg:
     tap_radius_n: float = 0.012
     record_moves_while_down: bool = True
     move_throttle_ms: float = 8.0
+    #: How taps reach the game: "postmessage" (Google Play Games) or "adb" (LDPlayer).
+    #: AI-NOTE: only parsed here; the adb path itself is rdf04-t2.
+    backend: str = "postmessage"
+    adb: str = ""      # adb.exe path (backend "adb")
+    serial: str = ""   # adb device serial, e.g. "127.0.0.1:5555"
 
 
 @dataclass(frozen=True)

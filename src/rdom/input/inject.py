@@ -13,11 +13,17 @@ to avoid perfectly-constant input.
 
 Cheong's destroy has a 90s cooldown, tracked here. Default is dry-run: nothing
 is injected unless execute=True.
+
+LDPlayer (config [input] backend "adb") uses AdbInjector instead: the same
+interface, input sent with `adb shell input`. make_injector picks the class
+from the config.
 """
 from __future__ import annotations
 import ctypes
 import os
 import random
+import re
+import subprocess
 import time
 from ctypes import wintypes
 
@@ -41,6 +47,7 @@ SUMMON_UV = (0.50, 0.855)
 CHEONG_UV = (0.19, 0.867)
 UPGRADE_UV = (0.20, 0.94)
 GAME_PACKAGE = "com.percent.aos.randomdice2"
+GAME_ACTIVITY = "com.unity3d.player.UnityPlayerActivity"   # cmd package resolve-activity
 LOBBY_UV = (0.50, 0.869)     # "로비로 가기" on the game-over screen
 COOP_UV = (0.50, 0.745)      # "협동" (coop) on the lobby; button spans v 0.703-0.807 (GPG, 2026-10-16)
 FRIEND_UV = (0.155, 0.747)   # "친구와 하기" (play with a friend) on the lobby
@@ -91,8 +98,75 @@ def _render_child(top):
     return hit[0]
 
 
-class Injector:
+class _ActionBase:
+    """Policy-action execution shared by both input backends: the cheong (90 s)
+    and switch cooldowns and the op dispatch. A backend only supplies tap/swipe."""
+
+    def __init__(self):
+        self._cheong_last = -1e9
+        self._switch_last = -1e9
+        self._t0 = time.monotonic()
+
+    def cheong_ready(self):
+        return (time.monotonic() - self._cheong_last) >= CHEONG_CD
+
+    def switch_ready(self):
+        return (time.monotonic() - self._switch_last) >= SWITCH_CD
+
+    def execute_action(self, action):
+        """Run one policy action. Returns True if performed."""
+        op = action.get("op")
+        if op == "summon":
+            self.tap(*SUMMON_UV)
+        elif op == "destroy":
+            if not self.cheong_ready():
+                print("    cheong on cooldown, skipping destroy")
+                return False
+            u, v = cell_uv(action["cell"])
+            self.swipe(u, v, *CHEONG_UV)
+            self._cheong_last = time.monotonic()
+        elif op == "switch":
+            # The switch cooldown VARIES (user) -- a fixed timer wrongly skipped
+            # most swaps ("pretending"). Do not gate on a timer here; the caller
+            # verifies the swap by re-reading the board and retries until it takes.
+            ua, va = cell_uv(action["from"])
+            ub, vb = cell_uv(action["to"])
+            self.swipe(ua, va, ub, vb)
+            self._switch_last = time.monotonic()
+        elif op == "merge":
+            ua, va = cell_uv(action["from"])
+            ub, vb = cell_uv(action["to"])
+            self.swipe(ua, va, ub, vb)
+        elif op == "merge_destroy":
+            # Merge the surplus pair, then DESTROY the (pip-2) result so no
+            # higher-pip die is left on the board -- keeps it pip-1 pure for the
+            # reader (a pip-2 die read as pip-1 desyncs the swap logic). Frees 2
+            # cells per one skill cast (user's efficient method).
+            if not self.cheong_ready():
+                print("    cheong on cooldown, skipping merge_destroy")
+                return False
+            ua, va = cell_uv(action["from"])
+            ub, vb = cell_uv(action["to"])
+            self.swipe(ua, va, ub, vb)          # merge from -> to
+            time.sleep(0.4)                      # let the merge settle
+            self.swipe(ub, vb, *CHEONG_UV)       # destroy the merged die
+            self._cheong_last = time.monotonic()
+        elif op in ("align_pip", "wait"):
+            print(f"    no-op ({op}): {action.get('why','')}")
+            return False
+        else:
+            print(f"    unknown op: {op}")
+            return False
+        return True
+
+    def cheong_cooldown_left(self):
+        left = CHEONG_CD - (time.monotonic() - self._cheong_last)
+        return max(0.0, left)
+
+
+class Injector(_ActionBase):
     def __init__(self, execute=False, config="config/recorder.toml"):
+        super().__init__()
         self.execute = execute
         self.cfg = load_config(config)
         set_dpi_awareness()
@@ -100,9 +174,6 @@ class Injector:
         if execute:
             self._target()
             print(f"input: window messages -> hwnd {self._render}", flush=True)
-        self._cheong_last = -1e9
-        self._switch_last = -1e9
-        self._t0 = time.monotonic()
 
     def _target(self):
         """(top-level hwnd, render hwnd); re-found if the game was restarted."""
@@ -191,58 +262,134 @@ class Injector:
         self._render = None
         os.startfile(LAUNCH_URI)
 
-    def cheong_ready(self):
-        return (time.monotonic() - self._cheong_last) >= CHEONG_CD
 
-    def switch_ready(self):
-        return (time.monotonic() - self._switch_last) >= SWITCH_CD
+ADB_FALLBACK_SIZE = (1440, 2560)
 
-    def execute_action(self, action):
-        """Run one policy action. Returns True if performed."""
-        op = action.get("op")
-        if op == "summon":
-            self.tap(*SUMMON_UV)
-        elif op == "destroy":
-            if not self.cheong_ready():
-                print("    cheong on cooldown, skipping destroy")
-                return False
-            u, v = cell_uv(action["cell"])
-            self.swipe(u, v, *CHEONG_UV)
-            self._cheong_last = time.monotonic()
-        elif op == "switch":
-            # The switch cooldown VARIES (user) -- a fixed timer wrongly skipped
-            # most swaps ("pretending"). Do not gate on a timer here; the caller
-            # verifies the swap by re-reading the board and retries until it takes.
-            ua, va = cell_uv(action["from"])
-            ub, vb = cell_uv(action["to"])
-            self.swipe(ua, va, ub, vb)
-            self._switch_last = time.monotonic()
-        elif op == "merge":
-            ua, va = cell_uv(action["from"])
-            ub, vb = cell_uv(action["to"])
-            self.swipe(ua, va, ub, vb)
-        elif op == "merge_destroy":
-            # Merge the surplus pair, then DESTROY the (pip-2) result so no
-            # higher-pip die is left on the board -- keeps it pip-1 pure for the
-            # reader (a pip-2 die read as pip-1 desyncs the swap logic). Frees 2
-            # cells per one skill cast (user's efficient method).
-            if not self.cheong_ready():
-                print("    cheong on cooldown, skipping merge_destroy")
-                return False
-            ua, va = cell_uv(action["from"])
-            ub, vb = cell_uv(action["to"])
-            self.swipe(ua, va, ub, vb)          # merge from -> to
-            time.sleep(0.4)                      # let the merge settle
-            self.swipe(ub, vb, *CHEONG_UV)       # destroy the merged die
-            self._cheong_last = time.monotonic()
-        elif op in ("align_pip", "wait"):
-            print(f"    no-op ({op}): {action.get('why','')}")
-            return False
-        else:
-            print(f"    unknown op: {op}")
-            return False
-        return True
 
-    def cheong_cooldown_left(self):
-        left = CHEONG_CD - (time.monotonic() - self._cheong_last)
-        return max(0.0, left)
+def _px(u, v, res_w, res_h, jitter=5):
+    """(u,v) -> android pixels, jittered and clamped to the screen."""
+    x = int(u * res_w + random.uniform(-jitter, jitter))
+    y = int(v * res_h + random.uniform(-jitter, jitter))
+    return max(0, min(res_w - 1, x)), max(0, min(res_h - 1, y))
+
+
+def parse_wm_size(text):
+    """(w, h) from `wm size` output, or None. An 'Override size' line wins over
+    'Physical size': it is what the screen currently renders."""
+    found = {}
+    for kind, w, h in re.findall(r"(Physical|Override) size:\s*(\d+)x(\d+)", text or ""):
+        found[kind] = (int(w), int(h))
+    return found.get("Override") or found.get("Physical")
+
+
+def resolve_device(adb, preferred=""):
+    """The adb serial to use. LDPlayer shows up as 127.0.0.1:5555 or as
+    emulator-5554 depending on how adb was started; a hard-coded serial that is
+    not attached makes every tap fail SILENTLY (stdout/err go to DEVNULL) -- a
+    2026-10-07 run tapped 친구와 하기 into the void. Prefer `preferred`, else the
+    single attached device; raise if there is none or several."""
+    import tempfile
+    with tempfile.TemporaryFile("w+") as fh:      # a file, not a pipe: see AdbInjector._run on adb pipes
+        subprocess.run([adb, "devices"], stdout=fh, stderr=subprocess.DEVNULL, timeout=10)
+        fh.seek(0); out = fh.read()
+    devs = [l.split()[0] for l in out.splitlines()[1:] if l.strip().endswith("device")]
+    if preferred in devs:
+        return preferred
+    if len(devs) == 1:
+        return devs[0]
+    raise RuntimeError(f"adb: cannot pick a device (attached: {devs or 'none'})")
+
+
+class AdbInjector(_ActionBase):
+    """Same interface as Injector, input via `adb shell input` (LDPlayer)."""
+
+    def __init__(self, execute=False, config="config/recorder_ld.toml"):
+        super().__init__()
+        self.execute = execute
+        self.cfg = load_config(config)
+        self.adb = self.cfg.input.adb
+        self.device = self.cfg.input.serial
+        self.res_w, self.res_h = ADB_FALLBACK_SIZE
+        if execute:
+            self.device = resolve_device(self.adb, self.device)
+            print(f"adb device: {self.device}", flush=True)
+            # AI-NOTE: read once; the size is fixed for a running emulator and every tap needs it.
+            size = parse_wm_size(self._out("wm", "size"))
+            if size:
+                self.res_w, self.res_h = size
+            else:
+                print("adb: wm size unreadable -- using 1440x2560", flush=True)
+
+    def _run(self, *args):
+        args = [str(a) for a in args]
+        cmd = [self.adb, "-s", self.device, "shell", *args]
+        if not self.execute:
+            print("    [dry-run]", " ".join(args))
+            return
+        # NO PIPES. capture_output=True deadlocks on Windows: the adb *fork-server*
+        # daemon inherits the pipe handles and never closes them, so after the adb
+        # client exits Python still waits for EOF -- and run()'s timeout does not
+        # help, it kills the client and then blocks draining the same pipe. A live
+        # run sat there silently for 12 minutes mid-battle (2026-09-27). Nothing
+        # reads adb's output anyway, so send it to DEVNULL and there is no pipe to
+        # wait on.
+        try:
+            subprocess.run(cmd, stdout=subprocess.DEVNULL,
+                           stderr=subprocess.DEVNULL, timeout=10)
+        except subprocess.TimeoutExpired:
+            print("    adb timed out:", " ".join(args), flush=True)
+
+    def _out(self, *args):
+        """adb shell output via a temp FILE (a pipe deadlocks, see _run). '' on failure."""
+        import tempfile
+        with tempfile.TemporaryFile() as fh:
+            try:
+                subprocess.run([self.adb, "-s", self.device, "shell", *map(str, args)],
+                               stdout=fh, stderr=subprocess.DEVNULL, timeout=10)
+            except (subprocess.TimeoutExpired, OSError):
+                # AI-NOTE: adb.exe missing or crashing at spawn raises OSError /
+                # FileNotFoundError; callers (game_in_front) rely on "" = unknown.
+                return ""
+            fh.seek(0)
+            return fh.read().decode("utf-8", "replace")
+
+    def tap(self, u, v):
+        x, y = _px(u, v, self.res_w, self.res_h)
+        self._run("input", "tap", x, y)
+
+    def swipe(self, u0, v0, u1, v1, dur_ms=None):
+        x0, y0 = _px(u0, v0, self.res_w, self.res_h)
+        x1, y1 = _px(u1, v1, self.res_w, self.res_h)
+        dur = dur_ms if dur_ms is not None else random.randint(160, 300)
+        self._run("input", "swipe", x0, y0, x1, y1, dur)
+
+    def back(self):
+        """Android BACK. Used to unwind a half-finished lobby navigation
+        (invite popup left open, room created but the friend never accepted)
+        so the next round can start from a known screen."""
+        self._run("input", "keyevent", "4")
+
+    def game_in_front(self):
+        """True if Random Dice 2 is the focused app, False if another app is.
+        None if it cannot be told (dry run / adb failure) -- callers must not
+        relaunch on None."""
+        if not self.execute:
+            return None
+        out = self._out("dumpsys", "window")
+        focus = [l for l in out.splitlines() if "mCurrentFocus" in l]
+        if not focus:
+            return None
+        return GAME_PACKAGE in focus[0]
+
+    def launch_game(self):
+        """Start (or bring back) Random Dice 2 -- e.g. the emulator sits on the
+        launcher home screen after the game closed (2026-10-11)."""
+        # `monkey` is missing on LDPlayer 14 -> start the launcher activity directly
+        self._run("am", "start", "-n", f"{GAME_PACKAGE}/{GAME_ACTIVITY}")
+
+
+def make_injector(config_path="config/recorder.toml", execute=False):
+    """AdbInjector when the config's [input] backend is "adb", else Injector."""
+    if load_config(config_path).input.backend == "adb":
+        return AdbInjector(execute=execute, config=config_path)
+    return Injector(execute=execute, config=config_path)

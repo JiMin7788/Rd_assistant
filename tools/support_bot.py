@@ -104,15 +104,25 @@ def append_round(path, record):
         f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
 
-def run_battle(g, inj, minutes, route=route_deck, gear_play=None, support_play=None):
+def run_battle(g, inj, minutes, route=route_deck, gear_play=None, support_play=None, expect=None):
     """Route the battle, play it, hand over to the support player on 'wrong_deck'.
-    Returns (result, player) so the caller can read player.stats."""
+    Returns (result, player) so the caller can read player.stats.
+    expect='gear': play the gear player without routing or force, return its 'wrong_deck' as is.
+    expect='support': route; a 'gear' route returns ('wrong_deck', None) without playing."""
     if gear_play is None:
         import gear_bot
         gear_play = gear_bot.play
     # AI-NOTE: resolved at call time so this module works before play() exists (added later).
     if support_play is None:
         support_play = getattr(sys.modules[__name__], "play")
+    if expect == "gear":
+        # AI-NOTE: duo gear side: deck.toml force and the hand-over would start the support player on a deck it cannot read.
+        return gear_play(g, inj, minutes=minutes), gear_play
+    if expect == "support":
+        if route(g) != "support":
+            print("deck guard: gear deck on screen, support expected", flush=True)
+            return "wrong_deck", None
+        return support_play(g, inj, minutes=minutes), support_play
     player = support_play if route(g) == "support" else gear_play
     res = player(g, inj, minutes=minutes)
     if player is gear_play and res == "wrong_deck":
@@ -122,7 +132,7 @@ def run_battle(g, inj, minutes, route=route_deck, gear_play=None, support_play=N
     return res, player
 
 
-def play(g, inj, minutes=40, tick=0.6, mode=None):
+def play(g, inj, minutes=40, tick=0.6, mode=None, duo=False):
     """Play one support-deck battle in the R4 mode (or the forced `mode`), save end.png and append
     the R14 round record. Returns the player's result; play.stats holds the stats (gear_loop reads it)."""
     import support_players as sp
@@ -156,6 +166,8 @@ def play(g, inj, minutes=40, tick=0.6, mode=None):
     rec = build_record(game_id, wall_start, datetime.datetime.now(), res, mode, gates,
                        mrec, power.record() if power else None, dict(player.stats),
                        final_score=final_score)
+    if duo:
+        rec["duo"] = True                    # duo games are told apart in the H3 judge input
     append_round(ROUNDS_FILE, rec)
     play.stats = dict(player.stats)
     return res
