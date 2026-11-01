@@ -28,6 +28,7 @@
 - [Minigame gauge recognizer (군밀 대청소)](components/perception-minigame.md) — perception/minigame.py read_gauge/read_tip/zone_at/same_gauge/fit_params, RGB-prototype row search at 622 px, leave-one-gauge-out 80/80 within 0.005 u, rdf05 fixtures; GPG half-size only, not wired (2026-11-02)
 - [Minigame release planner (군밀 대청소)](components/policy-minigame.md) — policy/minigame.py SweepModel/Fit triangle fit with transient trim and 1.5-period/0.6 % rms gates, frame_clock, plan_release with required lead_min (largest in-yellow margin, 15 % floor), LatencyCal median of 7, latency_sample, error_ms; defaults gpg 0.06 / ld 0.2 unverified; not wired (2026-11-02)
 - [Minigame bot loop (군밀 대청소)](components/minigame-bot.md) — tools/minigame_bot.py live / dry run / replay gauge loop, guards (window moved, covered, 3 unregistered releases), cancel on stop, gauges.jsonl + latency_<profile>.json + strips, replay gate 1 of 1 verifiable yellow; not wired (2026-11-02)
+- [Minigame gauge simulation and report (군밀 대청소)](components/minigame-sim.md) — src/rdom/sim/gauge_sim.py regression sim of our own game model (real GaugeLoop), tools/minigame_sim.py --case, gpg >= 98/100 gate + timing gates, LD rates recorded, AIM_FRAC finding, tools/minigame_report.py (2026-11-02)
 - [Safety guards and stop switches](components/safety-guards.md) — dry-run, battle/window guards, failure limits, PAUSE/STOP (2026-10-23)
 
 ## Decisions

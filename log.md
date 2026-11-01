@@ -300,3 +300,8 @@
 ## 2026-11-02 · rdf05-t5 · minigame_bot gauge loop
 - tools/minigame_bot.py: live / dry run / replay loop with guards, cancel() on stop, gauges.jsonl, per-method latency file and strip PNGs; replay gate 1 of 1 verifiable plans yellow.
 - pages: components/minigame-bot.md (new)
+
+## 2026-11-02 · rdf05-t6 · Gauge simulation harness and minigame_report
+- Sim of our own game model drives the real GaugeLoop; it found the median-latency frame slip (GPG 91/100 yellow), fixed by AIM_FRAC=0.25 in minigame_bot.py. LD hit rates are recorded in the docstring, not gated.
+- tools/minigame_report.py summarises gauges.jsonl (execute, non-manual, non-cancel_test only).
+- pages: components/minigame-sim.md (new), components/minigame-bot.md (updated)

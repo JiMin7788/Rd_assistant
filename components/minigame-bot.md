@@ -2,7 +2,7 @@
 title: Minigame bot loop (군밀 대청소)
 type: component
 updated: 2026-11-02
-sources: [rdf05-t5]
+sources: [rdf05-t5, rdf05-t6]
 ---
 # Minigame bot loop (군밀 대청소)
 
@@ -48,6 +48,9 @@ starts each 대청소 round by hand; the bot runs until Ctrl+C. Not wired into r
   (postmessage / sendevent / swipe) is ignored; the dry run accepts any.
 - `strips/<stamp>_<profile>_g<n>.png` — crop of the bar and result text, exclusive-create with `_2`..`_99`
   suffixes (same rule as save_frame).
+
+- Live plans aim `AIM_FRAC` (0.25) of a game frame earlier than the latency median, and `_result` takes that aim off
+  the sample again; why and how: [minigame-sim.md](minigame-sim.md).
 
 ## Not yet proven
 Live runs: the latency defaults, `PREP_S`/`REFIT_S` timings and the real input path are unverified (H5).
