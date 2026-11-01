@@ -10,6 +10,7 @@ import pytest
 
 from rdom import profile as profiles
 from rdom.input import coop_join, friend_coop
+from rdom.input.friend_coop import invite_and_start as REAL_INVITE_AND_START
 from rdom.input.inject import SPEED_UV
 import rdom.notify.discord as discord
 
@@ -361,6 +362,20 @@ def test_public_creates_an_open_room(env, monkeypatch):
     monkeypatch.setattr(coop_join, "wait_and_accept", lambda *a, **k: 1 / 0)
     assert env.gl.main(["--profile", "ld"]) == 0
     assert env.battles and env.rooms == [(None, "closed")]
+
+
+def test_inviter_starts_from_a_coop_room_frame(env, monkeypatch):
+    # recover_step ends on a coop room; the inviter must go on from there, not fail the round
+    from rdom.perception import board
+    taps = []
+    inj = types.SimpleNamespace(tap=lambda u, v: taps.append((u, v)))
+    for n, v in (("is_lobby", False), ("is_friend_menu", False), ("is_coop_room", True)):
+        monkeypatch.setattr(board, n, lambda f, _v=v: _v)
+    monkeypatch.setattr(friend_coop, "invite_and_start", REAL_INVITE_AND_START)
+    monkeypatch.setattr(friend_coop, "start_ready", lambda f: True)
+    prof, duo = profiles.get("ld"), {"host": "h", "partner": "p", "invite_wait_s": 5}
+    assert env.gl.lobby_phase("inviter", env.g, inj, prof, duo) == "ok"
+    assert taps == [profiles.uv(prof, "START_COOP_UV")]
 
 
 def test_lobby_phase_results(env, monkeypatch):

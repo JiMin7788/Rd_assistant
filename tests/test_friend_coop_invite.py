@@ -110,9 +110,23 @@ def test_stop_while_waiting(what, res):
     assert sim.t - t_req < 2.0
 
 
-def test_not_on_lobby_is_none():
-    sim = Sim(); sim.screen = "room"
+def test_unknown_screen_is_none():
+    sim = Sim(); sim.screen = "unknown"
     assert run(sim) is None and sim.taps == []
+
+
+def test_starts_from_an_open_coop_room():
+    # recover_step ends on a coop room: skip 친구와 하기 / 방 생성, go straight to the invite
+    sim = Sim(accept_at=10.0); sim.screen = "room"
+    assert run(sim) is True
+    assert FRIEND_UV not in sim.taps and CREATE_ROOM_UV not in sim.taps
+    assert sim.taps.count(INVITE_FRIEND_UV) == 1
+
+
+def test_starts_from_the_friend_menu():
+    sim = Sim(accept_at=10.0); sim.screen = "menu"
+    assert run(sim) is True
+    assert FRIEND_UV not in sim.taps and sim.taps[0] == CREATE_ROOM_UV
 
 
 def test_navigation_broke_is_none():
