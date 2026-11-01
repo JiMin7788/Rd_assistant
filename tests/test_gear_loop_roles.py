@@ -1,6 +1,7 @@
 """gear_loop roles (rdf04-t8): exit codes, role phases, per-bot records, tagged status. Fakes only:
 no window, no input, no network; STOP/PAUSE and the record files live in a tmp dir."""
 import importlib
+import os
 import json
 import sys
 import types
@@ -79,7 +80,8 @@ def env(gl, monkeypatch, tmp_path):
     monkeypatch.setattr(gl, "make_injector",
                         lambda cfg, execute=False: e.injectors.append((cfg, execute)) or e.inj)
     monkeypatch.setattr(gl, "leave_result_screen", lambda f, g, inj: f)
-    monkeypatch.setattr(gl, "recover_step", lambda f, g, inj, prof: f)
+    e.real_recover = gl.recover_step
+    monkeypatch.setattr(gl, "recover_step", lambda f, g, inj, prof: (f, False))
     monkeypatch.setattr(gl, "is_battle", lambda f: e.state["battle"])
     monkeypatch.setattr(gl, "read_speed", lambda f: 1)
     monkeypatch.setattr(gl, "gear", types.SimpleNamespace(reload_if_changed=lambda: None))
@@ -101,8 +103,70 @@ def env(gl, monkeypatch, tmp_path):
         return True
     monkeypatch.setattr(gl, "open_room_and_wait", partner)
     monkeypatch.setattr(friend_coop, "invite_and_start", partner)
+    e.real_wait = coop_join.wait_and_accept
     monkeypatch.setattr(coop_join, "wait_and_accept", lambda *a, **k: partner() and "battle")
     return e
+
+
+class DeadGameInj(FakeInj):
+    """The game is closed and never comes back."""
+    def __init__(self):
+        super().__init__(); self.launches = 0
+
+    def game_in_front(self):
+        return False
+
+    def launch_game(self):
+        self.launches += 1
+
+
+def _dead_game(env, monkeypatch):
+    env.inj = DeadGameInj()
+    gl = env.gl
+    for n in ("has_popup_close", "has_modal_x", "network_error", "is_exit_dialog"):
+        monkeypatch.setattr(gl, n, lambda f: False)
+    monkeypatch.setattr(gl, "is_lobby", lambda f: True)         # ends the post-launch wait at once
+    monkeypatch.setattr(gl, "recover_step", env.real_recover)
+
+
+def test_joiner_whose_game_cannot_start_ends_in_guard(env, monkeypatch):
+    _dead_game(env, monkeypatch)
+    monkeypatch.setattr(coop_join.board, "is_battle", lambda f: False)
+    monkeypatch.setattr(coop_join.invite, "invite_popup", lambda f: None)
+    monkeypatch.setattr(coop_join.invite, "joined_room", lambda f: False)
+    monkeypatch.setattr(coop_join, "wait_and_accept",
+                        lambda *a, **k: env.real_wait(*a, sleep=lambda s: None, **k))
+    assert env.gl.main(["--role", "joiner"]) == 3
+    assert ("⛔ 초대 수락 후 판이 3회 연속 시작되지 않음 -- 정지. 화면 확인 필요", "frame") in env.status
+    assert env.inj.launches == 6 and env.battles == []          # 2 per round, 3 rounds
+
+
+def test_round_start_give_up_is_a_failed_round(env, monkeypatch):
+    _dead_game(env, monkeypatch)
+    calls = []
+    monkeypatch.setattr(env.gl, "lobby_phase", lambda *a: calls.append(a) or "ok")
+    assert env.gl.main(["--profile", "ld", "--role", "inviter"]) == 3
+    assert calls == [] and env.inj.launches == 6
+    assert ("⛔ 배속봇 초대 3회 연속 실패 -- 정지. 화면 확인 필요", "frame") in env.status
+
+
+def test_recover_step_gives_up_after_three_backs(env, monkeypatch):
+    class Inj(FakeInj):
+        backs = 0
+        def game_in_front(self): return True
+        def back(self): self.backs += 1
+    inj = Inj()
+    for n in ("has_popup_close", "has_modal_x", "network_error", "is_exit_dialog", "is_lobby", "is_game_over",
+              "is_coop_room", "is_friend_menu"):
+        monkeypatch.setattr(env.gl, n, lambda f: False)
+    f, gave_up = env.real_recover("frame", env.g, inj, profiles.get("ld"))
+    assert gave_up is True and inj.backs == 3
+
+
+def test_joiner_skips_round_start_recover(env, monkeypatch):
+    monkeypatch.setattr(env.gl, "recover_step", lambda *a: (_ for _ in ()).throw(AssertionError("recover")))
+    assert env.gl.main(["--role", "joiner"]) == 0
+    assert len(env.battles) == 1
 
 
 def texts(e):
@@ -199,14 +263,16 @@ def test_main_builds_injector_from_profile_and_execute(env):
     env.stop.write_text("")
     env.gl.main(["--profile", "ld", "--role", "inviter"])
     env.gl.main(["--role", "joiner", "--execute"])
-    assert env.injectors == [(profiles.get("ld").config, False), (profiles.get("gpg").config, True)]
-    assert env.grabbers == [profiles.get("ld").config, profiles.get("gpg").config]
+    cfgs = [os.path.join(env.gl.ROOT, profiles.get(n).config) for n in ("ld", "gpg")]
+    assert env.injectors == [(cfgs[0], False), (cfgs[1], True)]
+    assert env.grabbers == cfgs
 
 
 def test_default_is_gpg_public_dry_run(env):
     env.stop.write_text("")
     env.gl.main([])
-    assert env.checks == [["gpg"]] and env.injectors == [(profiles.get("gpg").config, False)]
+    assert env.checks == [["gpg"]]
+    assert env.injectors == [(os.path.join(env.gl.ROOT, profiles.get("gpg").config), False)]
 
 
 def test_tag_set_at_start_and_ld_scales(env):
@@ -240,7 +306,7 @@ def test_joiner_uses_wait_and_accept_with_recover_step(env, monkeypatch):
     assert env.gl.main(["--role", "joiner"]) == 0
     assert seen["host"] == "대변먹는자" and seen["stop"] is env.gl.should_stop
     rec = seen["recover"]
-    assert rec.func is env.gl.recover_step
+    assert rec.func is env.gl._joiner_recover
     assert rec.keywords == {"g": env.g, "inj": env.inj, "prof": profiles.get("gpg")}
 
 

@@ -141,17 +141,19 @@ def round_start(g, rnd):
 def recover_step(f, g, inj, prof):
     """Get from whatever is on screen to a screen a round can start from (lobby, 친구와 하기
     menu, coop room or battle): relaunch a closed game, close popups, BACK on unknown screens.
-    Returns the frame to go on with. The joiner calls it (via functools.partial) on every idle
-    frame of wait_and_accept."""
+    Returns (frame to go on with, gave_up). gave_up is True when the game cannot be relaunched or
+    3 BACKs found no known screen: the round is failed. The joiner calls it (via _joiner_recover)
+    on every idle frame of wait_and_accept."""
     # shop/event popups open by themselves on the lobby after a game (재설계 패키지,
     # 2026-10-08): close them with their X before starting a room
-    unknown = 0; launches = 0
+    unknown = 0; launches = 0; gave_up = False
     for _ in range(30):
         # game closed (emulator on the launcher home screen, 2026-10-11): start it
         # again; BACK / taps on the home screen would never get back to the lobby
         if inj.game_in_front() is False:
             if launches >= 2:
-                print("game does not start -- give up this round", flush=True); break
+                print("game does not start -- give up this round", flush=True)
+                gave_up = True; break
             launches += 1
             print(f"게임이 꺼져 있음 -- 랜덤다이스 실행 ({launches}/2)", flush=True)
             send_status("🔄 게임이 꺼져 있어서 다시 실행합니다")
@@ -199,9 +201,14 @@ def recover_step(f, g, inj, prof):
             unknown += 1
             print(f"unknown screen -- BACK ({unknown}/3)", flush=True); inj.back()
         else:
-            break
+            gave_up = True; break
         time.sleep(1.5); f = g.grab()
-    return f
+    return f, gave_up
+
+
+def _joiner_recover(f, g, inj, prof):
+    """wait_and_accept's recover callback: a truthy return ends the wait as 'failed'."""
+    return recover_step(f, g, inj, prof)[1]
 
 
 def _invite_uvs(prof):
@@ -227,7 +234,7 @@ def lobby_phase(role, g, inj, prof, duo):
         if r is True: return "ok"
         print(f"round did not start ({r})", flush=True); return "fail"
     r = coop_join.wait_and_accept(g, inj, duo["host"], should_stop,
-                                  recover=functools.partial(recover_step, g=g, inj=inj, prof=prof))
+                                  recover=functools.partial(_joiner_recover, g=g, inj=inj, prof=prof))
     if r == "battle": return "ok"
     if r == "stopped": return "stop"
     if r == "paused": return "wait"
@@ -305,10 +312,14 @@ def run_loop(role, prof, duo, g, inj):
             return code
         f = g.grab()
         f = leave_result_screen(f, g, inj)
-        f = recover_step(f, g, inj, prof)
+        # AI-NOTE: the joiner skips the round-start recover: it could close the host's invite popup with
+        # the modal X; wait_and_accept checks the popup first and calls recover only on idle frames.
+        gave_up = False
+        if role != "joiner":
+            f, gave_up = recover_step(f, g, inj, prof)
         came_from_lobby = not is_battle(f)
         if came_from_lobby:
-            r = lobby_phase(role, g, inj, prof, duo)
+            r = "fail" if gave_up else lobby_phase(role, g, inj, prof, duo)
             if r == "stop":
                 return EXIT_CLEAN
             if r == "wait":
@@ -347,8 +358,9 @@ def main(argv=None):
         return EXIT_GUARD
     if a.profile == "ld":
         gear_bot.SUPPORT_SCALES = gear_bot.LD_SUPPORT_SCALES
-    g = LiveGrabber(config=prof.config)
-    inj = make_injector(prof.config, execute=a.execute)
+    cfg = os.path.join(ROOT, prof.config)
+    g = LiveGrabber(config=cfg)
+    inj = make_injector(cfg, execute=a.execute)
     send_status("▶ 봇 시작")
     try:
         code = run_loop(a.role, prof, duo, g, inj)
