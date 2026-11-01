@@ -169,3 +169,27 @@ H1 과 rdF02 보정(점수, 덱 바, 파워 카드, LV_BOX)은 모두 끝났다.
 - [ ] 5판 후 `python tools/support_judge.py` 실행
 - [ ] 스크린샷을 사용자가 다시 확인
 - [ ] `판정: 통과` + 스크린샷 일치 = 완료. `판정: 실패` 이고 스크린샷도 일치하면 결과를 사용자에게 가져가 규칙을 다시 정한다 (기준은 완화하지 않음)
+
+## rdF04 두 봇 (LD 기어봇 + GPG 서폿봇)
+
+### H4 — 두 봇 인수 (rdF04)
+인수 조건: **한 판만 되면 됨** — 두 봇이 협동 한 판을 끝까지 진행하고, 가드 정지도 오류(크래시)도 없는 것. 명령은 `C:\dev\rdom` 에서 `.venv\Scripts\python.exe` 로 실행. 라이브 동작은 드라이런 먼저, `--execute` 는 사용자가 지켜볼 때만.
+- [ ] (1) 시작 점검: `python tools/duo_check.py` → 출력되는 `start check: OK ...` 줄이 **모두 OK** 여야 한다 (FAIL 이 있으면 중단하고 마스터에게 보고)
+- [ ] (2) LD 드라이런 (입력 없이 화면만 읽음): 사용자가 LD 에서 기어덱 한 판을 직접 하는 동안 두 명령을 같이 실행
+  - `python tools/gear_bot.py --profile ld` (`--execute` 없음 = 입력 안 함)
+  - `python tools/save_frame.py --profile ld --every 5 --minutes 20` (5초마다 프레임 저장, 저장 폴더는 `data/support_frames/manual/ld_<시각>/`)
+  - 판이 끝난 뒤 마스터가 `python tools/check_ld_profile.py <저장 폴더>` 로 확인한다. 불일치가 나오면 수정 작업을 먼저 하고, 그 뒤에 (3) 으로 간다
+- [ ] (3) 라이브 듀오 한 판 (사용자 입회): `봇 시작.bat` 실행 후 아래 순서를 끝까지 지켜본다
+  - 대변먹는자(LD)가 배속봇(GPG)을 초대 → 배속봇 수락 → 협동 시작 → 두 봇 모두 2.0x → 판 끝 → 두 봇 모두 로비로 → 두 번째 초대까지 나오는지 확인
+  - **서폿봇(GPG) 의 SP / 파워업 줄 (`power-up`, `power panel ->`) 을 2.0x 에서 관찰한다.** SP 와 파워업 타이밍은 1.5x 에서 측정했으므로 2.0x 에서는 어긋날 수 있다 (`power.bought` 가 0 인지, `tap not confirmed` 가 많은지 본다)
+- [ ] (4) 정지: Discord `/종료` → 진행 중인 판이 끝나면 두 봇이 모두 정지. 두 봇 각각 `■ 봇 종료` 메시지 ([기어], [서폿]) 가 보여야 한다. `■ 두 봇 모두 정지됨` 이나 `⛔` 메시지는 가드 정지/크래시 정지이므로 **실패**
+- [ ] 콘솔에서 볼 줄 (`tools/run_all.py` 가 태그 `[기어]` / `[서폿]` 을 붙여 보여줌):
+  - `start check: OK` (두 봇 모두)
+  - `invite from 대변먹는자 -- accept` ([서폿])
+  - `수락 대기중` ([기어], 초대가 나간 뒤)
+  - `power-up`, `power panel ->` ([서폿], 2.0x)
+- [ ] 실패하면 마스터에게 보낼 것: `data/bot_logs/*_gear.log`, `data/bot_logs/*_support.log`, 그리고 Discord 에 올라온 스크린샷 (화면 캡처는 사용자가 직접)
+- [ ] 합격 = 두 봇이 한 판을 끝까지, 가드 정지·오류 없이 ('한 판만 되면 됨')
+- 미해결 항목 (open items):
+  - LD 서포팅덱 감지는 실제 LD 화면으로 검증되지 않았다 (LD 에서 서포팅덱 화면 프레임이 아직 없음)
+  - rdf04-t1 `tools/check_ld_profile.py` 의 미해결 항목: 초대 팝업이 `start_ready=1` 로 읽힘, 옛 방 화면 `exit=1`, 어두워진 전투 화면 `battle=0`, `COOP_UV` 값(0.497, 0.823) 확인

@@ -68,3 +68,26 @@ def test_h3_runbook_lines_exist_in_code():
               "power panel: ", "support result:", "game-over look-alike", "game-over screen seen once",
               "battle still on screen"):
         assert s in h3 and s in code, s
+
+
+def test_h4_runbook_commands_exist_in_code():
+    # AI-NOTE: every tool and flag named in the H4 runbook (rdF04, R17) must exist in the repo.
+    todo = (ROOT / "CLAUDE_CODE_TODO.md").read_text(encoding="utf-8")
+    h4 = todo.split("### H4")[1]
+    needed = {
+        "duo_check.py": (),
+        "gear_bot.py": ("--profile",),
+        "save_frame.py": ("--profile", "--every", "--minutes"),
+        "check_ld_profile.py": (),
+    }
+    for tool, flags in needed.items():
+        path = ROOT / "tools" / tool
+        assert path.is_file(), tool
+        assert "tools/" + tool in h4, tool
+        code = path.read_text(encoding="utf-8")
+        for flag in flags:
+            assert 'add_argument("' + flag + '"' in code, (tool, flag)
+            assert flag in h4, (tool, flag)
+    for s in ("start check: OK", "invite from 대변먹는자 -- accept", "수락 대기중", "[기어]", "[서폿]",
+              "■ 봇 종료", "1.5x", "2.0x", "한 판만 되면 됨"):
+        assert s in h4, s
