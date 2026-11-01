@@ -305,3 +305,7 @@
 - Sim of our own game model drives the real GaugeLoop; it found the median-latency frame slip (GPG 91/100 yellow), fixed by AIM_FRAC=0.25 in minigame_bot.py. LD hit rates are recorded in the docstring, not gated.
 - tools/minigame_report.py summarises gauges.jsonl (execute, non-manual, non-cancel_test only).
 - pages: components/minigame-sim.md (new), components/minigame-bot.md (updated)
+
+## 2026-11-02 · rdf05-t7 · H5 minigame runbook and spec section
+- H5 runbook (Korean) added to CLAUDE_CODE_TODO.md: GPG 19/20 yellow, LD best effort, warm-up cancel test and latency thresholds; spec gained a minigame section; test_minigame_runbook.py guards the flags.
+- pages: howto/run-bot.md (updated)

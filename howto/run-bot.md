@@ -1,8 +1,8 @@
 ---
 title: Run the bot (launchers, dry-run, live)
 type: howto
-updated: 2026-11-01
-sources: [seed, rdf01-t12, rdf01-t13, rdf02-t7, rdf02-m1, rdf03-t8, rdf03-t10, rdf03-m2, rdf04-t2, rdf04-t9, rdf04-t10, rdf04-t12]
+updated: 2026-11-02
+sources: [seed, rdf01-t12, rdf01-t13, rdf02-t7, rdf02-m1, rdf03-t8, rdf03-t10, rdf03-m2, rdf04-t2, rdf04-t9, rdf04-t10, rdf04-t12, rdf05-t7]
 ---
 # Run the bot (launchers, dry-run, live)
 
@@ -55,6 +55,19 @@ Everything else is a manual / dry-run entry point. Run from `C:\dev\rdom` with `
   `test_h4_runbook_commands_exist_in_code` (tests/test_save_frame_tool.py) fails if a tool or flag named in the
   H4 section stops existing. `docs/01_GAME_SPEC.md` emulator section now states both emulators run together
   (GPG = support bot / PostMessage, LD = gear bot / adb).
+- H5 minigame gauge-bot runbook (rdF05, in `CLAUDE_CODE_TODO.md` "H5 — 미니게임 게이지 봇", Korean). Pass = GPG 19+
+  of 20 gauges yellow (`완벽해!`); LD "as many as possible", hit rate and miss causes reported and the user judges.
+  Steps: (1) GPG dry run while the user plays one run (`minigame_bot.py --profile gpg`; both gauges must print a
+  detect line and a `[드라이런]` line, else report); (2) warm-up, at most 2 runs, not counted
+  (`--execute --cancel-test`; the line `취소 점검: 삼각형이 계속 움직여요 (정상)` must appear, `⚠ 취소 점검` = stop and
+  report; continue until `지연 보정` shows `저장값`; then `minigame_report.py --profile gpg`; latency range hi-lo
+  > 20 ms or |mean error_ms| > 8 ms = report before (3)); (3) 10 runs = 20 gauges with `--execute`, user counts
+  `완벽해!` and it must match the bot tally; (4) LD: `--probe-input`, dry run, warm-up, 10 runs, report. The user
+  presses `대청소 시작` by hand (costs a ticket, approved); no coop bot in the same window; `⛔` = stop, do not
+  restart. The offline sim is regression only and does not replace the live steps. `test_minigame_runbook.py`
+  (tests/) fails if a flag named in the H5 section is missing from `minigame_bot` / `minigame_report`. Game rules the bot
+  relies on (stop registers on finger UP, 2 gauges per run, no time limit): `docs/01_GAME_SPEC.md` minigame section;
+  tool behaviour: [minigame-bot](../components/minigame-bot.md).
 - `python tools/support_dryrun.py --help` (or `-h`) prints the usage line and exits 0; `python
   tools/build_digit_templates.py --help` prints argparse usage. Before, `--help` was taken as a kind name and
   wrote `assets/templates/digits_--help.npz`.
@@ -99,5 +112,6 @@ Everything else is a manual / dry-run entry point. Run from `C:\dev\rdom` with `
 - commit `04c74c9` (branch task/rdf03-t8) — tools/support_dryrun.py `--data-dir` and `USAGE`; tests `test_usage_text_and_exit_codes`, `test_data_dir_sets_model_dirs` in tests/test_support_dryrun.py
 - commit `557bf89` (branch task/rdf03-t10) — `CLAUDE_CODE_TODO.md` H2 done / H3 R14 runbook; `tools/run_all.py` `SHOW` additions; tests `test_run_all_show_has_play_mode_lines`, `test_h3_runbook_lines_exist_in_code` in tests/test_save_frame_tool.py
 - `CLAUDE_CODE_TODO.md` ("### H4"), `docs/01_GAME_SPEC.md` (rdF04 emulator line), `tests/test_save_frame_tool.py` (`test_h4_runbook_commands_exist_in_code`) — task rdf04-t12, commit `b7efbf8`
+- `CLAUDE_CODE_TODO.md` ("### H5"), `docs/01_GAME_SPEC.md` (minigame section) — task rdf05-t7, commit `74eedbd` (also adds the runbook flag/tool existence test, not yet merged into the main checkout)
 - `tools/gear_bot.py`, `tools/save_frame.py` (`PROFILES`, `run_every`, `main`) — commit `3635c90` (rdf04-t2), which also adds the `save_frame --every` test
 - commit `4aa774e` — adds tools/support_dryrun.py (dryrun/main, output lines, support_ready=True, imports) and tests/test_support_dryrun.py (empty-data-dir expectations junk 0 / wait / score None, no-inject check); not yet merged into the main checkout

@@ -36,7 +36,7 @@
 - [Content-normalised (u,v) coordinates; window messages instead of adb](decisions/input-coordinates.md) — one coordinate space; GPG PostMessage since 2026-10-16 (2026-10-23)
 
 ## Howto
-- [Run the bot (launchers, dry-run, live)](howto/run-bot.md) — .bat launchers, run_all/supervisor, dry-run entry points, support-deck offline frame check, run_all SHOW lines, H2 runbook, H3 (R14) runbook, support_dryrun --data-dir, --profile ld for gear_bot/save_frame, save_frame --every, H4 two-bot acceptance runbook (2026-11-01)
+- [Run the bot (launchers, dry-run, live)](howto/run-bot.md) — .bat launchers, run_all/supervisor, dry-run entry points, support-deck offline frame check, run_all SHOW lines, H2 runbook, H3 (R14) runbook, support_dryrun --data-dir, --profile ld for gear_bot/save_frame, save_frame --every, H4 two-bot acceptance runbook, H5 minigame gauge-bot runbook (2026-11-02)
 - [Run the tests](howto/run-tests.md) — pytest from the venv; unittest misses test_policy_gear (2026-10-23)
 
 ## Lessons
