@@ -77,6 +77,17 @@ def test_game_in_front(monkeypatch):
         assert inj.game_in_front() is want
 
 
+@pytest.mark.parametrize("exc", [OSError(22, "adb crashed"), FileNotFoundError("adb.exe"),
+                                 subprocess.TimeoutExpired("adb", 10)])
+def test_game_in_front_none_when_adb_cannot_run(monkeypatch, exc):
+    inj, _ = _live(monkeypatch)
+
+    def boom(cmd, **kw):
+        raise exc
+    monkeypatch.setattr(inject.subprocess, "run", boom)
+    assert inj.game_in_front() is None
+
+
 def test_resolve_device(monkeypatch):
     def attached(listing):
         monkeypatch.setattr(inject.subprocess, "run", FakeRun(listing.encode()))

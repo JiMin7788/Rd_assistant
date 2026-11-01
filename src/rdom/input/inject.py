@@ -346,7 +346,9 @@ class AdbInjector(_ActionBase):
             try:
                 subprocess.run([self.adb, "-s", self.device, "shell", *map(str, args)],
                                stdout=fh, stderr=subprocess.DEVNULL, timeout=10)
-            except subprocess.TimeoutExpired:
+            except (subprocess.TimeoutExpired, OSError):
+                # AI-NOTE: adb.exe missing or crashing at spawn raises OSError /
+                # FileNotFoundError; callers (game_in_front) rely on "" = unknown.
                 return ""
             fh.seek(0)
             return fh.read().decode("utf-8", "replace")
