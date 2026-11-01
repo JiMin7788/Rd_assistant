@@ -38,6 +38,8 @@ def test_tags_per_log_file():
     m = _load()
     assert m.tag_for("20261101_1200_gear.log") == "기어"
     assert m.tag_for("20261101_1200_support.log") == "서폿"
+    assert m.tag_for("20261101_1200_gear_2.log") == "기어"
+    assert m.tag_for("20261101_1200_support_2.log") == "서폿"
     assert m.tag_for("discord_bot.log") == "디코"
     assert m.tag_for("supervisor.log") is None
 
@@ -46,7 +48,7 @@ def test_tail_specs_patterns(tmp_path):
     m = _load()
     specs = m.tail_specs(str(tmp_path))
     assert [t for _, t in specs] == ["기어", "서폿", "디코"]
-    assert specs[0][0] == os.path.join(str(tmp_path), "bot_logs", "2*_gear.log")
+    assert specs[0][0] == os.path.join(str(tmp_path), "bot_logs", "2*_gear*.log")
     assert not any(p.endswith("2*.log") for p, _ in specs)
 
 

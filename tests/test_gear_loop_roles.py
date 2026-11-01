@@ -163,6 +163,41 @@ def test_recover_step_gives_up_after_three_backs(env, monkeypatch):
     assert gave_up is True and inj.backs == 3
 
 
+def _unknown_screen(env, monkeypatch):
+    class Inj(FakeInj):
+        backs = 0
+        def game_in_front(self): return True
+        def back(self): self.backs += 1
+    for n in ("has_popup_close", "has_modal_x", "network_error", "is_exit_dialog", "is_lobby", "is_game_over",
+              "is_coop_room", "is_friend_menu"):
+        monkeypatch.setattr(env.gl, n, lambda f: False)
+    monkeypatch.setattr(env.gl, "recover_step", env.real_recover)
+    return Inj()
+
+
+def test_joiner_recover_stops_before_any_tap_on_an_invite_popup(env, monkeypatch):
+    inj = _unknown_screen(env, monkeypatch)
+    monkeypatch.setattr(coop_join.invite, "invite_popup", lambda f: {"x": 1})
+    assert env.gl._joiner_recover("frame", env.g, inj, profiles.get("gpg")) is False
+    assert inj.backs == 0 and inj.taps == [] and env.g.grabs == 0
+
+
+def test_joiner_recover_stops_on_stop_file(env, monkeypatch):
+    inj = _unknown_screen(env, monkeypatch)
+    monkeypatch.setattr(coop_join.invite, "invite_popup", lambda f: None)
+    env.stop.write_text("")
+    assert env.gl._joiner_recover("frame", env.g, inj, profiles.get("gpg")) is False
+    assert inj.backs == 0 and env.g.grabs == 0
+
+
+def test_joiner_recover_stops_when_an_invite_shows_during_the_unknown_wait(env, monkeypatch):
+    inj = _unknown_screen(env, monkeypatch)
+    shown = iter([None, {"x": 1}])
+    monkeypatch.setattr(coop_join.invite, "invite_popup", lambda f: next(shown))
+    assert env.gl._joiner_recover("frame", env.g, inj, profiles.get("gpg")) is False
+    assert inj.backs == 0
+
+
 def test_joiner_skips_round_start_recover(env, monkeypatch):
     monkeypatch.setattr(env.gl, "recover_step", lambda *a: (_ for _ in ()).throw(AssertionError("recover")))
     assert env.gl.main(["--role", "joiner"]) == 0
