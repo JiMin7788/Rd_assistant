@@ -23,6 +23,7 @@ import ctypes
 import os
 import random
 import re
+import statistics
 import subprocess
 import time
 from ctypes import wintypes
@@ -65,6 +66,9 @@ SPEED_UV = (0.781, 0.799)         # 배속 (1.0x/1.5x/2.0x) fast-forward button.
 # Measured from a live battle frame (2026-09-27): the button disc spans
 # u 0.738-0.824, v 0.775-0.823. The old (0.755, 0.782) sat near its rim, so
 # the +-5px tap jitter could miss it entirely and the battle ran at 1.0x.
+PRESS_LEAD_GPG = 0.25             # s from a posted DOWN until the press is safely registered (GPG)
+PRESS_LEAD_LD = 0.6               # s from the LD press start to its UP (sendevent DOWN / swipe duration)
+CANCEL_DV = 0.12                  # cancel = drag this far below the press point (v), then UP
 CHEONG_CD = 90.0
 SWITCH_CD = 5.0                   # switch swap cooldown (seconds) -- TODO confirm
 
@@ -171,6 +175,7 @@ class Injector(_ActionBase):
         self.cfg = load_config(config)
         set_dpi_awareness()
         self._top = self._render = None
+        self._down = None            # (u, v, x, y) of the held press
         if execute:
             self._target()
             print(f"input: window messages -> hwnd {self._render}", flush=True)
@@ -182,16 +187,21 @@ class Injector(_ActionBase):
             self._render = _render_child(self._top)
         return self._top, self._render
 
-    def _point(self, u, v, jitter=4):
+    def _point(self, u, v, jitter=4, clamp=None):
         """(u,v) -> client coords of the render window (screen px of the
-        captured content rect, then ScreenToClient)."""
+        captured content rect, then ScreenToClient). `clamp` = (u0, v0, u1, v1)
+        keeps the jittered point inside that box of the content."""
         top, render = self._target()
         client = WindowState.read(top).client
         c = Viewport(client=client, chrome=fit_chrome(client, self.cfg.target.chrome)).content
         x = c.left + u * c.width + random.uniform(-jitter, jitter)
         y = c.top + v * c.height + random.uniform(-jitter, jitter)
-        x = min(max(x, c.left), c.right - 1)
-        y = min(max(y, c.top), c.bottom - 1)
+        x0, y0, x1, y1 = c.left, c.top, c.right - 1, c.bottom - 1
+        if clamp:
+            x0, y0 = c.left + clamp[0] * c.width, c.top + clamp[1] * c.height
+            x1, y1 = c.left + clamp[2] * c.width, c.top + clamp[3] * c.height
+        x = min(max(x, x0), x1)
+        y = min(max(y, y0), y1)
         pt = wintypes.POINT(int(x), int(y))
         _user32.ScreenToClient(render, ctypes.byref(pt))
         return pt.x, pt.y
@@ -228,6 +238,55 @@ class Injector(_ActionBase):
             time.sleep(dur / 1000 / steps)
         time.sleep(0.03)
         self._post(WM_LBUTTONUP, 0, _lparam(x1, y1))
+
+    # --- press / release / cancel: the 멈춰 button registers on mouse UP ---
+    press_lead = PRESS_LEAD_GPG
+    uses_swipe = False
+
+    def start_delay(self):
+        return 0.0
+
+    def press(self, u, v, clamp=None):
+        """DOWN at (u,v) and hold; returns perf_counter() just after posting."""
+        if not self.execute:
+            print(f"    [dry-run] press {u:.3f},{v:.3f}")
+            return time.perf_counter()
+        x, y = self._point(u, v, clamp=clamp)
+        self._down = (u, v, x, y)
+        self._post(WM_MOUSEMOVE, 0, _lparam(x, y))
+        self._post(WM_LBUTTONDOWN, MK_LBUTTON, _lparam(x, y))
+        return time.perf_counter()
+
+    def release(self):
+        """UP at the pressed point (the click lands on UP)."""
+        if not self.execute:
+            print("    [dry-run] release")
+            return time.perf_counter()
+        if self._down is None:
+            return None
+        _, _, x, y = self._down
+        self._down = None
+        self._post(WM_LBUTTONUP, 0, _lparam(x, y))
+        return time.perf_counter()
+
+    def cancel(self):
+        """Drag the held press off the button (6 MK_LBUTTON moves to v + CANCEL_DV), then UP there."""
+        if not self.execute:
+            print("    [dry-run] cancel")
+            return time.perf_counter()
+        if self._down is None:
+            return None
+        u, v, x, y = self._down
+        self._down = None
+        # AI-NOTE: dy is the jitter-free px height of CANCEL_DV, so the drag always ends below the press point.
+        dy = self._point(u, v + CANCEL_DV, jitter=0)[1] - self._point(u, v, jitter=0)[1]
+        for i in range(1, 7):
+            self._post(WM_MOUSEMOVE, MK_LBUTTON, _lparam(x, round(y + dy * i / 6)))
+        self._post(WM_LBUTTONUP, 0, _lparam(x, y + dy))
+        return time.perf_counter()
+
+    def release_swipe(self, t_release, clock, sleeper):
+        raise NotImplementedError("GPG releases with WM_LBUTTONUP; release_swipe is the LD swipe fallback")
 
     def back(self):
         """Android BACK (Esc in GPG). Used to unwind a half-finished lobby
@@ -300,6 +359,32 @@ def resolve_device(adb, preferred=""):
     raise RuntimeError(f"adb: cannot pick a device (attached: {devs or 'none'})")
 
 
+SWIPE_METHOD = ("swipe", None, None)
+# Linux input codes used by the sendevent method
+EV_SYN, EV_KEY, EV_ABS = 0, 1, 3
+BTN_TOUCH, ABS_MT_POSITION_X, ABS_MT_POSITION_Y, ABS_MT_TRACKING_ID = 330, 53, 54, 57
+
+
+def method_line(method):
+    """The one status line naming the LD release method (`method` = probe result)."""
+    if method[0] == "sendevent":
+        return f"LD 입력 방식: sendevent ({method[1]})"
+    return "LD 입력 방식: input swipe (정확도 낮음)"
+
+
+def parse_getevent(text):
+    """[(device, (max_x, max_y))] for every device in `getevent -pl` output that has
+    ABS_MT_POSITION_X and _Y."""
+    found = []
+    for block in re.split(r"(?m)^add device \d+:\s*", text or "")[1:]:
+        dev = block.split(None, 1)[0] if block.strip() else ""
+        mx = re.search(r"ABS_MT_POSITION_X\s*:.*?max\s+(\d+)", block)
+        my = re.search(r"ABS_MT_POSITION_Y\s*:.*?max\s+(\d+)", block)
+        if dev and mx and my:
+            found.append((dev, (int(mx.group(1)), int(my.group(1)))))
+    return found
+
+
 class AdbInjector(_ActionBase):
     """Same interface as Injector, input via `adb shell input` (LDPlayer)."""
 
@@ -310,6 +395,10 @@ class AdbInjector(_ActionBase):
         self.adb = self.cfg.input.adb
         self.device = self.cfg.input.serial
         self.res_w, self.res_h = ADB_FALLBACK_SIZE
+        self._method = None          # cached probe_release_method() result
+        self._spawn_delay = 0.0      # median of the timed `adb shell true` probes
+        self._down = None            # held press: (x, y, u, v) for sendevent, (x, y) for the swipe fallback
+        self._procs = []             # Popen objects of timed calls, reaped on the next spawn
         if execute:
             self.device = resolve_device(self.adb, self.device)
             print(f"adb device: {self.device}", flush=True)
@@ -362,6 +451,114 @@ class AdbInjector(_ActionBase):
         x1, y1 = _px(u1, v1, self.res_w, self.res_h)
         dur = dur_ms if dur_ms is not None else random.randint(160, 300)
         self._run("input", "swipe", x0, y0, x1, y1, dur)
+
+    # --- press / release / cancel ---
+    press_lead = PRESS_LEAD_LD
+
+    def probe_release_method(self):
+        """('sendevent', device, (max_x, max_y)) when a multi-touch node is writable, else
+        ('swipe', None, None). Read-only commands only, all through _out (temp file). Cached."""
+        if self._method is not None:
+            return self._method
+        method = SWIPE_METHOD
+        for dev, axes in parse_getevent(self._out("getevent", "-pl")):
+            if "W" in self._out("test", "-w", dev, "&&", "echo", "W"):
+                method = ("sendevent", dev, axes)
+                break
+        times = []
+        for _ in range(5):
+            t0 = time.perf_counter()
+            self._out("true")
+            times.append(time.perf_counter() - t0)
+        self._spawn_delay = statistics.median(times)
+        self._method = method
+        return method
+
+    def _release_method(self):
+        # AI-NOTE: a dry run must not touch adb, so it reports the swipe default without caching it.
+        if self._method is None and not self.execute:
+            return SWIPE_METHOD
+        return self.probe_release_method()
+
+    @property
+    def uses_swipe(self):
+        return self._release_method()[0] == "swipe"
+
+    def start_delay(self):
+        """Seconds from spawning an `input swipe` until it touches down; sendevent has none."""
+        return self._spawn_delay if self.uses_swipe else 0.0
+
+    def _spawn(self, shell_cmd):
+        """Start one `adb shell` call without waiting; returns perf_counter() just after."""
+        self._procs = [p for p in self._procs if p.poll() is None]
+        # Same no-pipe rule as _run: DEVNULL, never PIPE (see the comment there).
+        self._procs.append(subprocess.Popen(
+            [self.adb, "-s", self.device, "shell", shell_cmd],
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
+        return time.perf_counter()
+
+    @staticmethod
+    def _events(dev, *events):
+        return "; ".join(f"sendevent {dev} {t} {c} {v}" for t, c, v in events)
+
+    def _up(self, dev):
+        return self._events(dev, (EV_ABS, ABS_MT_TRACKING_ID, -1), (EV_KEY, BTN_TOUCH, 0), (EV_SYN, 0, 0))
+
+    def press(self, u, v, clamp=None):
+        if not self.execute:
+            print(f"    [dry-run] press {u:.3f},{v:.3f}")
+            return time.perf_counter()
+        method, dev, axes = self._release_method()
+        if method == "swipe":
+            # swipe fallback: a touch cannot be held, so only the point is kept for release_swipe
+            self._down = _px(u, v, self.res_w, self.res_h)
+            return time.perf_counter()
+        x, y = _px(u, v, axes[0] + 1, axes[1] + 1)
+        self._down = (x, y, u, v)
+        return self._spawn(self._events(
+            dev, (EV_ABS, ABS_MT_TRACKING_ID, 1), (EV_ABS, ABS_MT_POSITION_X, x),
+            (EV_ABS, ABS_MT_POSITION_Y, y), (EV_KEY, BTN_TOUCH, 1), (EV_SYN, 0, 0)))
+
+    def release(self):
+        if not self.execute:
+            print("    [dry-run] release")
+            return time.perf_counter()
+        method, dev, _ = self._release_method()
+        if method == "swipe" or self._down is None:
+            return None
+        self._down = None
+        return self._spawn(self._up(dev))
+
+    def cancel(self):
+        if not self.execute:
+            print("    [dry-run] cancel")
+            return time.perf_counter()
+        method, dev, axes = self._release_method()
+        if method == "swipe" or self._down is None:
+            self._down = None
+            return None
+        x, _, u, v = self._down
+        self._down = None
+        y = _px(u, v + CANCEL_DV, axes[0] + 1, axes[1] + 1, jitter=0)[1]
+        move = self._events(dev, (EV_ABS, ABS_MT_POSITION_X, x), (EV_ABS, ABS_MT_POSITION_Y, y), (EV_SYN, 0, 0))
+        return self._spawn(move + "; " + self._up(dev))
+
+    def release_swipe(self, t_release, clock, sleeper):
+        """Swipe fallback: one `input swipe x y x y <PRESS_LEAD_LD ms>` spawned so its UP lands at
+        t_release. Returns clock() after spawning, or None (nothing sent) if that time has passed."""
+        spawn_at = t_release - self.start_delay() - PRESS_LEAD_LD
+        now = clock()
+        if self._down is None or now > spawn_at:
+            return None
+        sleeper(spawn_at - now)
+        x, y = self._down
+        self._down = None
+        cmd = f"input swipe {x} {y} {x} {y} {int(PRESS_LEAD_LD * 1000)}"
+        if not self.execute:
+            print("    [dry-run]", cmd)
+        else:
+            self._spawn(cmd)
+        return clock()
 
     def back(self):
         """Android BACK. Used to unwind a half-finished lobby navigation
