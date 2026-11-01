@@ -2,7 +2,7 @@
 title: Joiner flow (wait_and_accept)
 type: component
 updated: 2026-11-01
-sources: [rdf04-t4, rdf04-t8]
+sources: [rdf04-t4, rdf04-t8, rdT05]
 ---
 # Joiner flow (wait_and_accept)
 
@@ -18,7 +18,7 @@ sources: [rdf04-t4, rdf04-t8]
 4. Otherwise `recover(f)` (only in the waiting phase) and a "still waiting for an invite (n min)" log every 60 s.
 
 ## Name check
-Each popup frame reads `invite_name`; `name_matches(name, host)` must hold on `NAME_STREAK` = 2 consecutive reads (R2) before the accept tap on `accept_uv`. A mismatch resets the streak. After `NAME_READS_MAX` = 5 reads without an accept, the popup is closed with `close_uv`, `invite from <name|?> -- declined` is logged, and waiting continues (1 s sleep so the popup can close).
+Each popup frame calls `invite.invite_name_matches(f, host)` (multi-threshold OCR, see [invite-detect](invite-detect.md)); the `matched` flag must hold on `NAME_STREAK` = 2 consecutive reads (R2) before the accept tap on `accept_uv`. A mismatch resets the streak. The returned name is only logged (`last_name`). After `NAME_READS_MAX` = 5 reads without an accept, the popup is closed with `close_uv`, `invite from <name|?> -- declined` is logged, and waiting continues (1 s sleep so the popup can close).
 
 ## After accept
 - Phase `joining`: no `recover` is called, because a loading screen is "unknown" to it and its BACK/relaunch would undo the accept. `join_s` for a joined room or a battle, else `'failed'`; a popup still up after `join_s` is closed with X and also `'failed'`.
@@ -30,4 +30,5 @@ No tap is made. After the first decision it logs `would accept` or `would declin
 
 ## Evidence
 - commit `09a8c4e` (branch task/rdf04-t4, not yet merged into this checkout, so paths are not lint-checked) — adds src/rdom/input/coop_join.py (constants, phases, return values, the AI-NOTE on skipping recover while joining) and tests/test_coop_join.py (fake grabber, injector and clock covering AC1-AC5).
+- commit `4141695` (branch task/rdT05, not yet merged into this checkout, so paths are not lint-checked) — src/rdom/input/coop_join.py uses `invite_name_matches` in the name check; tests/test_coop_join.py monkeypatches it.
 - [invite-detect](invite-detect.md) — the detectors this flow calls.

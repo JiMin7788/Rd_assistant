@@ -276,3 +276,7 @@
 ## 2026-11-01 · rdf04-r1-s5 · game_in_front None when adb cannot start
 - AdbInjector._out also swallows OSError/FileNotFoundError (not only TimeoutExpired), so game_in_front returns None instead of raising when adb.exe is missing or crashes at spawn.
 - pages: components/input-inject.md (updated)
+
+## 2026-11-01 · rdT05 · Invite name read robust on live GPG frames
+- One OCR cut (150) read nothing on live GPG popups; invite.invite_name_matches(f, host) now tries NAME_THRESHOLDS (150,130,170,100,190,210) and matches if any Hangul row passes name_matches; wait_and_accept uses it, invite_name is the longest row for logs only.
+- pages: components/invite-detect.md (updated), components/coop-join.md (updated)

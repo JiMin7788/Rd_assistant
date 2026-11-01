@@ -2,7 +2,7 @@
 title: Invite popup and joined-room detection
 type: component
 updated: 2026-11-01
-sources: [rdf04-t3]
+sources: [rdf04-t3, rdT05]
 ---
 # Invite popup and joined-room detection
 
@@ -11,7 +11,9 @@ sources: [rdf04-t3]
 ## Entry points
 - `invite_popup(f)` returns `{'accept_uv', 'close_uv'}` or None. It needs both `invite_title.png` (TITLE_BOX) and `invite_accept.png` (ACCEPT_BOX) at >= 0.80. `accept_uv` is the matched button centre, `close_uv` is the fixed X `CLOSE_UV = (0.867, 0.171)`.
 - `joined_room(f)` is True when `board.has_modal_x(f)` holds and `room_title.png` (ROOM_TITLE_BOX) scores >= 0.80; the same check serves host and joiner view.
-- `invite_name(f)` OCRs NAME_BOX with `friend_coop._ocr_data` and keeps Hangul syllables only, because the banner artwork makes Tesseract emit stray punctuation and digits. `name_matches(text, host)` accepts equal strings (spaces removed) or `friend_coop._name_cover >= NAME_COVER_MIN` (0.8). A false accept would put the bot in a stranger's room, so a weak cover is rejected.
+- `invite_name_matches(f, host)` returns `(matched, name_read)` and is what the joiner uses. It OCRs NAME_BOX (`friend_coop._ocr_data`) at every cut in `NAME_THRESHOLDS = (150, 130, 170, 100, 190, 210)` and keeps Hangul syllables only per row (the banner artwork makes Tesseract emit stray punctuation and digits). It is True when ANY row at ANY threshold passes `name_matches`, and stops at the first match. `name_read` is the matching row, else the longest Hangul row seen ('' if none). Reason: a single cut (150) read nothing on live GPG frames of 2026-11-01 (1252x2232); each cut reads the name on some frames and not others, and a junk row must not hide a good one.
+- `invite_name(f)` is for logging only: the longest Hangul row over all thresholds, '' if unreadable. Do not use it for the accept decision.
+- `name_matches(text, host)` accepts equal strings (spaces removed) or `friend_coop._name_cover >= NAME_COVER_MIN` (0.8). A false accept would put the bot in a stranger's room, so a weak cover is rejected.
 - `scores(f)` returns the raw three template scores for threshold work.
 
 ## Detection method
@@ -29,7 +31,9 @@ Negatives were the six rdF04 fixtures against the templates they are not, plus 6
 ## Pitfalls
 - On LD the popup's yellow 초대 수락 button reads `start_ready` True ([profiles-ld](profiles-ld.md)); this module does not change that detector, it only offers `invite_popup` as the separate check.
 - The lower 협동 같이하기 text of the popup starts at v 0.26, so ROOM_TITLE_BOX ends at v 0.25 to keep popups out (popup scores 0.443 GPG, 0.459 LD).
-- Name OCR is unverified on live LD frames; only the fixtures were used.
+- Name OCR is unverified on live LD frames; only the fixtures were used. On GPG, six live popup frames (`tests/fixtures/rdf04/gpg_popup_2257*.png`, `_2258*.png`) plus `gpg_invite_popup` all match 대변먹는자, and none matches 배속봇, 웅로어 or 홍길동 (tests/test_invite.py). The LD fixture still reads its own name 배속봇 and does not match the GPG host.
+- Cost: up to 6 OCR passes per popup frame when nothing matches (a decline path), one pass set per read in the joiner.
 
 ## Evidence
 - commit `829080e` (branch task/rdf04-t3, not yet merged into this checkout, so paths are not lint-checked) — adds src/rdom/perception/invite.py (functions, boxes, thresholds, docstring with the measured scores and negative set), the three templates in assets/templates/, and tests/test_invite.py.
+- commit `4141695` (branch task/rdT05, not yet merged into this checkout, so paths are not lint-checked) — src/rdom/perception/invite.py adds NAME_THRESHOLDS, `_name_rows`, `invite_name_matches` and the longest-row `invite_name`; tests/test_invite.py runs the six live GPG fixtures and the other-host declines.
