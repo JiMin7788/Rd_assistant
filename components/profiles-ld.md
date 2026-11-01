@@ -2,7 +2,7 @@
 title: Capture profiles (LDPlayer / GPG) and the LD offline check
 type: component
 updated: 2026-11-01
-sources: [rdf04-t1]
+sources: [rdf04-t1, rdf04-r1-s2]
 ---
 # Capture profiles (LDPlayer / GPG) and the LD offline check
 
@@ -33,6 +33,12 @@ calls the profile module yet, and the adb input path does not exist yet (rdf04-t
 Read-only; prints the 12 screen detectors, `read_speed`, `slot_pending`/`start_ready`, `gear.ui_state` and
 `detect_deck` per PNG or per folder. `--sessions` cuts frames out of the old LD session videos into a fresh
 tmp dir, never under `data/`. The module docstring holds the recorded run (6 fixtures + 22 session frames).
+- `content_of(frame, cfg)` runs before the detectors and prints one info line per file. A frame exactly the
+  `[target.place]` size (1154x2082) is a whole-window grab: it is cropped with `fit_chrome` + `Viewport(...).content`
+  (what the bot does), because the detectors expect the content area only; on a window grab `room`/`modalX` read 0.
+  Any other size is used as is (content frame). The line shows chrome insets L/T/R/B, content size, aspect vs
+  9:16 and the % difference; over 1% it adds `NOT 9:16: window WxH would give 9:16`, which names the window size
+  to use (needed when the window is too narrow for `fit_chrome` to give 9:16, as it clamps `right` to 0).
 - The screen detectors written on LD hold on LD: lobby, friend menu, coop room, battle, result screen all read
   as expected on the session frames.
 - Popup and joined-room detection now live in [invite-detect](invite-detect.md) (rdf04-t3).
@@ -47,4 +53,5 @@ the README names each source. LD crops are 1122x1994, GPG crops 1244x2224.
 
 ## Evidence
 - commit `8d88a7a` (branch task/rdf04-t1, not yet merged into this checkout, so paths are not lint-checked) — adds config/recorder_ld.toml (chrome measurement comment, place, monitor_index, adb keys, UNVERIFIED note), src/rdom/profile.py (Profile, PROFILES, get, uv, COOP_UV override and its OPEN comment) and the InputCfg backend/adb/serial fields in src/rdom/recorder/config.py.
+- commit `1f2bcbb` (branch task/rdf04-r1-s2, not yet merged into this checkout, so paths are not lint-checked) — check_ld_profile.py content_of and main (window-grab crop, info line, NOT 9:16 hint); test_profile_ld.py tests test_check_ld_profile_crops_window_grab_and_reports_chrome and test_check_ld_profile_reports_window_size_for_off_aspect.
 - commit `8d88a7a` — tools/check_ld_profile.py docstring holds the run (expected vs read, mismatches, findings); tests/test_profile_ld.py asserts config loads, 9:16 content, profile lookups and fixture detector results; tests/fixtures/rdf04/README.md names each fixture's source.

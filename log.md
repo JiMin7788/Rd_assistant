@@ -268,3 +268,7 @@
 ## 2026-11-01 · rdf04-i2 · Integration fixes round 2
 - invite_and_start now continues from an open coop room and from the 친구와 하기 menu (where gear_loop.recover_step ends), not only from the lobby; an unknown screen still returns None.
 - pages: components/coop-invite.md (updated)
+
+## 2026-11-01 · rdf04-r1-s2 · check_ld_profile crops window grabs
+- tools/check_ld_profile.py crops 1154x2082 whole-window grabs with the configured chrome before detecting (room/modalX read 0 on uncropped grabs) and prints chrome insets, content size, aspect, plus the window size that would give 9:16 when off by more than 1%.
+- pages: components/profiles-ld.md (updated)
