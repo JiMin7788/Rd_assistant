@@ -2,11 +2,11 @@
 title: Supervisor (duo / gear modes)
 type: component
 updated: 2026-11-01
-sources: [rdf04-t9]
+sources: [rdf04-t9, rdf04-t10]
 ---
 # Supervisor (duo / gear modes)
 
-`tools/supervisor.py` runs one or two `gear_loop.py` children, restarts a crashed bot, and stops both bots on a guard stop or a bot's 5th crash in 30 minutes. Not yet started by `run_all.py` (rdf04-t10).
+`tools/supervisor.py` runs one or two `gear_loop.py` children, restarts a crashed bot, and stops both bots on a guard stop or a bot's 5th crash in 30 minutes. Started by `run_all.py` with an explicit `--mode` ([run-all](run-all.md)).
 
 ## Modes and children
 - `--mode duo` (default): `gear_loop.py --profile ld --role inviter --execute` (bot `gear`, tag [기어]) and `--profile gpg --role joiner --execute` (bot `support`, tag [서폿]). `--mode gear`: only `--profile ld --role public --execute`. The table is `CHILDREN`; tags come from `rdom.profile`.

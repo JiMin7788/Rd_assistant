@@ -2,7 +2,7 @@
 title: Run the bot (launchers, dry-run, live)
 type: howto
 updated: 2026-11-01
-sources: [seed, rdf01-t12, rdf01-t13, rdf02-t7, rdf02-m1, rdf03-t8, rdf03-t10, rdf03-m2, rdf04-t2, rdf04-t9]
+sources: [seed, rdf01-t12, rdf01-t13, rdf02-t7, rdf02-m1, rdf03-t8, rdf03-t10, rdf03-m2, rdf04-t2, rdf04-t9, rdf04-t10]
 ---
 # Run the bot (launchers, dry-run, live)
 
@@ -11,7 +11,8 @@ Everything else is a manual / dry-run entry point. Run from `C:\dev\rdom` with `
 
 ## Production (gear deck, coop rooms)
 - Start: `봇 시작.bat` = `.venv\Scripts\python.exe -u tools\run_all.py %*` (`--no-game` = Discord only;
-  start the game loop later with Discord `/시작`). One console; closing it stops both.
+  start the game loop later with Discord `/시작`; `--gear-only` = gear bot alone on LD, default = duo). One
+  console; closing it stops everything. Console tags and SHOW lines: [run-all](../components/run-all.md).
 - Pause after current game: `봇 일시정지.bat` (creates `data\PAUSE`); resume: `봇 재개.bat` (deletes it).
 - Clean stop: Discord `/종료` (writes `data\STOP`).
 - Supervisor modes, per-bot restart and stop-both: [supervisor](../components/supervisor.md).

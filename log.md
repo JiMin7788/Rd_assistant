@@ -248,3 +248,7 @@
 ## 2026-11-01 · rdf04-t9 · Supervisor duo/gear modes
 - supervisor.py is a Supervisor class (injectable spawn/clock/sleep/notify/screenshot): duo inviter(ld)+joiner(gpg) or gear public child, crash counts per bot, guard stop or 5th crash writes STOP, waits for the other child, exits 1; writes bot_mode.json and (duo) room.json, removes pid/mode/STOP at exit; log per start `<stamp>_<bot>.log`.
 - pages: components/supervisor.md (new), components/safety-guards.md (updated), howto/run-bot.md (updated)
+
+## 2026-11-01 · rdf04-t10 · run_all duo by default, tagged tails
+- run_all passes --mode duo (or gear with --gear-only), prints a header with names from config/duo.toml, follows per-bot logs tagged [기어]/[서폿]/[디코]; decision parts are pure functions and import is side-effect free.
+- pages: components/run-all.md (new), components/supervisor.md (updated), howto/run-bot.md (updated)
