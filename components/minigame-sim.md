@@ -2,7 +2,7 @@
 title: Minigame gauge simulation and report (군밀 대청소)
 type: component
 updated: 2026-11-02
-sources: [rdf05-t6, rdf05-i1]
+sources: [rdf05-t6, rdf05-i1, rdf05-i2]
 ---
 # Minigame gauge simulation and report (군밀 대청소)
 
@@ -37,9 +37,11 @@ only the calibrated part. Replay uses no aim. `lead_min` therefore includes the 
 ## Report (`tools/minigame_report.py [--profile P] [--file F]`)
 Read-only, default `data/minigame/gauges.jsonl`. Counts only records with execute true, manual false and not
 cancel_test; prints the profile line (노랑/보라/파랑/바깥), the latency median and range, and early/late misses
-(counted over misses only) with the "전체 평균" error_ms taken over ALL counted records, or `<profile>: 기록 없음`.
-The all-record mean is the bias the H5 runbook checks (`|전체 평균 error_ms| > 8 ms`); a misses-only mean is +0 when
-every gauge hits and jumps one frame (~16 ms) on a single miss. Exact texts are in the spec R11 and the tests.
+(counted over misses only) with the "(평균 <+/-ms> ms)" error_ms taken over ALL counted records, or `<profile>: 기록 없음`.
+The all-record mean is the bias the H5 runbook checks (`|빗나감 줄의 평균| > 8 ms`); a misses-only mean is +0 when
+every gauge hits and jumps one frame (~16 ms) on a single miss. The line keeps the spec wording `(평균 ...)` even
+though the mean covers all records: a round-1 reword to `(전체 평균 ...)` broke spec R11 / scenario S35 and was
+reverted. Exact texts are in the spec R11 and the tests.
 
 ## Evidence
 - commit e7c4619 (task/rdf05-t6, not yet merged, files not yet in the main checkout) adds:
@@ -48,4 +50,5 @@ every gauge hits and jumps one frame (~16 ms) on a single miss. Exact texts are 
   - tools/minigame_report.py — the report.
   - tests/test_minigame_sim.py — the gpg 98/100 gate and the timing gates for four cases.
   - tools/minigame_bot.py — `AIM_FRAC`, `aim_used`, aim taken off the sample in `_result`.
-- commit fe04a5d (task/rdf05-i1, not yet merged): src/rdom/sim/gauge_sim.py (`_new_gauge` width scaled by HI-LO, docstring hit rates), tools/minigame_report.py (`errs` vs `miss`), tests/test_minigame_sim.py (width range, no manual timeout), CLAUDE_CODE_TODO.md (runbook says 전체 평균).
+- commit fe04a5d (task/rdf05-i1, not yet merged): src/rdom/sim/gauge_sim.py (`_new_gauge` width scaled by HI-LO, docstring hit rates), tools/minigame_report.py (`errs` vs `miss`), tests/test_minigame_sim.py (width range, no manual timeout), CLAUDE_CODE_TODO.md.
+- commit 3362a6b (task/rdf05-i2): tools/minigame_report.py `MISS_LINE` back to `(평균 {avg} ms)`, tests/test_minigame_sim.py (3 report asserts), CLAUDE_CODE_TODO.md (runbook says 빗나감 줄의 평균).

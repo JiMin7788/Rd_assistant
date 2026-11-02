@@ -313,3 +313,7 @@
 ## 2026-11-02 · rdf05-i1 · Integration fixes round 1
 - Sim yellow width is now 2.5-3.5 % of travel (was a raw u width, 1.5x too easy); report mean error_ms is over all records; plan_release always answers on a fitted gauge and _choose fixes the search window per gauge, so narrow yellow no longer ends in the 8 s timeout (GPG sim 102/104, LD rates re-recorded). HORIZON_PERIODS 2 reason documented.
 - pages: components/policy-minigame.md (updated), components/minigame-bot.md (updated), components/minigame-sim.md (updated)
+
+## 2026-11-02 · rdf05-i2 · Integration fixes round 2
+- Report miss line restored to the spec wording `(평균 <+/-ms> ms)` (R11/S35); the mean stays over all records. Runbook says `빗나감 줄의 평균`. The always-release planner fallback is already on policy-minigame.md; the plan documents (spec R4, design PLAN row, S16) are not part of this diff.
+- pages: components/minigame-sim.md (updated)
