@@ -611,3 +611,33 @@ def test_replay_gate_on_recording():
     assert verified >= 1
     assert out[-1] == f"리플레이: 게이지 8개, 계획한 프레임이 노랑 {verified}개, 확인 불가 {len(loop.replay_log) - verified}개"
     assert sum("[드라이런]" in line for line in out) >= verified
+
+
+# ---------------------------------------------------------------- planning window (rdf05-i1)
+def test_release_after_a_cancel_test_gets_a_fresh_search_window(tmp_path, monkeypatch):
+    # AI-NOTE: the window end is fixed per gauge; if it survived the cancel test the second plan would see ~2 frames only.
+    r = run(tmp_path, monkeypatch, sim_s=9.0, cancel_test=True)
+    cancel_t = next(c[1] for c in r.inj.calls if c[0] == "cancel")
+    after = [p for p in r.plans if p.now > cancel_t and p.plan is not None]
+    assert after and after[0].kw["horizon_periods"] == pytest.approx(bot.HORIZON_PERIODS)
+    assert r.recs[0]["zone"] == "노랑 (완벽해)"
+
+
+def _choose_gauge(old_frame_t):
+    from rdom.policy.minigame import Fit, Plan
+    fit = Fit(0.16, 0.84, 1.0, 0.0, 0.0)
+    old = Plan(frame_t=old_frame_t, release_t=old_frame_t - 0.06, margin=0.01, predicted_u=0.5)
+    return SimpleNamespace(fit=fit, fc=(1 / 60.0, 0.0), read=SimpleNamespace(yellow=(0.45, 0.48)),
+                           plan=old, window_end=None)
+
+
+def test_choose_replaces_an_old_plan_whose_refit_margin_is_negative():
+    g = _choose_gauge(0.0294)                     # the refit puts this frame at u ~ 0.2, far outside yellow
+    got = bot.GaugeLoop._choose(None, g, 0.0, 0.06, 0.0)
+    assert got is not None and got.frame_t != g.plan.frame_t and got.margin >= 0
+
+
+def test_choose_keeps_an_old_plan_that_is_still_in_yellow():
+    g = _choose_gauge(0.5 * (0.465 - 0.16) / 0.68)  # tip at the yellow centre
+    got = bot.GaugeLoop._choose(None, g, 0.0, 0.06, 0.0)
+    assert got.frame_t == g.plan.frame_t

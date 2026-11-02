@@ -21,10 +21,11 @@ from the bot's own reading.
 Hit rates (python tools/minigame_sim.py --case C --gauges N --seed S; yellow among ALL N gauges, gauges that
 got no release count as they ended; capture_delay 0.03 s; the 98 % gate is only on the gpg case in
 tests/test_minigame_sim.py, the rest is recorded, not gated):
-  gpg        --gauges 104 --seed 1   노랑 103/104 (99 %)   (gated: >= 98 of gauges 5..104)
-  ld60       --gauges  40 --seed 1   노랑  22/40  (55 %)   latency estimate 176 ms (sim 150 ms, start 200 ms)
-  ld30       --gauges  40 --seed 1   노랑  26/40  (65 %)   latency estimate 200 ms
-  ld60swipe  --gauges  40 --seed 1   노랑  13/40  (32 %)   latency estimate 182 ms
+  gpg        --gauges 104 --seed 1   노랑 102/104 (98 %)   (gated: >= 98 of gauges 5..104, no manual stop;
+                                                          yellow width 2.5-3.5 % of travel, spec R11)
+  ld60       --gauges  40 --seed 1   노랑  21/40  (52 %)   latency estimate 176 ms (sim 150 ms, start 200 ms)
+  ld30       --gauges  40 --seed 1   노랑  23/40  (58 %)   latency estimate 199 ms
+  ld60swipe  --gauges  40 --seed 1   노랑  11/40  (28 %)   latency estimate 182 ms
 Cause of the LD numbers: the assumed input jitter (+-25 ms, and +-30 ms swipe start jitter) is larger than a game
 frame (16.7 ms at 60 fps), so the UP lands on the planned frame or a neighbour at random; the loop cannot know it.
 These are our assumptions, not measurements; the user decides what LD is worth after H5.
@@ -134,7 +135,7 @@ class SimGame:
     def _new_gauge(self, t_start):
         prev = self.gauges[-1].yc if self.gauges else None
         speed = self.rng.uniform(*self.speed_range)
-        yw = self.rng.uniform(*self.yellow_w_range)
+        yw = self.rng.uniform(*self.yellow_w_range) * (self.HI - self.LO)     # spec R11: share of travel
         while True:
             yc = self.rng.uniform(0.32, 0.68)
             if prev is None or abs(yc - prev) >= 0.02:       # a new gauge must look different (same_bar)
