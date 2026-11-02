@@ -18,8 +18,9 @@ C:/dev/_hub/features/minigame/rec/gpg_20261102_003916.mp4, latency 0, GPG press 
   8 gauges found (each once); a plan was reached in 6: gauges 1 (planned frame 3546; yellow 0.0273 u is narrower
   than one frame step of 0.031 u, so the planner takes the best in-yellow frame below the 15 % margin) and 3
   (planned frame 4662 = 77.70 s, 216 frames before the user's stop) read 노랑 (완벽해) = 2 of 2 verifiable plans
-  yellow; gauges 5, 6, 7 and 8 planned a frame at or after the user's own stop (확인 불가, 4); gauges 2 and 4 got
-  no plan (stop before 1.5 periods). Output: "리플레이: 게이지 8개, 계획한 프레임이 노랑 2개, 확인 불가 4개".
+  yellow; gauges 5, 6, 7 and 8 planned a frame at or after the user's own stop (확인 불가); gauges 2 and 4 got
+  no plan (stop before 1.5 periods) and count as 확인 불가 too, each with its own line (6 in all).
+  Output: "리플레이: 게이지 8개, 계획한 프레임이 노랑 2개, 확인 불가 6개" (y + u = m).
   The recording's bar detector misreads the first blue edge for 2-4 frames when the triangle is under it, so a
   gauge is "the same" when bar span and yellow interval agree (same_bar) and a new one is confirmed only after
   the bar span has been still for 0.3 s with a moving tip.
@@ -327,6 +328,7 @@ class GaugeLoop:
         self.replay_yellow = self.replay_unknown = 0
         self.replay_log = []         # replay: {n, frame_t, zone} per plan that was checked
         self._ended = None           # read of the gauge that just ended: not a new gauge while it stays
+        self._cur = None             # the gauge being run (None between gauges)
 
     # ----- top level -----
     def run(self):
@@ -337,10 +339,12 @@ class GaugeLoop:
                 self.n += 1
                 self._gauge(read, shape)
         except EndOfSource:
+            self._replay_close_open_gauge()
             self.out(self._end_line())
             return EXIT_CLEAN
         except KeyboardInterrupt:
             self.injector.cancel()           # AI-NOTE: never a plain release: that would click 멈춰
+            self._replay_close_open_gauge()
             self.out(self._end_line())
             return EXIT_CLEAN
         except _Stop as s:
@@ -416,6 +420,7 @@ class GaugeLoop:
 
     def _gauge(self, read, shape):
         g = self._new_gauge(read, shape)
+        self._cur = g
         while True:
             self._check_window()
             frame, t = self.source.grab_fresh(g.band)
@@ -609,9 +614,19 @@ class GaugeLoop:
                 self._replay_unknown(g, plan)
 
     def _replay_unknown(self, g, plan):
+        # AI-NOTE: plan is None for a gauge the user stopped (or the video ended) before any plan existed;
+        # it still gets its verdict line so that yellow + unknown = gauges counted in the summary.
+        g.replay_state = "done"
         self.out(REPLAY_UNKNOWN.format(n=g.n))
         self.replay_unknown += 1
-        self.replay_log.append({"n": g.n, "frame_t": plan.frame_t, "zone": None})
+        self.replay_log.append({"n": g.n, "frame_t": plan.frame_t if plan else None, "zone": None})
+
+    def _replay_close_open_gauge(self):
+        """Replay: the video ended / Ctrl+C inside a counted gauge that has no verdict yet."""
+        g = self._cur
+        if self.replay and g is not None and g.replay_state is None:
+            self._replay_unknown(g, g.planned if g.planned is not None else g.plan)
+        self._cur = None
 
     # ----- RESULT -----
     def _result(self, g, t, *, gone=False, cancel_test=False):
@@ -634,12 +649,12 @@ class GaugeLoop:
         elif not cancel_test:
             self.out(RESULT_MANUAL.format(n=g.n, zone=zone))
         if self.replay:
-            pending = g.planned if g.planned is not None else g.plan
-            if pending is not None and g.replay_state is None:
-                self._replay_unknown(g, pending)
+            if g.replay_state is None:
+                self._replay_unknown(g, g.planned if g.planned is not None else g.plan)
         self._record(g, zone, stop_u, sample, err, manual=not by_bot, cancel_test=cancel_test)
         self._save_strip(g)
         self._ended = g.read
+        self._cur = None
 
     def _record(self, g, zone, stop_u, sample, err, *, manual, cancel_test):
         if self.records is None:

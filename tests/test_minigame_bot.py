@@ -475,6 +475,14 @@ def test_covered_game_gets_no_press_and_one_warning(tmp_path, monkeypatch):
 
 
 def test_three_unregistered_releases_stop_with_exit_3(tmp_path, monkeypatch):
+    _three_unregistered_exit_3(tmp_path, monkeypatch)
+
+
+def test_s28_three_unregistered_exit_3(tmp_path, monkeypatch):      # the name the QA scenario S28 runs
+    _three_unregistered_exit_3(tmp_path, monkeypatch)
+
+
+def _three_unregistered_exit_3(tmp_path, monkeypatch):
     r = run(tmp_path, monkeypatch, sim_s=25.0, inj_kw={"registers": False})
     assert r.code == 3
     assert [line for line in r.out if line.startswith("⚠ 게이지 1: 놓았는데")] == [
@@ -599,17 +607,20 @@ def test_replay_gate_on_recording():
     video.close()
     assert loop.n == 8                                         # all eight recorded gauges, none twice
     verified = 0
+    assert [e["n"] for e in loop.replay_log] == list(range(1, 9))   # S15: one verdict per counted gauge
     for e in loop.replay_log:
-        frame = e["frame_t"] * 60
         k = str(e["n"])                                        # gauges are confirmed in recording order
         stop = traces[k]["stop_frame"]
         if e["zone"] is None:
-            assert frame > stop - 1, f"gauge {k}: planned frame {frame:.1f} lies before the stop {stop} but was not read"
+            if e["frame_t"] is not None:                       # None = stopped before any plan: nothing to check
+                frame = e["frame_t"] * 60
+                assert frame > stop - 1, f"gauge {k}: planned frame {frame:.1f} lies before the stop {stop} but was not read"
         else:
             verified += 1
             assert e["zone"] == "노랑 (완벽해)", f"gauge {k}: planned frame {frame:.1f} reads {e['zone']}"
     assert verified >= 1
-    assert out[-1] == f"리플레이: 게이지 8개, 계획한 프레임이 노랑 {verified}개, 확인 불가 {len(loop.replay_log) - verified}개"
+    assert out[-1] == f"리플레이: 게이지 8개, 계획한 프레임이 노랑 {verified}개, 확인 불가 {8 - verified}개"
+    assert sum("계획한 프레임" in line and "게이지" in line and not line.startswith("리플레이") for line in out) == 8
     assert sum("[드라이런]" in line for line in out) >= verified
 
 
@@ -641,3 +652,215 @@ def test_choose_keeps_an_old_plan_that_is_still_in_yellow():
     g = _choose_gauge(0.5 * (0.465 - 0.16) / 0.68)  # tip at the yellow centre
     got = bot.GaugeLoop._choose(None, g, 0.0, 0.06, 0.0)
     assert got.frame_t == g.plan.frame_t
+
+
+# ---------------------------------------------------------------- QA round 1 (rdf05-q1)
+def _replay_loop(clock, src, out):
+    return bot.GaugeLoop(src, bot.NullInjector("gpg"), clock=clock, sleeper=clock.sleep, profile="gpg",
+                         execute=False, replay=True, out=out.append,
+                         latency_cal=bot.LatencyCal(default=0.0))
+
+
+def test_s15_replay_summary_counts_every_gauge_once(monkeypatch):
+    """A gauge the user stopped before any plan exists still gets its 확인 불가 line, so y + u = m."""
+    monkeypatch.setattr(bot, "REFIT_S", 0.2)
+    clock = VClock()
+    game = Game(clock, t_start=clock.now + 0.2)
+    game.register_stop(game.t_start + 0.6)                  # stopped by hand long before 1.5 periods
+    out = []
+    loop = _replay_loop(clock, FakeSource(game, clock, t_end=game.t_start + 4.0), out)
+    assert loop.run() == 0
+    assert loop.n == 1 and loop.replay_log == [{"n": 1, "frame_t": None, "zone": None}]
+    assert [line for line in out if line.startswith("게이지 1: 계획한")] == [
+        "게이지 1: 계획한 프레임 전에 직접 멈춤 (확인 불가)"]
+    assert out[-1] == "리플레이: 게이지 1개, 계획한 프레임이 노랑 0개, 확인 불가 1개"
+
+
+def test_s15_replay_end_inside_a_gauge_still_gets_a_verdict(monkeypatch):
+    monkeypatch.setattr(bot, "REFIT_S", 0.2)
+    clock = VClock()
+    game = Game(clock, t_start=clock.now + 0.2)             # never stopped: the video just ends mid-gauge
+    out = []
+    loop = _replay_loop(clock, FakeSource(game, clock, t_end=game.t_start + 1.2), out)
+    assert loop.run() == 0
+    verdicts = [line for line in out if line.startswith("게이지 1: 계획한")]
+    assert len(verdicts) == 1 and loop.replay_yellow + loop.replay_unknown == loop.n == 1
+    assert out[-1].startswith("리플레이: 게이지 1개, ")
+
+
+def test_s5_ld_probe_input_read_only(monkeypatch):
+    """--probe-input --profile ld through the real AdbInjector, with every adb command logged by a fake runner."""
+    import subprocess
+    from rdom.input import inject
+    log = []
+    answers = {"devices": "List of devices attached\n127.0.0.1:5555\tdevice\n",
+               "getevent": "add device 1: /dev/input/event2\n  name: \"touch\"\n"
+                           "    ABS (0003): ABS_MT_POSITION_X  : value 0, min 0, max 1439, fuzz 0\n"
+                           "                ABS_MT_POSITION_Y  : value 0, min 0, max 2559, fuzz 0\n",
+               "test": "W\n"}
+
+    def fake_run(cmd, **kw):
+        log.append((list(cmd), kw))
+        word = next((w for w in ("devices", "getevent", "test") if w in cmd), None)
+        if word and kw.get("stdout") not in (None, subprocess.DEVNULL, subprocess.PIPE):
+            text = answers[word]
+            kw["stdout"].write(text if "b" not in getattr(kw["stdout"], "mode", "b") else text.encode())
+        return SimpleNamespace(returncode=0)
+
+    def no_popen(*a, **k):
+        raise AssertionError("probe must not spawn a background adb call")
+
+    monkeypatch.setattr(inject.subprocess, "run", fake_run)
+    monkeypatch.setattr(inject.subprocess, "Popen", no_popen)
+    out = []
+    assert bot.main(["--profile", "ld", "--probe-input"], out=out.append) == 0
+    assert out == ["LD 입력 방식: sendevent (/dev/input/event2)"]
+    assert log, "the probe never reached the adb runner"
+    for cmd, kw in log:
+        text = " ".join(map(str, cmd))
+        assert not any(w in cmd for w in ("tap", "swipe", "sendevent")), text
+        assert "input" not in cmd[3:4], text                  # `adb -s X shell input ...` would be input injection
+        assert subprocess.PIPE not in (kw.get("stdout"), kw.get("stderr")) and not kw.get("capture_output"), text
+        assert "|" not in text, text
+    shell = [cmd[4:] for cmd, _ in log if "shell" in cmd]
+    assert all(c[0] in ("getevent", "test", "true", "wm") for c in shell), shell
+
+
+class _Hold(Exception):
+    pass
+
+
+class _FrozenSource(FakeSource):
+    """The gauge confirms (the tip moves), then every band grab comes back unchanged: the tip is never read again."""
+
+    def __init__(self, *a, hold_after=30.0, **kw):
+        super().__init__(*a, **kw)
+        import threading
+        self.hold_after, self.t_frozen = hold_after, None
+        self.reached, self.release = threading.Event(), threading.Event()
+
+    def grab_fresh(self, region_uv=None):
+        if region_uv is None:
+            return super().grab_fresh(None)
+        self._end()
+        if self.t_frozen is None:
+            self.t_frozen = self.clock.now
+        if self.clock.now - self.t_frozen >= self.hold_after:       # 30 s of fake time went by: park here
+            self.reached.set()
+            assert self.release.wait(20), "the test never let the parked loop go"
+            raise bot.EndOfSource()
+        self.clock.now += 0.04
+        return None, self.clock.now
+
+
+def test_s17_frozen_tip_warns_once(monkeypatch):
+    import threading
+    monkeypatch.setattr(bot, "REFIT_S", 0.2)
+    clock = VClock()
+    game = Game(clock, t_start=clock.now + 0.2)
+    src = _FrozenSource(game, clock, t_end=clock.now + 1000.0)
+    inj = FakeInjector(game, clock)
+    out, result = [], []
+    loop = bot.GaugeLoop(src, inj, clock=clock, sleeper=clock.sleep, profile="gpg", execute=True,
+                         latency_cal=bot.LatencyCal(default=bot.DEFAULT_LATENCY["gpg"]), out=out.append)
+    t = threading.Thread(target=lambda: result.append(loop.run()), daemon=True)
+    t.start()
+    try:
+        assert src.reached.wait(20), "the loop never got through 30 s of fake time"
+        assert t.is_alive() and result == []                  # still running, not exited
+        assert out.count("⚠ 게이지 1: 삼각형 움직임을 못 읽어서 기다려요") == 1
+        assert inj.calls == []
+        assert loop.n == 1 and loop.m == 0
+    finally:
+        src.release.set()
+        t.join(20)
+    assert result == [0] and inj.calls == []                  # ends only now, by the source ending
+
+
+class _RegisterSchedule(FakeInjector):
+    """release() registers only on the calls whose entry in `plan` is True."""
+
+    def __init__(self, *a, plan, **kw):
+        super().__init__(*a, **kw)
+        self.plan, self.k = list(plan), 0
+
+    def release(self):
+        self.registers = self.plan[self.k] if self.k < len(self.plan) else False
+        self.k += 1
+        return super().release()
+
+
+class _TwoGaugeSource(FakeSource):
+    """After a gauge stopped, a second gauge starts 1.5 s later (once)."""
+
+    restarts = 1
+
+    def _maybe_restart(self):
+        g = self.game
+        if self.restarts and g.stop_k is not None and self.clock.now > g.frame_time(g.stop_k) + 1.0:
+            self.restarts -= 1
+            g.t_start, g.stop_k = self.clock.now + 0.3, None
+            self.t_end = g.t_start + 12.0
+
+    def grab(self):
+        self._maybe_restart()
+        return super().grab()
+
+    def grab_fresh(self, region_uv=None):
+        self._maybe_restart()
+        return super().grab_fresh(region_uv)
+
+
+def test_s28_unregistered_counter_resets(tmp_path, monkeypatch):
+    """fail, fail, register, fail, fail: the counts read (1/3) (2/3), the success resets, the run never exits."""
+    monkeypatch.setattr(bot, "REFIT_S", 0.2)
+    clock = VClock()
+    game = Game(clock, t_start=clock.now + 0.2)
+    src = _TwoGaugeSource(game, clock, t_end=game.t_start + 12.0)
+    inj = _RegisterSchedule(game, clock, plan=[False, False, True, False, False, True])
+    out = []
+    loop = bot.GaugeLoop(src, inj, clock=clock, sleeper=clock.sleep, profile="gpg", execute=True,
+                         latency_cal=bot.LatencyCal(default=bot.DEFAULT_LATENCY["gpg"]), out=out.append)
+    code = loop.run()
+    warn = [line for line in out if line.startswith("⚠ 게이지") and "놓았는데" in line]
+    assert warn == ["⚠ 게이지 1: 놓았는데 삼각형이 안 멈췄어요 (1/3)", "⚠ 게이지 1: 놓았는데 삼각형이 안 멈췄어요 (2/3)",
+                    "⚠ 게이지 2: 놓았는데 삼각형이 안 멈췄어요 (1/3)", "⚠ 게이지 2: 놓았는데 삼각형이 안 멈췄어요 (2/3)"]
+    assert not any("(3/3)" in line or line.startswith("⛔") for line in out)
+    assert code == 0 and loop.m == 2 and loop.fails == 0     # both gauges registered in the end; counter back at 0
+    assert inj.k == 6 and inj.kinds().count("cancel") == 0
+
+
+class _RaisesAfterPress(FakeSource):
+    """The grabber blows up on its first use after the injector pressed."""
+
+    def window_moved(self):
+        if "press" in self.inj.kinds():
+            raise _Hold("grabber died during the hold")
+        return False
+
+
+def test_s30_exception_during_hold_cancels_then_raises(tmp_path, monkeypatch):
+    monkeypatch.setattr(bot, "REFIT_S", 0.2)
+    clock = VClock()
+    game = Game(clock, t_start=clock.now + 0.2)
+    src = _RaisesAfterPress(game, clock, t_end=game.t_start + 10.0)
+    inj = FakeInjector(game, clock)
+    src.inj = inj
+    made = []
+
+    def make_inj(cfg, execute):
+        made.append(execute)
+        return inj
+
+    seams = {"preflight": lambda profs, place: [("gpg", True, "ok")], "grabber": lambda cfg: src,
+             "injector": make_inj, "clock": clock, "sleeper": clock.sleep, "data_dir": tmp_path}
+    out = []
+    # AI-NOTE: main() maps no exception to an exit code, so the error reaches the caller (the process dies
+    # with a traceback, exit 1): not 0 (clean) and not 3 (guard stop). It must not be swallowed.
+    with pytest.raises(_Hold):
+        bot.main(["--profile", "gpg", "--execute"], seams=seams, out=out.append)
+    assert inj.kinds().count("cancel") == 1
+    assert inj.kinds().count("press") == 1 and made == [True]  # no second try, no new injector
+    assert inj.kinds()[-1] == "cancel" and src.closed
+    assert not any(line.startswith("미니게임 봇 종료") for line in out)
+
