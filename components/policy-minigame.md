@@ -2,7 +2,7 @@
 title: Minigame release planner (군밀 대청소)
 type: component
 updated: 2026-11-02
-sources: [rdf05-t2]
+sources: [rdf05-t2, rdf05-i1]
 ---
 # Minigame release planner (군밀 대청소)
 
@@ -34,7 +34,11 @@ into any loop yet. Tip reads come from [perception-minigame.md](perception-minig
   end part is cut. The fitted turning values lie 0.1-2.1 % beyond the highest sample (the peak falls between frames).
 - `plan_release` never returns a frame earlier than `now + lead_min`; a better frame that is too near is skipped
   for a later crossing. Among equal margins the earliest wins. `release_t = frame_t - latency`.
-- `None` when the best margin is below 15 % of the yellow width (this also covers "no frame in yellow").
+- Always a plan for a fitted gauge (rdf05-i1): the frame with the largest margin > 0 wins even below
+  `min_margin_frac` (15 % of yellow width; the parameter is now unused by the choice); when no frame is in yellow
+  (yellow narrower than a frame step and the frame alignment repeats every period) the frame whose predicted tip
+  is nearest the yellow centre is taken. `None` only without fit / frame clock / frames. Before, such gauges got
+  no plan and the bot never released (sim gauges 33, 81, 98 hit the 8 s manual timeout).
 - `LatencyCal.add` ignores samples outside [0, 0.5] s and `None`; `estimate()` = median of the last 7, else the
   default (the dataclass default is the GPG value; pass the LD one for LD). `latency_sample` can be negative by
   frame quantisation, which `add` then drops.
@@ -54,4 +58,5 @@ latency and the loop that uses the planner belong to rdf05-t5.
 - commit 90e6bfa (task/rdf05-t2, not yet merged, files not yet in the main checkout) adds:
   - src/rdom/policy/minigame.py — all entry points, constants, transient trimming, planner and the docstring with the easing and per-gauge error tables.
   - tests/test_minigame_policy.py — prediction gate on traces.json, fit-condition, frame_clock, plan_release (lead_min cases), LatencyCal, latency_sample and error_ms tests.
+- commit fe04a5d (task/rdf05-i1, not yet merged) — src/rdom/policy/minigame.py `plan_release` argmax / nearest-centre fallback and its docstring; tests/test_minigame_policy.py covers yellow narrower than one frame step.
 - tests/fixtures/rdf05/traces.json — recorded `[t, tip_u]` series, yellow interval and stop_frame used by the gate (from rdf05-t1).

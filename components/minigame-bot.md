@@ -2,7 +2,7 @@
 title: Minigame bot loop (군밀 대청소)
 type: component
 updated: 2026-11-02
-sources: [rdf05-t5, rdf05-t6]
+sources: [rdf05-t5, rdf05-t6, rdf05-i1]
 ---
 # Minigame bot loop (군밀 대청소)
 
@@ -35,9 +35,17 @@ starts each 대청소 round by hand; the bot runs until Ctrl+C. Not wired into r
 - `--cancel-test` cancels instead of releasing on the first hold and prints whether the tip kept moving.
 - Replay judges the planned frame, not the user's stop: yellow if the tip sits in yellow at the planned frame
   while the video still follows the fitted sweep (3 % of travel), else "확인 불가". Gate measured on
-  `gpg_20261102_003916.mp4` (latency 0, GPG lead 0.25): 8 gauges, 1 of 1 verifiable plans yellow, 4 unverifiable,
-  3 without plan (gauge 1: yellow narrower than one frame step; 2 and 4: stop before 1.5 periods). Console texts
+  `gpg_20261102_003916.mp4` (latency 0, GPG lead 0.25): 8 gauges, 2 of 2 verifiable plans yellow (gauges 1 and 3),
+  4 unverifiable, 2 without plan (gauges 2 and 4: stop before 1.5 periods). Gauge 1 (yellow narrower than one
+  frame step) now gets a plan from the planner's below-margin fallback. Console texts
   are the constants at the top of the module (`REPLAY_END`, `RESULT`, ...).
+- Narrow yellow: `_choose` fixes the planner's search window end per gauge (`_Gauge.window_end`, set at the first
+  plan, cleared whenever the plan is dropped or sent). A window sliding with `now` kept offering a better frame at
+  its far end, so the plan receded until the sim's 8 s timeout (gauge 33). The remaining window never shrinks below
+  two game frames. A weak plan (margin > 0 but < 15 % of yellow) also stays against another weak candidate, and a
+  later candidate replaces an old plan whose refit margin is < 0.
+- `HORIZON_PERIODS = 2`, not the spec R4 value 6, on purpose: with 6 the slowest gauges (period up to 1.5 s) plan up
+  to 9 s ahead and 13 of 104 sim GPG gauges hit the 8 s timeout (87/100 yellow). Documented at the constant.
 
 ## Files written (`data/minigame/`)
 - `gauges.jsonl` — one JSON line per gauge: ts, profile, execute, n, bar, yellow, period_s, fit_rms,
@@ -51,6 +59,8 @@ starts each 대청소 round by hand; the bot runs until Ctrl+C. Not wired into r
 
 - Live plans aim `AIM_FRAC` (0.25) of a game frame earlier than the latency median, and `_result` takes that aim off
   the sample again; why and how: [minigame-sim.md](minigame-sim.md).
+
+- commit fe04a5d (task/rdf05-i1, not yet merged) — tools/minigame_bot.py: `window_end`, `_choose`, `HORIZON_PERIODS` comment, replay-gate docstring; tests/test_minigame_bot.py covers the refit-margin replacement.
 
 ## Not yet proven
 Live runs: the latency defaults, `PREP_S`/`REFIT_S` timings and the real input path are unverified (H5).

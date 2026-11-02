@@ -309,3 +309,7 @@
 ## 2026-11-02 · rdf05-t7 · H5 minigame runbook and spec section
 - H5 runbook (Korean) added to CLAUDE_CODE_TODO.md: GPG 19/20 yellow, LD best effort, warm-up cancel test and latency thresholds; spec gained a minigame section; test_minigame_runbook.py guards the flags.
 - pages: howto/run-bot.md (updated)
+
+## 2026-11-02 · rdf05-i1 · Integration fixes round 1
+- Sim yellow width is now 2.5-3.5 % of travel (was a raw u width, 1.5x too easy); report mean error_ms is over all records; plan_release always answers on a fitted gauge and _choose fixes the search window per gauge, so narrow yellow no longer ends in the 8 s timeout (GPG sim 102/104, LD rates re-recorded). HORIZON_PERIODS 2 reason documented.
+- pages: components/policy-minigame.md (updated), components/minigame-bot.md (updated), components/minigame-sim.md (updated)

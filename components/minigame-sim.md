@@ -2,7 +2,7 @@
 title: Minigame gauge simulation and report (군밀 대청소)
 type: component
 updated: 2026-11-02
-sources: [rdf05-t6]
+sources: [rdf05-t6, rdf05-i1]
 ---
 # Minigame gauge simulation and report (군밀 대청소)
 
@@ -19,10 +19,13 @@ run against a simulated game. It says nothing about the real game (spec R11); re
 - `python tools/minigame_sim.py --case gpg|ld60|ld30|ld60swipe --gauges N --seed S` prints
   `sim <case>: 노랑 <y>/<n> (<pct>%)` and the latency estimate. Every case starts from a fresh `LatencyCal` with a
   wrong guess (gpg 0.060, LD 0.200) and must converge on its own.
-- Gates in `tests/test_minigame_sim.py`: gpg, seeded, 104 gauges, >= 98 yellow among gauges 5..104; for all four cases
+- Yellow width = 2.5-3.5 % of travel (`yellow_w_range` times `HI - LO` = 0.68 u), per spec R11. It was used as a raw
+  u width (3.7-5.1 % of travel), which made the gate about 1.5x too easy; a test pins yw/(HI-LO) in [0.025, 0.035].
+- Gates in `tests/test_minigame_sim.py`: gpg, seeded, 104 gauges, >= 98 yellow among gauges 5..104 and no sim
+  "manual" timeout in that range; for all four cases
   no DOWN/spawn is scheduled before its plan was made and every sent DOWN/spawn is <= 2 ms after its scheduled time.
-  LD hit rates are recorded in the module docstring, not gated (seed 1, 40 gauges: ld60 22, ld30 26, ld60swipe 13;
-  gpg 103/104). Cause: the assumed LD jitter (±25 ms, swipe start ±30 ms) exceeds a 16.7 ms game frame.
+  LD hit rates are recorded in the module docstring, not gated (seed 1, 40 gauges, spec-width yellow: ld60 21,
+  ld30 23, ld60swipe 11; gpg 102/104). Cause: the assumed LD jitter (±25 ms, swipe start ±30 ms) exceeds a 16.7 ms game frame.
 
 ## Pitfall found by the sim: AIM_FRAC
 A latency sample is "stop frame - UP sent" = true latency + the gap between UP arrival and that frame (0..1 frame), so
@@ -33,8 +36,10 @@ only the calibrated part. Replay uses no aim. `lead_min` therefore includes the 
 
 ## Report (`tools/minigame_report.py [--profile P] [--file F]`)
 Read-only, default `data/minigame/gauges.jsonl`. Counts only records with execute true, manual false and not
-cancel_test; prints the profile line (노랑/보라/파랑/바깥), the latency median and range, and early/late misses with
-mean error, or `<profile>: 기록 없음`. Exact texts are in the spec R11 and the tests.
+cancel_test; prints the profile line (노랑/보라/파랑/바깥), the latency median and range, and early/late misses
+(counted over misses only) with the "전체 평균" error_ms taken over ALL counted records, or `<profile>: 기록 없음`.
+The all-record mean is the bias the H5 runbook checks (`|전체 평균 error_ms| > 8 ms`); a misses-only mean is +0 when
+every gauge hits and jumps one frame (~16 ms) on a single miss. Exact texts are in the spec R11 and the tests.
 
 ## Evidence
 - commit e7c4619 (task/rdf05-t6, not yet merged, files not yet in the main checkout) adds:
@@ -43,3 +48,4 @@ mean error, or `<profile>: 기록 없음`. Exact texts are in the spec R11 and t
   - tools/minigame_report.py — the report.
   - tests/test_minigame_sim.py — the gpg 98/100 gate and the timing gates for four cases.
   - tools/minigame_bot.py — `AIM_FRAC`, `aim_used`, aim taken off the sample in `_result`.
+- commit fe04a5d (task/rdf05-i1, not yet merged): src/rdom/sim/gauge_sim.py (`_new_gauge` width scaled by HI-LO, docstring hit rates), tools/minigame_report.py (`errs` vs `miss`), tests/test_minigame_sim.py (width range, no manual timeout), CLAUDE_CODE_TODO.md (runbook says 전체 평균).
