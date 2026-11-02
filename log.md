@@ -317,3 +317,7 @@
 ## 2026-11-02 · rdf05-i2 · Integration fixes round 2
 - Report miss line restored to the spec wording `(평균 <+/-ms> ms)` (R11/S35); the mean stays over all records. Runbook says `빗나감 줄의 평균`. The always-release planner fallback is already on policy-minigame.md; the plan documents (spec R4, design PLAN row, S16) are not part of this diff.
 - pages: components/minigame-sim.md (updated)
+
+## 2026-11-02 · rdf05-q1 · replay summary verdict per gauge, QA scenario tests
+- Replay now logs a 확인 불가 verdict for gauges stopped before any plan or still open at video end/Ctrl+C, so yellow + unknown = gauges (recording: 2 yellow, 6 unknown); named tests for S5, S15, S17, S28, S30.
+- pages: components/minigame-bot.md (updated)

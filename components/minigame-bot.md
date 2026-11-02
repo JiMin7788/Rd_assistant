@@ -2,7 +2,7 @@
 title: Minigame bot loop (군밀 대청소)
 type: component
 updated: 2026-11-02
-sources: [rdf05-t5, rdf05-t6, rdf05-i1]
+sources: [rdf05-t5, rdf05-t6, rdf05-i1, rdf05-q1]
 ---
 # Minigame bot loop (군밀 대청소)
 
@@ -36,9 +36,13 @@ starts each 대청소 round by hand; the bot runs until Ctrl+C. Not wired into r
 - Replay judges the planned frame, not the user's stop: yellow if the tip sits in yellow at the planned frame
   while the video still follows the fitted sweep (3 % of travel), else "확인 불가". Gate measured on
   `gpg_20261102_003916.mp4` (latency 0, GPG lead 0.25): 8 gauges, 2 of 2 verifiable plans yellow (gauges 1 and 3),
-  4 unverifiable, 2 without plan (gauges 2 and 4: stop before 1.5 periods). Gauge 1 (yellow narrower than one
-  frame step) now gets a plan from the planner's below-margin fallback. Console texts
-  are the constants at the top of the module (`REPLAY_END`, `RESULT`, ...).
+  6 unverifiable (4 planned at/after the user's stop, 2 without plan: gauges 2 and 4, stop before 1.5 periods).
+  Gauge 1 (yellow narrower than one frame step) now gets a plan from the planner's below-margin fallback. Console
+  texts are the constants at the top of the module (`REPLAY_END`, `RESULT`, ...).
+- Replay summary invariant (S15): every counted gauge gets exactly one verdict line, so yellow + unknown = gauges.
+  `_replay_unknown(g, plan)` accepts `plan=None` (logs `frame_t: None`); a gauge with no plan at its stop, or still
+  open when the video ends / on Ctrl+C (`_replay_close_open_gauge`, via `GaugeLoop._cur`), counts as 확인 불가.
+  Before this the summary said "확인 불가 4" for the recording and the planless gauges got no line.
 - Narrow yellow: `_choose` fixes the planner's search window end per gauge (`_Gauge.window_end`, set at the first
   plan, cleared whenever the plan is dropped or sent). A window sliding with `now` kept offering a better frame at
   its far end, so the plan receded until the sim's 8 s timeout (gauge 33). The remaining window never shrinks below
@@ -62,6 +66,14 @@ starts each 대청소 round by hand; the bot runs until Ctrl+C. Not wired into r
 
 - commit fe04a5d (task/rdf05-i1, not yet merged) — tools/minigame_bot.py: `window_end`, `_choose`, `HORIZON_PERIODS` comment, replay-gate docstring; tests/test_minigame_bot.py covers the refit-margin replacement.
 
+## QA scenario tests (rdf05-q1)
+Named after the QA scenarios in `tests/test_minigame_bot.py`: `test_s5_ld_probe_input_read_only` (real
+`AdbInjector`, fake `subprocess.run`; no tap/swipe/sendevent, no pipes, no Popen), `test_s15_*` (summary),
+`test_s17_frozen_tip_warns_once` (tip frozen 30 s: one warning, no press, loop keeps running), `test_s28_*`
+(`test_s28_three_unregistered_exit_3`; `test_s28_unregistered_counter_resets`: fail, fail, ok, fail, fail never
+exits, counter back to 0) and `test_s30_exception_during_hold_cancels_then_raises` (one `cancel()`, the exception
+propagates out of `main()` unmapped, no retry).
+
 ## Not yet proven
 Live runs: the latency defaults, `PREP_S`/`REFIT_S` timings and the real input path are unverified (H5).
 
@@ -69,3 +81,4 @@ Live runs: the latency defaults, `PREP_S`/`REFIT_S` timings and the real input p
 - commit 04439fd (task/rdf05-t5, not yet merged, files not yet in the main checkout) adds:
   - tools/minigame_bot.py — all of the above; module docstring holds the replay gate numbers, `_hold`, `_result`, `_record`, `load_latency`/`save_latency`, `_main_live`.
   - tests/test_minigame_bot.py — `test_replay_gate_on_recording` and the loop, guard, record and latency-file tests.
+- commit d7addda (task/rdf05-q1) — tools/minigame_bot.py `_replay_unknown`, `_replay_close_open_gauge`, `_cur`; tests/test_minigame_bot.py QA round 1 tests and the 8-verdict assertion in `test_replay_gate_on_recording`.
