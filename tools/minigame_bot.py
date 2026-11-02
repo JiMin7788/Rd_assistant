@@ -15,11 +15,11 @@ TRACK (band grabs, SweepModel) -> PLAN -> HOLD (execute) or WOULD (dry run / rep
 
 Replay gate (tests/test_minigame_bot.py::test_replay_gate_on_recording, recording
 C:/dev/_hub/features/minigame/rec/gpg_20261102_003916.mp4, latency 0, GPG press lead 0.25 s), measured:
-  8 gauges found (each once); a plan was reached in 5: gauge 3 (planned frame 4662 = 77.70 s, 216 frames before
-  the user's stop) reads 노랑 (완벽해) = 1 of 1 verifiable plans yellow; gauges 5, 6, 7 and 8 planned a frame
-  at or after the user's own stop (확인 불가, 4); gauges 1, 2 and 4 got no plan (1: yellow 0.0273 u is narrower
-  than one frame step of 0.031 u and the 46-frame sweep repeats the same alignment, no frame has the margin;
-  2 and 4: stop before 1.5 periods). Output: "리플레이: 게이지 8개, 계획한 프레임이 노랑 1개, 확인 불가 4개".
+  8 gauges found (each once); a plan was reached in 6: gauges 1 (planned frame 3546; yellow 0.0273 u is narrower
+  than one frame step of 0.031 u, so the planner takes the best in-yellow frame below the 15 % margin) and 3
+  (planned frame 4662 = 77.70 s, 216 frames before the user's stop) read 노랑 (완벽해) = 2 of 2 verifiable plans
+  yellow; gauges 5, 6, 7 and 8 planned a frame at or after the user's own stop (확인 불가, 4); gauges 2 and 4 got
+  no plan (stop before 1.5 periods). Output: "리플레이: 게이지 8개, 계획한 프레임이 노랑 2개, 확인 불가 4개".
   The recording's bar detector misreads the first blue edge for 2-4 frames when the triangle is under it, so a
   gauge is "the same" when bar span and yellow interval agree (same_bar) and a new one is confirmed only after
   the bar span has been still for 0.3 s with a moving tip.
@@ -101,6 +101,9 @@ REPLAY_TOL = 0.03          # replay: |tip - model| / travel below this = the vid
 CONFIRM_MISSES = 25        # CONFIRM: new-frame timeouts (40 ms each) before falling back to WAIT
 SETTLE_S = 0.3             # CONFIRM: the bar span must not have moved for this long (zoom-in animation)
 SAME_TOL = 0.004           # bar span / yellow interval tolerance (u), spec R3
+# AI-NOTE: spec R4 says 6 periods, kept at 2 on purpose: with 6 the slowest gauges (period up to 1.5 s)
+# plan up to 9 s ahead and the sim's 8 s timeout hit 13 of 104 GPG gauges (87/100 yellow); 2 periods
+# (<= 3 s) are enough for a frame with a usable margin.
 HORIZON_PERIODS = 2        # plan_release looks this many sweep periods ahead
 AIM_FRAC = 0.25            # UP is aimed this fraction of a game frame earlier than the latency median says
 MAX_SUFFIX = 99
@@ -290,6 +293,7 @@ class _Gauge:
     latency_used: float = 0.0
     aim_used: float = 0.0            # the part of latency_used that is AIM_FRAC, not calibration
     ever_planned: bool = False
+    window_end: object = None        # end of the planner's search window (capture clock); reset when a plan is dropped
     warned_unreadable: bool = False
     warned_covered: bool = False
     next_check: float = 0.0
@@ -478,20 +482,30 @@ class GaugeLoop:
         if self.fails >= 3:
             raise _Stop(NOT_REGISTERED_STOP)
         g.released_t = g.release_sent_t = g.press_sent_t = None
-        g.planned = g.plan = None
+        g.planned = g.plan = g.window_end = None
 
     # ----- PLAN -----
     def _choose(self, g, now, latency, lead):
         """The planner's answer, but a still-reachable earlier frame stays unless a clearly better one appears."""
-        cand = plan_release(g.fit, g.fc, g.read.yellow, now, latency, lead_min=lead,
-                            horizon_periods=HORIZON_PERIODS)
+        # AI-NOTE: the search window ends at a fixed time per gauge (set at the first plan). With a window that
+        # slides along with `now`, a narrow yellow keeps offering a better frame at the far end and the plan
+        # recedes for ever (sim gauge 33: no release until the 8 s timeout). The window shrinks to the
+        # frames still reachable, but never below two game frames, so there is always an answer.
+        if g.window_end is None:
+            g.window_end = now + lead + HORIZON_PERIODS * g.fit.period
+        horizon = max(g.window_end - (now + lead), 2.0 * g.fc[0]) / g.fit.period
+        cand = plan_release(g.fit, g.fc, g.read.yellow, now, latency, lead_min=lead, horizon_periods=horizon)
         old = g.plan
         if old is not None and old.frame_t >= now + lead - 1e-9:
             y0, y1 = g.read.yellow
             u = float(g.fit.u_at(old.frame_t))
             margin = min(u - y0, y1 - u)
             w = y1 - y0
-            if margin >= 0.15 * w and (cand is None or cand.margin <= margin + 0.1 * w):
+            # AI-NOTE: a plan in yellow stays while no clearly better frame appears; a weak plan (margin
+            # < 0.15 w) also stays against another weak candidate, so a narrow yellow does not make the
+            # target jump between near-equal frames as the search window slides.
+            if margin > 0 and (cand is None or cand.margin <= margin + 0.1 * w) \
+                    and (margin >= 0.15 * w or cand is None or cand.margin < 0.15 * w):
                 return Plan(frame_t=old.frame_t, release_t=old.frame_t - latency,
                             margin=margin, predicted_u=u)
         return cand
@@ -542,10 +556,10 @@ class GaugeLoop:
             if not g.warned_covered:
                 g.warned_covered = True
                 self.out(COVERED_WARN)
-            g.plan = None
+            g.plan = g.window_end = None
             return
         if self.clock() > first_t:       # AI-NOTE: a slow grab / check ate the lead: send nothing, re-plan
-            g.plan = None
+            g.plan = g.window_end = None
             return
         button = g.read.button
         uv = ((button[0] + button[2]) / 2, (button[1] + button[3]) / 2)
@@ -555,7 +569,7 @@ class GaugeLoop:
             inj.press(*uv, clamp=button)             # keeps the point only; the swipe is the press+release
             spawn = inj.release_swipe(plan.release_t, self.clock, self.sleeper)
             if spawn is None:
-                g.plan = None
+                g.plan = g.window_end = None
                 return
             press_t = spawn
             sent_t = spawn + inj.start_delay() + inj.press_lead     # when the swipe's UP lands
@@ -568,7 +582,7 @@ class GaugeLoop:
         if sent_t is None:
             sent_t = end
         g.hold_end_t, g.last_move_t = end, None
-        g.plan = None
+        g.plan = g.window_end = None     # AI-NOTE: a later plan on this gauge (cancel test) gets a fresh window
         self._check_window()
         if test:
             self.cancel_pending = False

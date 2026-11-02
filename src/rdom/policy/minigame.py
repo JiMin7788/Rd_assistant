@@ -232,8 +232,11 @@ def plan_release(fit, frame_clock, yellow, now, latency, *, lead_min,
     """Plan | None: the game frame with the largest in-yellow margin among frames >= now + lead_min.
 
     Frames are searched from now + lead_min over horizon_periods sweep periods. A frame earlier
-    than now + lead_min is never returned (its DOWN / swipe would lie in the past). None when the
-    best margin is below min_margin_frac x yellow width or no frame is in yellow.
+    than now + lead_min is never returned (its DOWN / swipe would lie in the past). Always a Plan
+    for a fitted gauge: when no frame reaches min_margin_frac x yellow width, the frame with the
+    largest margin > 0 is taken (argmax, the earliest of equal margins; never just the first frame
+    that grazes an edge), and when no frame is in yellow at all the frame whose predicted tip is
+    nearest the yellow centre. None only without fit / frame clock / frames.
     """
     if fit is None or frame_clock is None:
         return None
@@ -247,9 +250,12 @@ def plan_release(fit, frame_clock, yellow, now, latency, *, lead_min,
     ft = fph + k * fp
     u = fit.u_at(ft)
     margin = np.minimum(u - y0, y1 - u)
-    if margin.max() < min_margin_frac * (y1 - y0):    # also covers "no frame in yellow" (margin < 0)
-        return None
-    i = int(np.argmax(margin >= margin.max() - 1e-12))     # earliest among equal margins
+    if margin.max() > 0.0:
+        i = int(np.argmax(margin >= margin.max() - 1e-12))     # earliest among equal margins
+    else:
+        # AI-NOTE: no frame in yellow (yellow narrower than a frame step and the frame alignment repeats
+        # every period): release on the frame nearest the centre; a bot that never releases is worse.
+        i = int(np.argmin(np.abs(u - 0.5 * (y0 + y1))))
     return Plan(frame_t=float(ft[i]), release_t=float(ft[i] - latency),
                 margin=float(margin[i]), predicted_u=float(u[i]))
 

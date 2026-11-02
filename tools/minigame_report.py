@@ -18,7 +18,7 @@ DEFAULT_FILE = ROOT / "data" / "minigame" / "gauges.jsonl"
 HEAD_LINE = "{profile}: 게이지 {n}개 · 노랑 {y} ({pct}%) · 보라 {p} · 파랑 {b} · 바깥 {o}"
 LATENCY_LINE = "지연: 중앙값 {med} ms, 범위 {lo}-{hi} ms"
 LATENCY_NONE = "지연: 측정값 없음"
-MISS_LINE = "빗나감: 빠름 {e} · 늦음 {l} (평균 {avg} ms)"
+MISS_LINE = "빗나감: 빠름 {e} · 늦음 {l} (전체 평균 {avg} ms)"
 NO_RECORDS = "{profile}: 기록 없음"
 ALL_PROFILES = "전체"
 ZONE_PREFIX = {"노랑": "y", "보라": "p", "파랑": "b", "바깥": "o"}     # the start of minigame_bot.ZONE_NAMES values
@@ -56,11 +56,14 @@ def report_lines(profile, recs):
     ms = [r["latency_sample"] * 1000.0 for r in recs if isinstance(r.get("latency_sample"), (int, float))]
     lines.append(LATENCY_LINE.format(med=round(statistics.median(ms)), lo=round(min(ms)), hi=round(max(ms)))
                  if ms else LATENCY_NONE)
-    # AI-NOTE: error_ms is signed (negative = stopped early); only gauges that missed yellow have a "cause".
-    errs = [r["error_ms"] for r in recs
+    # AI-NOTE: error_ms is signed (negative = stopped early). Early/late are counted over the misses only,
+    # but the mean is over ALL records: it is the systematic bias the H5 runbook compares with the sim, and
+    # a miss-only mean is +0 when every gauge hits and swings by one frame on a single miss.
+    errs = [r["error_ms"] for r in recs if isinstance(r.get("error_ms"), (int, float))]
+    miss = [r["error_ms"] for r in recs
             if r.get("zone", "")[:2] != "노랑" and isinstance(r.get("error_ms"), (int, float))]
     avg = statistics.fmean(errs) if errs else 0.0
-    lines.append(MISS_LINE.format(e=sum(e < 0 for e in errs), l=sum(e > 0 for e in errs), avg=f"{avg:+.0f}"))
+    lines.append(MISS_LINE.format(e=sum(e < 0 for e in miss), l=sum(e > 0 for e in miss), avg=f"{avg:+.0f}"))
     return lines
 
 

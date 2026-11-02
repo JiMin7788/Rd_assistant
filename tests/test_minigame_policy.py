@@ -226,25 +226,36 @@ def test_plan_matches_brute_force_and_margin_rule(k):
     plan = plan_release(fit, fc, yellow, now, 0.06, lead_min=lead)
     ft, u, marg = brute(fit, fc, yellow, now + lead, now + lead + 6 * fit.period)
     best = marg.max()
-    if best < 0.15 * 0.03:
-        assert plan is None
-    else:
+    assert plan is not None
+    assert plan.margin == pytest.approx(best)
+    assert plan.frame_t >= now + lead - 1e-9
+    assert plan.release_t == pytest.approx(plan.frame_t - 0.06)
+    assert marg[np.argmin(np.abs(ft - plan.frame_t))] == pytest.approx(best)
+
+
+def test_plan_releases_when_yellow_is_narrower_than_one_frame_step():
+    # AI-NOTE: yellow 0.001 u wide, the sweep moves 0.029 u per frame: usually no frame reaches a 15 %
+    # margin, for some frame phases none is in yellow at all. The planner must still answer: the in-yellow
+    # frame with the LARGEST margin (earliest of equals, not a first frame grazing an edge), else the
+    # frame nearest the yellow centre.
+    fit = Fit(0.15, 0.85, 0.8, 0.0, 0.0)
+    yellow, now, lead = (0.4000, 0.4010), 0.0, 0.41
+    seen = set()
+    for k in range(50):
+        fc = (FP, k * FP / 50)
+        plan = plan_release(fit, fc, yellow, now, 0.06, lead_min=lead)
+        ft, u, marg = brute(fit, fc, yellow, now + lead, now + lead + 6 * fit.period)
         assert plan is not None
-        assert plan.margin == pytest.approx(best)
         assert plan.frame_t >= now + lead - 1e-9
         assert plan.release_t == pytest.approx(plan.frame_t - 0.06)
-        assert marg[np.argmin(np.abs(ft - plan.frame_t))] == pytest.approx(best)
-
-
-def test_plan_none_when_every_margin_is_small():
-    # AI-NOTE: a 0.4 mm-wide yellow between frames: the sweep moves 0.029 per frame, so a frame
-    # inside it with 15 % margin on both sides is rare; scan phases and require at least one None.
-    fit = Fit(0.15, 0.85, 0.8, 0.0, 0.0)
-    got = [plan_release(fit, (FP, k * FP / 50), (0.4000, 0.4010), 0.0, 0.06, lead_min=0.41)
-           for k in range(50)]
-    assert any(p is None for p in got)
-    for p in got:
-        assert p is None or p.margin >= 0.15 * 0.001 - 1e-12
+        if marg.max() > 0:
+            seen.add("in")
+            assert plan.margin == pytest.approx(marg.max())
+            assert plan.frame_t == pytest.approx(ft[np.argmax(marg >= marg.max() - 1e-12)])
+        else:
+            seen.add("out")
+            assert abs(plan.predicted_u - 0.4005) == pytest.approx(np.abs(u - 0.4005).min())
+    assert seen == {"in", "out"}
 
 
 def test_plan_none_without_fit_or_clock():
@@ -253,9 +264,10 @@ def test_plan_none_without_fit_or_clock():
     assert plan_release(fit, None, YELLOW, 0.0, 0.06, lead_min=0.4) is None
 
 
-def test_plan_none_when_yellow_is_off_the_sweep():
+def test_plan_still_answers_when_yellow_is_off_the_sweep():
     fit = Fit(0.15, 0.85, 0.8, 0.0, 0.0)
-    assert plan_release(fit, (FP, 0.0), (0.9, 0.93), 0.0, 0.06, lead_min=0.4) is None
+    plan = plan_release(fit, (FP, 0.0), (0.9, 0.93), 0.0, 0.06, lead_min=0.4)
+    assert plan is not None and plan.margin < 0
 
 
 @pytest.mark.parametrize("name,press,latency,start", PROFILES)
