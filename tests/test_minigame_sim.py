@@ -105,13 +105,13 @@ def test_report_prints_the_three_lines(tmp_path):
     assert _run("--profile", "gpg", "--file", str(f)) == [
         "gpg: 게이지 6개 · 노랑 3 (50%) · 보라 1 · 파랑 1 · 바깥 1",
         "지연: 중앙값 65 ms, 범위 40-90 ms",
-        "빗나감: 빠름 1 · 늦음 2 (전체 평균 +10 ms)"]
+        "빗나감: 빠름 1 · 늦음 2 (평균 +10 ms)"]
 
 
 def test_report_mean_error_covers_hits_too(tmp_path):
     f = tmp_path / "gauges.jsonl"
     _write(f, [_rec(error_ms=10.0), _rec(error_ms=14.0)])
-    assert _run("--profile", "gpg", "--file", str(f))[2] == "빗나감: 빠름 0 · 늦음 0 (전체 평균 +12 ms)"
+    assert _run("--profile", "gpg", "--file", str(f))[2] == "빗나감: 빠름 0 · 늦음 0 (평균 +12 ms)"
 
 
 def test_report_ignores_manual_dry_run_cancel_test_and_other_profiles(tmp_path):
@@ -121,7 +121,7 @@ def test_report_ignores_manual_dry_run_cancel_test_and_other_profiles(tmp_path):
     assert _run("--profile", "gpg", "--file", str(f)) == [
         "gpg: 게이지 1개 · 노랑 1 (100%) · 보라 0 · 파랑 0 · 바깥 0",
         "지연: 중앙값 50 ms, 범위 50-50 ms",
-        "빗나감: 빠름 0 · 늦음 0 (전체 평균 +0 ms)"]
+        "빗나감: 빠름 0 · 늦음 0 (평균 +0 ms)"]
 
 
 def test_report_without_records_says_so_and_writes_nothing(tmp_path):

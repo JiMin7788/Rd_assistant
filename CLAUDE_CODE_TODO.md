@@ -206,7 +206,7 @@ H1 과 rdF02 보정(점수, 덱 바, 파워 카드, LV_BOX)은 모두 끝났다.
   - `⚠ 취소 점검` 줄이 나오면 즉시 중단하고 Claude 에게 보고 (고쳐지기 전에는 누르는 중 Ctrl+C 가 안전하지 않다)
   - `지연 보정` 줄이 `저장값` (샘플 2개 이상) 으로 나올 때까지 계속 (최대 2판)
   - 그 뒤 `.venv\Scripts\python.exe tools/minigame_report.py --profile gpg` 로 시뮬레이터 가정(지연 지터 ±3 ms, 도착 뒤 첫 게임 프레임에서 멈춤)과 비교한다
-  - 지연 범위(hi - lo) 가 20 ms 초과이거나 |전체 평균 error_ms| 가 8 ms 초과이면 (3) 전에 Claude 에게 보고
+  - 지연 범위(hi - lo) 가 20 ms 초과이거나 |빗나감 줄의 평균| 가 8 ms 초과이면 (3) 전에 Claude 에게 보고
 - [ ] (3) GPG 인수: `.venv\Scripts\python.exe tools/minigame_bot.py --profile gpg --execute` 로 10판 = 20게이지
   - 사용자가 `완벽해!` 개수를 직접 세고 봇의 집계와 일치해야 한다
   - 합격 = 20게이지 중 19 이상 노랑. 끝나면 `.venv\Scripts\python.exe tools/minigame_report.py --profile gpg`
