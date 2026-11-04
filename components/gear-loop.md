@@ -2,7 +2,7 @@
 title: gear_loop roles, exit codes and records
 type: component
 updated: 2026-11-05
-sources: [rdf04-t8, rdf04-i1, rdT06]
+sources: [rdf04-t8, rdf04-i1, rdT06, rdT07]
 ---
 # gear_loop roles, exit codes and records
 
@@ -23,7 +23,10 @@ sources: [rdf04-t8, rdf04-i1, rdT06]
 - Joiner: the round-start `recover_step` is skipped (it could close the host's invite popup with the modal X). Inside `coop_join.wait_and_accept` the callback `_joiner_recover` returns `gave_up`; a truthy value ends the wait as `'failed'` (this small change is in `coop_join.py`: `recover(f)` truthy -> `"recover gave up -- failed"`). Without it a game that never relaunches would loop on relaunches forever instead of reaching EXIT_GUARD.
 - `recover_step(f, g, inj, prof, stop_on=None)`: `stop_on(frame)` truthy ends the loop at once with `(frame, False)`, checked at the top of every iteration, after each grab in the 120 s relaunch wait and after the unknown-screen wait, always before any tap or BACK. `_joiner_recover` passes `stop_on` = `invite.invite_popup(frame) is not None or should_stop() is not None` (STOP/PAUSE). Why: `wait_and_accept` checks the invite popup and STOP/PAUSE only between `recover` calls, but one `recover_step` call grabs up to 30 frames and taps MODAL_X/BACK, which would close an incoming invite (shop popup over the lobby while an invite arrives). A stop is not a give-up, so the wait goes on and handles the popup.
 - `lobby_phase`: public -> `open_room_and_wait` (False = nobody joined, wait again, not a fail); inviter -> `friend_coop.invite_and_start(g, inj, partner, invite_wait_s, should_stop, uv=...)`; joiner -> `wait_and_accept(host, should_stop, recover=...)`.
-- `battle_phase`: wait up to 90 s for battle, tap 배속 **once** (every role; skipped when the round resumed an already running battle), `run_battle(expect=prof.bot)`; duo roles pass a `support_play` wrapper that sets the `duo` flag. `wrong_deck` -> status + screenshot, no record, no 로비로 가기, exit 3.
+- `battle_phase`: wait up to 90 s for battle, `confirm_speed` (every role, rdT07): read the caption with `read_speed`, tap 배속 (`SPEED_UV`), wait 1 s, re-read, up to `SPEED_TAPS_MAX` = 3 taps until it reads >= 2.0; logs `배속 <before> -> <after>`. A caption that is unreadable after a tap ends the loop (a blind extra tap could cycle 2.0 -> 1.0). A round that resumed a running battle (`tap_speed` False) taps only when the caption is legible and below 2.0. Then `run_battle(expect=prof.bot)`; duo roles pass a `support_play` wrapper that sets the `duo` flag. `wrong_deck` -> status + screenshot, no record, no 로비로 가기, exit 3.
+
+## 로비로 가기 retry (rdT07)
+`after_battle`: when `exit_to_lobby` returns False it logs `로비로 가기 failed -- retrying once`, sleeps 3 s, re-checks that no battle is on screen (the "battle still on screen" guard stays) and runs `exit_to_lobby` once more; a second failure saves the frame via `friend_coop.save_debug_frame("lobby_fail", ...)` to `data/coop_debug/lobby_fail_<timestamp>.png` (newest 20 kept) and logs the path. Cause: 2026-11-05 CleanCardinal never left the result screen.
 
 ## Records
 The file follows the **role** (rdT06): joiner -> `data/joiner_rounds.jsonl`, public / inviter -> `data/gear_rounds.jsonl` (`battle_phase`). It used to follow `prof.bot`, which would send both duo gear bots to one file; each line has `bot` and `mode` (`duo` for inviter/joiner, `gear` for public) plus the old fields. `room.json` is written only by the public role.
@@ -35,6 +38,7 @@ The file follows the **role** (rdT06): joiner -> `data/joiner_rounds.jsonl`, pub
 `tests/test_gear_loop_roles.py` (fakes, tmp data dirs) covers each exit code, STOP file kept, joiner/inviter call restrictions, 배속 once, record paths, tag insertion, and a joiner whose game cannot be relaunched ending in EXIT_GUARD after 3 rounds with bounded `launch_game` calls. `tests/test_gear_loop_result.py` keeps the import-safe check. Never run the live loop in QA.
 
 ## Evidence
+- commit `c5aec51` (rdT07) — `tools/gear_loop.py` `confirm_speed`, `SPEED_TAPS_MAX`, `battle_phase` branches, `after_battle` retry; tests in `tests/test_gear_loop_roles.py`, `tests/test_gear_loop_result.py`.
 - commit `215efdc` — gear_loop roles, profiles, exit codes, per-bot records, tagged status, config/duo.toml, `set_tag`.
 - commit `f9009fc` — `recover_step` returns `(frame, gave_up)`, joiner give-up ends `wait_and_accept` as failed, joiner skips round-start recover, config path under ROOT.
 - commit `3827a9b` (rdf04-i1) — `stop_on` in `recover_step` / `_joiner_recover`; three tests in the gear_loop roles test file (not in this checkout until merge) (invite popup, STOP file, invite during the unknown wait: no BACK, no tap).

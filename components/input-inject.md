@@ -1,8 +1,8 @@
 ---
 title: Input injection (M2)
 type: component
-updated: 2026-11-02
-sources: [seed, rdf04-t2, rdf04-r1-s5, rdf05-t3]
+updated: 2026-11-05
+sources: [seed, rdf04-t2, rdf04-r1-s5, rdf05-t3, rdT07]
 ---
 # Input injection (M2)
 
@@ -79,6 +79,7 @@ and touches neither the window nor adb.
   [policy-minigame](policy-minigame.md) LatencyCal).
 
 ## Evidence
+- commit `c5aec51` (rdT07) — `src/rdom/input/inject.py` `INPUT_MUTEX`, `LOCK_TIMEOUT_MS`, `SETTLE_S`, `Injector._lock/_activate/_gesture`, `tap/swipe/back` inside `_gesture()`; the same commit adds the input-lock test file (fake user32/kernel32; on task/rdT07, not in this checkout until merge, so not lint-checked). `press/release/cancel` were not changed by rdT07 (no lock/activation there).
 - `src/rdom/input/inject.py` — `Injector.press/release/cancel/release_swipe`, `_point(clamp=)`, `PRESS_LEAD_*`, `CANCEL_DV`; `AdbInjector.probe_release_method/_release_method/press/release/cancel/release_swipe/_spawn`, `parse_getevent`, `method_line` (commit `5152657`, rdf05-t3)
 - commit `5152657` (task/rdf05-t3) — adds the test_inject_press tests: press/release/cancel messages and sendevent/swipe command cases
 - `src/rdom/input/inject.py` — module docstring, `Injector.tap/swipe/back/execute_action`, UV constants

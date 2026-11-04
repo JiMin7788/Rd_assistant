@@ -2,7 +2,7 @@
 title: Live screen capture
 type: component
 updated: 2026-11-05
-sources: [rdf02-t7, seed, rdf01-t6, rdf02-t5, rdf05-t4, rdT08]
+sources: [rdf02-t7, seed, rdf01-t6, rdf02-t5, rdf05-t4, rdT07, rdT08]
 ---
 # Live screen capture
 

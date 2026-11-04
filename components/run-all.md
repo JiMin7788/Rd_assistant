@@ -2,7 +2,7 @@
 title: run_all console (duo / gear-only, tagged tails)
 type: component
 updated: 2026-11-05
-sources: [rdf04-t10, rdf04-i1, rdT06]
+sources: [rdf04-t10, rdf04-i1, rdT06, rdT07]
 ---
 # run_all console (duo / gear-only, tagged tails)
 
@@ -22,6 +22,7 @@ sources: [rdf04-t10, rdf04-i1, rdT06]
 Lock file, child processes and the tail loop live in `main(argv)`; importing the module (tests do, via `importlib`) starts nothing. Tests are in the rdf04-t10 duo test file.
 
 ## Evidence
+- commit `c5aec51` (rdT07) — `tools/run_all.py` `SECOND_COPY_WAIT_S` and the `return 1` refusal in `main`.
 - `tools/run_all.py` — `supervisor_args`, `header_text`, `load_names`, `tail_specs`, `tag_for`, `shown`, `SHOW`, `main`.
 - rdf04-t10 diff (the run_all duo test file added on the task branch) — args, header texts, default names, tags/patterns, SHOW keys, import starts no process.
 - `tools/supervisor.py` — the `--mode` values and log names it produces (see [supervisor](supervisor.md)).

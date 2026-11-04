@@ -1,8 +1,8 @@
 ---
 title: Inviter flow (invite_and_start)
 type: component
-updated: 2026-11-01
-sources: [rdf04-t5, rdf04-i2]
+updated: 2026-11-05
+sources: [rdf04-t5, rdf04-i2, rdT07]
 ---
 # Inviter flow (invite_and_start)
 
@@ -17,6 +17,9 @@ sources: [rdf04-t5, rdf04-i2]
 - Expiry: when the slot shows neither pending nor ready for `EXPIRED_S` = 3 s, it logs `invite expired -- inviting again` and invites again. The first invite goes out as soon as the room is up. A failed invite (friend list did not open / name not found) sleeps 3 s and tries again until `wait_s`.
 - No room code is read, written or posted on this path (a test checks the function body for `read_room_code`, `write_room`, `send_room_code`).
 
+## Friend-list OCR (rdT07)
+`find_friend_in_popup` OCRs `LIST_REGION` at each of `FRIEND_THRESHOLDS` = (150, 120, 180, None) (None = grayscale, no binarising) and matches the name on any row of any read (fuzzy / cover / first 3 chars). When none matches it saves the popup via `save_debug_frame("friend_list", ...)` to `COOP_DEBUG_DIR` (`data/coop_debug/friend_list_<timestamp>.png`, newest `DEBUG_KEEP` = 20 per prefix) and prints `friend list saved: <path>`. Why: the 2026-11-05 live run opened the invite window but never invited; threshold 150 alone had not read the list. Tests monkeypatch `COOP_DEBUG_DIR`.
+
 ## Decision: separate implementation
 `start_friend_coop` and `open_room_and_wait` are untouched (their 60 s wait and retry caps are live-tested); `invite_and_start` re-implements the gated steps on an injectable clock instead of refactoring them into shared helpers (AI-NOTE in the code).
 
@@ -26,4 +29,5 @@ sources: [rdf04-t5, rdf04-i2]
 ## Evidence
 - commit `3862b33` (branch task/rdf04-t5, not yet merged into this checkout, so paths are not lint-checked) — adds `invite_and_start`, `TICK_S`/`EXPIRED_S`/`ROOM_GONE_S`, `_uv_map`, `_wait_until` to src/rdom/input/friend_coop.py and tests/test_friend_coop_invite.py.
 - commit `9c8b45e` (rdf04-i2) — src/input/friend_coop.py `invite_and_start` branches on is_coop_room / is_friend_menu / is_lobby; tests/test_friend_coop_invite.py `test_starts_from_an_open_coop_room`, `test_starts_from_the_friend_menu`, `test_unknown_screen_is_none`; tests/test_gear_loop_roles.py `test_inviter_starts_from_a_coop_room_frame`.
+- commit `c5aec51` (rdT07) — `src/rdom/input/friend_coop.py` `FRIEND_THRESHOLDS`, `find_friend_in_popup`, `save_debug_frame`, `COOP_DEBUG_DIR`, `DEBUG_KEEP`.
 - [coop-join](coop-join.md) — the joiner side of the duo lobby.

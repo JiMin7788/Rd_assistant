@@ -329,3 +329,8 @@
 ## 2026-11-05 · rdT08 · GPG window titles swapped (inviter = CumbersomeTutor145, joiner = CleanCardinal77)
 - rdT06 had the two Google windows the wrong way round: profile `gpg` (대변먹는자, inviter) is window CumbersomeTutor145, `gpg2` (배속봇, joiner) is CleanCardinal77; config titles, preflight gpg2 texts and tests follow.
 - pages: components/profiles-ld.md (updated), components/preflight.md (updated), components/capture-live.md (updated)
+
+## 2026-11-05 · rdT07 · GPG+GPG duo live fixes: activation + input lock, single instance, friend-list OCR, 배속 confirm, 로비로 가기 retry
+- With two GPG windows a post to the non-foreground window is ignored; every Injector tap/swipe/back now takes the named mutex `Local\rdom_input`, activates its window (ACTIVATEAPP/NCACTIVATE/ACTIVATE + SETFOCUS), posts, releases. run_all and supervisor refuse a second copy.
+- find_friend_in_popup tries 4 thresholds and saves failures to data/coop_debug/; gear_loop confirms 배속 2.0 (max 3 taps, also on a resumed battle) and retries 로비로 가기 once, saving the frame on a second failure.
+- pages: components/input-inject.md (updated), decisions/input-coordinates.md (updated), components/gear-loop.md (updated), components/coop-invite.md (updated), components/supervisor.md (updated), components/run-all.md (updated), components/capture-live.md (updated)

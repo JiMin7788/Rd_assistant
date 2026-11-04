@@ -2,7 +2,7 @@
 title: Supervisor (duo / gear modes)
 type: component
 updated: 2026-11-05
-sources: [rdf04-t9, rdf04-t10, rdT06]
+sources: [rdf04-t9, rdf04-t10, rdT06, rdT07]
 ---
 # Supervisor (duo / gear modes)
 
@@ -27,6 +27,7 @@ sources: [rdf04-t9, rdf04-t10, rdT06]
 - Status texts are constants (`RESTART_TEXT`, `LIMIT_TEXT_*`, `GUARD_TEXT`, `ENDED_TEXT`) matching spec.md.
 
 ## Evidence
+- commit `c5aec51` (rdT07) — `tools/supervisor.py` `running_supervisor` and the `return 2` refusal in `main`.
 - `tools/supervisor.py` — `CHILDREN`, exit-code constants, text constants, `Supervisor._exited` / `_stop_both` / `run`, `_log_path` collision suffix, `_write_mode`.
 - `tools/gear_loop.py` — exit 0/3/crash contract the supervisor relies on (see [gear-loop](gear-loop.md)).
 - commit `87f0696` (rdT06, branch task/rdT06, not yet merged into this checkout) — `tools/supervisor.py` `CHILDREN` (duo = gpg inviter + gpg2 joiner, both gear) and `_log_path` (profile-named logs); tests/test_supervisor_duo.py asserts the children.

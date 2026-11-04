@@ -1,8 +1,8 @@
 ---
 title: Content-normalised (u,v) coordinates; window messages instead of adb
 type: decision
-updated: 2026-10-23
-sources: [seed]
+updated: 2026-11-05
+sources: [seed, rdT07]
 ---
 # Content-normalised (u,v) coordinates; window messages instead of adb
 
@@ -35,7 +35,7 @@ Since 2026-10-16 input is posted as window messages to Google Play Games; adb is
 - Old LDPlayer values (chrome 0/40/39/0, adb 127.0.0.1:5555) are historical only.
 
 ## Evidence
-- `src/rdom/input/inject.py` — docstring and `_point()`
+- `src/rdom/input/inject.py` — docstring (two-instance finding), `_lock/_activate/_gesture` and `_point()` (commit `c5aec51`, rdT07)
 - `src/rdom/capture/live.py` — `content_rect()` uses the same `Viewport`/`fit_chrome`
 - `config/recorder.toml` — `[target.chrome]` comment (GPG 2026-10-16; LDPlayer values)
 - `docs/01_GAME_SPEC.md` — emulator section
