@@ -2,9 +2,18 @@
 
 Google Play Games (PC) has no adb, so input is posted as window messages
 (WM_LBUTTON*/WM_MOUSEMOVE, WM_KEYDOWN) straight to the game's render child
-window (class CROSVM_1). That works in the background -- the real mouse cursor
-is not moved and the window does not need focus (verified 2026-10-16: a posted
-click opened 퀘스트, a posted Esc closed it). Esc is Android BACK in GPG.
+window (class CROSVM_1). The real mouse cursor is not moved (verified 2026-10-16:
+a posted click opened 퀘스트, a posted Esc closed it). Esc is Android BACK in GPG.
+
+Background input WITHOUT focus is NOT possible with two GPG instances (the Master's
+2026-11-05 probe): a posted click to the render child of the non-foreground window is
+ignored (3 of 3), while WM_ACTIVATEAPP + WM_NCACTIVATE + WM_ACTIVATE to the top window and
+WM_SETFOCUS to the render child made it work (2 of 2) and really made that window the
+foreground window; each of those messages alone did not. So every gesture of the executing
+Injector first takes a cross-process named mutex (the two bots take turns, one bot's drag is
+never cut by the other activating its window), activates its own window, then posts.
+Rendering/capture of a background window is unaffected. The game windows therefore take the
+foreground on every input while the bots run (accepted by the user).
 
 Content-normalized (u,v) map onto the same content rect the capture grabs
 (client - chrome, see capture.live), so a (u,v) read off a frame is tapped back
@@ -19,6 +28,7 @@ interface, input sent with `adb shell input`. make_injector picks the class
 from the config.
 """
 from __future__ import annotations
+import contextlib
 import ctypes
 import os
 import random
@@ -34,10 +44,24 @@ from rdom.recorder.window import WindowState, find_window, set_dpi_awareness
 
 _user32 = ctypes.WinDLL("user32", use_last_error=True)
 _user32.PostMessageW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
+_user32.SendMessageW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
+_user32.GetForegroundWindow.restype = wintypes.HWND
+_user32.SetForegroundWindow.argtypes = [wintypes.HWND]
+_kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+_kernel32.CreateMutexW.argtypes = [wintypes.LPVOID, wintypes.BOOL, wintypes.LPCWSTR]
+_kernel32.CreateMutexW.restype = wintypes.HANDLE
+_kernel32.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+_kernel32.WaitForSingleObject.restype = wintypes.DWORD
+_kernel32.ReleaseMutex.argtypes = [wintypes.HANDLE]
 _WNDENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
 WM_KEYDOWN, WM_KEYUP = 0x100, 0x101
 WM_MOUSEMOVE, WM_LBUTTONDOWN, WM_LBUTTONUP = 0x200, 0x201, 0x202
+WM_ACTIVATE, WM_SETFOCUS, WM_NCACTIVATE, WM_ACTIVATEAPP = 0x6, 0x7, 0x86, 0x1C
 MK_LBUTTON = 0x1
+INPUT_MUTEX = "Local\\rdom_input"     # shared by every bot process on this desktop session
+LOCK_TIMEOUT_MS = 5000                # a gesture that cannot get the lock in 5 s is skipped
+SETTLE_S = 0.03                       # pause after activation, before the first posted message
+WAIT_OBJECT_0, WAIT_ABANDONED = 0, 0x80
 VK_ESCAPE = 0x1B
 RENDER_CLASS = "CROSVM"            # GPG's game surface child window (CROSVM_1)
 # The desktop shortcut "랜덤 다이스 2.lnk" made by Google Play Games runs this.
@@ -171,6 +195,8 @@ class Injector(_ActionBase):
         self.cfg = load_config(config)
         set_dpi_awareness()
         self._top = self._render = None
+        self._mutex = None
+        self._fg_warned = False
         if execute:
             self._target()
             print(f"input: window messages -> hwnd {self._render}", flush=True)
@@ -196,6 +222,45 @@ class Injector(_ActionBase):
         _user32.ScreenToClient(render, ctypes.byref(pt))
         return pt.x, pt.y
 
+    def _lock(self):
+        """Take the cross-process input mutex. False (logged) on timeout."""
+        if self._mutex is None:
+            self._mutex = _kernel32.CreateMutexW(None, False, INPUT_MUTEX)
+        r = _kernel32.WaitForSingleObject(self._mutex, LOCK_TIMEOUT_MS)
+        if r in (WAIT_OBJECT_0, WAIT_ABANDONED):      # abandoned = the other bot died holding it: ours now
+            return True
+        print(f"    input lock timeout ({LOCK_TIMEOUT_MS} ms) -- gesture skipped", flush=True)
+        return False
+
+    def _activate(self):
+        """Make our window the foreground window; background posts are ignored with two GPG
+        instances (module docstring). The message sequence is exactly the one the probe proved."""
+        top, render = self._top, self._render
+        _user32.SendMessageW(top, WM_ACTIVATEAPP, 1, 0)
+        _user32.SendMessageW(top, WM_NCACTIVATE, 1, 0)
+        _user32.SendMessageW(top, WM_ACTIVATE, 1, 0)
+        _user32.SendMessageW(render, WM_SETFOCUS, 0, 0)
+        if _user32.GetForegroundWindow() != top:
+            _user32.SetForegroundWindow(top)
+            if _user32.GetForegroundWindow() != top and not self._fg_warned:
+                self._fg_warned = True
+                print("    window did not become the foreground window (input may be ignored)", flush=True)
+        time.sleep(SETTLE_S)
+
+    @contextlib.contextmanager
+    def _gesture(self):
+        """Lock + activate for the WHOLE gesture; yields False (post nothing) when the lock timed
+        out. The lock is released in a finally, also when posting raises."""
+        self._target()
+        if not self._lock():
+            yield False
+            return
+        try:
+            self._activate()
+            yield True
+        finally:
+            _kernel32.ReleaseMutex(self._mutex)
+
     def _post(self, msg, wparam, lparam):
         if not _user32.PostMessageW(self._render, msg, wparam, lparam):
             print(f"    PostMessage failed (err {ctypes.get_last_error()})", flush=True)
@@ -204,30 +269,36 @@ class Injector(_ActionBase):
         if not self.execute:
             print(f"    [dry-run] tap {u:.3f},{v:.3f}")
             return
-        lp = _lparam(*self._point(u, v))
-        self._post(WM_MOUSEMOVE, 0, lp)
-        self._post(WM_LBUTTONDOWN, MK_LBUTTON, lp)
-        time.sleep(random.uniform(0.05, 0.09))
-        self._post(WM_LBUTTONUP, 0, lp)
+        with self._gesture() as ok:
+            if not ok:
+                return
+            lp = _lparam(*self._point(u, v))
+            self._post(WM_MOUSEMOVE, 0, lp)
+            self._post(WM_LBUTTONDOWN, MK_LBUTTON, lp)
+            time.sleep(random.uniform(0.05, 0.09))
+            self._post(WM_LBUTTONUP, 0, lp)
 
     def swipe(self, u0, v0, u1, v1, dur_ms=None):
         dur = dur_ms if dur_ms is not None else random.randint(160, 300)
         if not self.execute:
             print(f"    [dry-run] swipe {u0:.3f},{v0:.3f} -> {u1:.3f},{v1:.3f} {dur}ms")
             return
-        x0, y0 = self._point(u0, v0)
-        x1, y1 = self._point(u1, v1)
-        self._post(WM_MOUSEMOVE, 0, _lparam(x0, y0))
-        self._post(WM_LBUTTONDOWN, MK_LBUTTON, _lparam(x0, y0))
-        time.sleep(0.03)
-        steps = max(6, dur // 16)
-        for i in range(1, steps + 1):
-            t = i / steps
-            self._post(WM_MOUSEMOVE, MK_LBUTTON,
-                       _lparam(round(x0 + (x1 - x0) * t), round(y0 + (y1 - y0) * t)))
-            time.sleep(dur / 1000 / steps)
-        time.sleep(0.03)
-        self._post(WM_LBUTTONUP, 0, _lparam(x1, y1))
+        with self._gesture() as ok:     # the lock covers the whole drag
+            if not ok:
+                return
+            x0, y0 = self._point(u0, v0)
+            x1, y1 = self._point(u1, v1)
+            self._post(WM_MOUSEMOVE, 0, _lparam(x0, y0))
+            self._post(WM_LBUTTONDOWN, MK_LBUTTON, _lparam(x0, y0))
+            time.sleep(0.03)
+            steps = max(6, dur // 16)
+            for i in range(1, steps + 1):
+                t = i / steps
+                self._post(WM_MOUSEMOVE, MK_LBUTTON,
+                           _lparam(round(x0 + (x1 - x0) * t), round(y0 + (y1 - y0) * t)))
+                time.sleep(dur / 1000 / steps)
+            time.sleep(0.03)
+            self._post(WM_LBUTTONUP, 0, _lparam(x1, y1))
 
     def back(self):
         """Android BACK (Esc in GPG). Used to unwind a half-finished lobby
@@ -236,11 +307,13 @@ class Injector(_ActionBase):
         if not self.execute:
             print("    [dry-run] back")
             return
-        self._target()
-        sc = _user32.MapVirtualKeyW(VK_ESCAPE, 0)
-        self._post(WM_KEYDOWN, VK_ESCAPE, 1 | (sc << 16))
-        time.sleep(0.06)
-        self._post(WM_KEYUP, VK_ESCAPE, 1 | (sc << 16) | (0xC0 << 24))
+        with self._gesture() as ok:
+            if not ok:
+                return
+            sc = _user32.MapVirtualKeyW(VK_ESCAPE, 0)
+            self._post(WM_KEYDOWN, VK_ESCAPE, 1 | (sc << 16))
+            time.sleep(0.06)
+            self._post(WM_KEYUP, VK_ESCAPE, 1 | (sc << 16) | (0xC0 << 24))
 
     def game_in_front(self):
         """True if the Random Dice 2 window exists, False if it is gone (game

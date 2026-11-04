@@ -18,6 +18,7 @@ PY = os.path.join(ROOT, ".venv", "Scripts", "python.exe")
 DATA = os.path.join(ROOT, "data")
 PID = os.path.join(DATA, "supervisor.pid")
 LOCK = os.path.join(DATA, "run_all.pid")
+SECOND_COPY_WAIT_S = 5        # leave the refusal text readable before the console closes
 SHOW = ("===", "room code", "someone joined", "battle result", "game over", "로비로",
         "게임이 꺼져", "팝업", "modal", "unknown screen", "!!", "Traceback", "Error",
         "stopping", "loop done", "초월", "discord bot ready", "tick:", "dm failed",
@@ -121,7 +122,8 @@ def main(argv=None):
     a = ap.parse_args(argv)
 
     if (p := read_pid(LOCK)) and alive(p) and p != os.getpid():
-        print(f"이미 실행 중입니다 (pid {p}). 이 창은 닫아도 됩니다."); time.sleep(5); return 0
+        print(f"이미 실행 중이에요 -- 두 번째 실행은 무시합니다 (pid {p}). 이 창은 닫아도 됩니다.")
+        time.sleep(SECOND_COPY_WAIT_S); return 1       # non-zero: nothing was started
     open(LOCK, "w").write(str(os.getpid()))
 
     os.system("title rdom 봇 (이 창을 닫으면 전부 종료)")

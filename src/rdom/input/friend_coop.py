@@ -13,6 +13,7 @@ retry loop).
 """
 from __future__ import annotations
 import difflib
+import glob
 import os
 import time
 
@@ -32,6 +33,11 @@ LIST_REGION = (0.08, 0.20, 0.92, 0.72)   # u0,v0,u1,v1
 # the coop-room friend slot where "+ 친구 초대" turns into "<name> 수락 대기중"
 SLOT_REGION = (0.14, 0.28, 0.86, 0.50)
 WAITING_TEXT = "수락 대기중"
+FRIEND_THRESHOLDS = (150, 120, 180, None)   # None = grayscale without binarizing
+# AI-NOTE: failed friend-list / 로비로 가기 frames land here so a live failure can be measured;
+# DEBUG_KEEP files are kept per prefix. Tests monkeypatch COOP_DEBUG_DIR (never write the real data/).
+COOP_DEBUG_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "data", "coop_debug"))
+DEBUG_KEEP = 20
 
 
 def _ocr_data(frame_rgb, region, scale=3, thresh=None):
@@ -108,14 +114,37 @@ def _rows(tokens, vtol=0.012):
 
 def find_friend_in_popup(frame_rgb, name, thresh=0.5):
     """In the friend-select popup, return the (u,v) to tap for `name`'s row, or
-    None. Rebuilds rows from per-character OCR before matching."""
+    None. Rebuilds rows from per-character OCR before matching, at several thresholds
+    (the live 2026-11-05 list was not read at 150 alone); any row of any read may match.
+    When nothing matches the popup frame is saved to data/coop_debug/ for measuring."""
     key = name.replace(" ", "")
-    for text, v in _rows(_ocr_data(frame_rgb, LIST_REGION, thresh=150)):
-        t = text.replace(" ", "")
-        if (_fuzzy(t, key) >= thresh or _name_cover(t, key) >= 0.6
-                or (len(key) >= 3 and key[:3] in t)):
-            return (0.5, v)     # tap the friend row (spans the popup width)
+    for th in FRIEND_THRESHOLDS:
+        for text, v in _rows(_ocr_data(frame_rgb, LIST_REGION, thresh=th)):
+            t = text.replace(" ", "")
+            if (_fuzzy(t, key) >= thresh or _name_cover(t, key) >= 0.6
+                    or (len(key) >= 3 and key[:3] in t)):
+                return (0.5, v)     # tap the friend row (spans the popup width)
+    path = save_debug_frame("friend_list", frame_rgb)
+    if path:
+        print(f"friend list saved: {path}", flush=True)
     return None
+
+
+def save_debug_frame(prefix, frame_rgb, keep=DEBUG_KEEP):
+    """Save `frame_rgb` as COOP_DEBUG_DIR/<prefix>_<timestamp>.png, keeping the newest `keep`
+    files of that prefix. Returns the path, or None when it could not be written."""
+    try:
+        os.makedirs(COOP_DEBUG_DIR, exist_ok=True)
+        path = os.path.join(COOP_DEBUG_DIR, f"{prefix}_{time.strftime('%Y%m%d_%H%M%S')}.png")
+        if not cv2.imwrite(path, cv2.cvtColor(np.asarray(frame_rgb), cv2.COLOR_RGB2BGR)):
+            return None
+        old = sorted(glob.glob(os.path.join(COOP_DEBUG_DIR, f"{prefix}_*.png")), key=os.path.getmtime)
+        for p in old[:-keep]:
+            os.remove(p)
+        return path
+    except Exception as e:                    # a debug dump must never break the bot
+        print(f"debug frame not saved: {e}", flush=True)
+        return None
 
 
 def slot_pending(frame_rgb):

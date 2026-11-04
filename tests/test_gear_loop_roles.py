@@ -84,7 +84,7 @@ def env(gl, monkeypatch, tmp_path):
     e.real_recover = gl.recover_step
     monkeypatch.setattr(gl, "recover_step", lambda f, g, inj, prof: (f, False))
     monkeypatch.setattr(gl, "is_battle", lambda f: e.state["battle"])
-    monkeypatch.setattr(gl, "read_speed", lambda f: 1)
+    monkeypatch.setattr(gl, "read_speed", lambda f: 2.0 if e.inj.taps else 1.0)   # the 배속 tap takes
     monkeypatch.setattr(gl, "gear", types.SimpleNamespace(reload_if_changed=lambda: None))
     monkeypatch.setattr(gl, "support", types.SimpleNamespace(reload_if_changed=lambda: None))
     monkeypatch.setattr(gl.gear_bot, "SUPPORT_SCALES", gl.gear_bot.SUPPORT_SCALES)   # restored at teardown
@@ -398,7 +398,81 @@ def test_speed_tapped_once_per_battle(env, args):
     assert env.inj.taps.count(SPEED_UV) == 1 and len(env.battles) == 1
 
 
-def test_resumed_battle_gets_no_speed_tap(env):
+# ---- rdT07: 배속 confirm / resume, 로비로 가기 retry
+def _speed_reads(monkeypatch, gl, seq):
+    """read_speed returns the next value of seq (the last one repeats)."""
+    it = iter(seq)
+    last = [None]
+    def rd(f):
+        last[0] = next(it, last[0])
+        return last[0]
+    monkeypatch.setattr(gl, "read_speed", rd)
+
+
+def test_speed_taps_until_2x_and_stops(env, monkeypatch, capsys):
+    prof = profiles.get("gpg")
+    _speed_reads(monkeypatch, env.gl, [1.0, 1.5, 2.0, 1.0])   # before, after tap 1, after tap 2
+    assert env.gl.confirm_speed(env.g, env.inj, prof, tap_first=True) == 2.0
+    assert len(env.inj.taps) == 2
+    assert "배속 1.0 -> 2.0" in capsys.readouterr().out
+
+
+def test_speed_gives_up_after_three_taps(env, monkeypatch, capsys):
+    _speed_reads(monkeypatch, env.gl, [1.0])
+    assert env.gl.confirm_speed(env.g, env.inj, profiles.get("gpg"), tap_first=True) == 1.0
+    assert len(env.inj.taps) == 3
+    assert "배속 1.0 -> 1.0" in capsys.readouterr().out
+
+
+def test_resumed_battle_below_2x_is_tapped(env, monkeypatch):
+    _speed_reads(monkeypatch, env.gl, [1.5, 2.0])
+    env.gl.confirm_speed(env.g, env.inj, profiles.get("gpg"), tap_first=False)
+    assert len(env.inj.taps) == 1
+
+
+@pytest.mark.parametrize("seen", [2.0, None])
+def test_resumed_battle_at_2x_or_unreadable_is_not_tapped(env, monkeypatch, seen):
+    _speed_reads(monkeypatch, env.gl, [seen])
+    env.gl.confirm_speed(env.g, env.inj, profiles.get("gpg"), tap_first=False)
+    assert env.inj.taps == []
+
+
+def test_battle_phase_resumed_applies_speed(env, monkeypatch):
+    _speed_reads(monkeypatch, env.gl, [1.0, 2.0])
+    assert env.gl.battle_phase("inviter", env.g, env.inj, profiles.get("gpg"), 1, tap_speed=False) == "ok"
+    assert len(env.inj.taps) == 1
+
+
+def _lobby_run(gl, monkeypatch, tmp_path, results):
+    import numpy as np
+    monkeypatch.setattr(gl.time, "sleep", lambda s: None)
+    monkeypatch.setattr(friend_coop, "COOP_DEBUG_DIR", str(tmp_path / "cd"))
+    class G:
+        def grab(self):
+            return np.zeros((8, 8, 3), np.uint8)
+    calls = iter(results)
+    gl.after_battle("clear", G(), "inj", exit_fn=lambda g, i: next(calls), battle_fn=lambda f: False)
+    return list((tmp_path / "cd").glob("lobby_fail_*.png")) if (tmp_path / "cd").exists() else []
+
+
+def test_lobby_exit_retried_once_then_ok(gl, monkeypatch, tmp_path, capsys):
+    assert _lobby_run(gl, monkeypatch, tmp_path, [False, True]) == []
+    assert "retrying once" in capsys.readouterr().out
+
+
+def test_lobby_exit_failing_twice_saves_frame(gl, monkeypatch, tmp_path, capsys):
+    assert len(_lobby_run(gl, monkeypatch, tmp_path, [False, False])) == 1
+    assert "frame saved:" in capsys.readouterr().out
+
+
+def test_lobby_exit_not_retried_when_it_works(gl, monkeypatch, tmp_path, capsys):
+    _lobby_run(gl, monkeypatch, tmp_path, [True])
+    assert "retrying" not in capsys.readouterr().out
+
+
+def test_resumed_battle_already_at_2x_gets_no_speed_tap(env, monkeypatch):
+    # rdT07: a resumed battle is tapped only when the caption is legible and below 2.0
+    monkeypatch.setattr(env.gl, "read_speed", lambda f: 2.0)
     env.state["battle"] = True
     assert env.gl.main(["--profile", "ld", "--role", "inviter"]) == 0
     assert env.inj.taps == [] and len(env.battles) == 1
