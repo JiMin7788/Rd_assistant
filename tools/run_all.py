@@ -4,11 +4,11 @@
 
 - Discord bot: always running; restarted 10 s after it dies.
 - Supervisor (game loops): started now unless --no-game, or later with Discord /시작.
-  Default = duo (gear bot on LD + support bot on Google Play Games); --gear-only starts
-  the gear bot alone (LD, public room).
+  Default = duo (two gear bots, one per Google Play Games window); --gear-only starts
+  the first gear bot alone (public room).
   All children share THIS console's window but write their output to files
   (data/discord_bot.log, data/bot_logs/*) -- no extra windows. This console shows
-  the important lines of the logs, tagged [기어] / [서폿] / [디코].
+  the important lines of the logs, tagged [기어1] / [기어2] / [디코].
 - Closing this window (or Ctrl+C) stops everything.
 """
 import argparse, fnmatch, glob, os, subprocess, sys, time
@@ -35,8 +35,8 @@ def supervisor_args(gear_only):
 
 def header_text(gear_only, host="대변먹는자", partner="배속봇"):
     if gear_only:
-        return "기어봇만 시작 (LD)"
-    return f"두 봇 시작 (기어=LD {host} · 서폿=구글 {partner})"
+        return "기어봇만 시작 (구글)"
+    return f"두 봇 시작 (기어1=구글 {host} · 기어2=구글 {partner})"
 
 
 def load_names(root=ROOT):
@@ -53,9 +53,10 @@ def load_names(root=ROOT):
 def tail_specs(data_dir=DATA):
     """(glob pattern, console tag) per followed log. One Tail per bot, so each bot's newest log is followed."""
     logs = os.path.join(data_dir, "bot_logs")
-    # the trailing * also matches a same-minute restart: YYYYMMDD_HHMM_gear_2.log (supervisor._log_path)
-    return [(os.path.join(logs, "2*_gear*.log"), "기어"),
-            (os.path.join(logs, "2*_support*.log"), "서폿"),
+    # logs are named by profile (supervisor._log_path); a same-minute restart is YYYYMMDD_HHMM_gpg_2.log.
+    # AI-NOTE: "gpg[_.]*" does not match gpg2 files, "gpg2*" matches only those.
+    return [(os.path.join(logs, "2*_gpg[_.]*"), "기어1"),
+            (os.path.join(logs, "2*_gpg2*"), "기어2"),
             (os.path.join(data_dir, "discord_bot.log"), "디코")]
 
 

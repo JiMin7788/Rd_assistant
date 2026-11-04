@@ -26,13 +26,13 @@ def test_mode_now(tmp_path):
 
 def test_exact_spec_texts():
     assert d.DUO_BLOCK == "지금은 봇 두 대가 같이 플레이 중이라 참가할 수 없어요"
-    assert d.start_reply("duo") == "▶ 두 봇을 켭니다. (기어=LD 대변먹는자 · 서폿=구글 배속봇)"
-    assert d.start_reply("gear") == "▶ 기어봇만 켭니다. (LD · 방 코드 공개 + 예약)"
+    assert d.start_reply("duo") == "▶ 두 봇을 켭니다. (기어1=구글 대변먹는자 · 기어2=구글 배속봇)"
+    assert d.start_reply("gear") == "▶ 기어봇만 켭니다. (구글 · 방 코드 공개 + 예약)"
     assert d.stop_reply("duo") == "⏹ 지금 판이 끝나면 두 봇 모두 종료합니다."
     assert d.stop_reply("gear") == "⏹ 지금 판이 끝나면 봇을 종료합니다."
     assert d.pause_reply("duo") == "⏸ 지금 판이 끝나면 두 봇 모두 일시정지합니다. (/재개 로 재개)"
     assert d.pause_reply("gear") == "⏸ 지금 판이 끝나면 일시정지합니다. (/재개 로 재개)"
-    assert d.status_title("duo", False, False) == "🟢 실행 중 · 🤖 두 봇 (기어=LD · 서폿=구글)"
+    assert d.status_title("duo", False, False) == "🟢 실행 중 · 🤖 두 봇 (기어1=구글 대변먹는자 · 기어2=구글 배속봇)"
     assert d.status_title("duo", True, True).endswith(" · ⏸ 일시정지(판 사이 대기) · ⏹ 종료 예약")
     assert d.status_title("gear", False, False) == "🟢 실행 중"
     assert d.status_title("off", False, False) == "⚫ 꺼짐"
@@ -41,7 +41,7 @@ def test_exact_spec_texts():
     assert d.presence("duo", 3, "") == "랜다2 봇 두 대 · 오늘 3판"
     assert d.presence("gear", 3, " · 대기 2명") == "랜다2 협동 · 오늘 3판 · 대기 2명"
     assert d.presence("off", 3, "") == "꺼짐"
-    assert d.SHOT_CONTENT == "기어(LD) · 서폿(구글)"
+    assert d.SHOT_CONTENT == "기어1(구글) · 기어2(구글)"
     assert d.START_HELP == "`/시작` 켜기 (둘 다 · 기어만)"
 
 
@@ -81,10 +81,10 @@ def test_log_blocks_missing_file_still_has_headers(tmp_path):
 
 def test_screens_for():
     duo = d.screens_for("duo")
-    assert [(t, f) for t, _c, f in duo] == [("[기어]", "gear.jpg"), ("[서폿]", "support.jpg")]
-    assert duo[0][1] == "config/recorder_ld.toml" and duo[1][1] == "config/recorder.toml"
+    assert [(t, f) for t, _c, f in duo] == [("[기어1]", "gear.jpg"), ("[기어2]", "gear2.jpg")]
+    assert duo[0][1] == "config/recorder.toml" and duo[1][1] == "config/recorder_gpg2.toml"
     gear = d.screens_for("gear")
-    assert len(gear) == 1 and gear[0][1] == "config/recorder_ld.toml"
+    assert len(gear) == 1 and gear[0][1] == "config/recorder.toml"
 
 
 def test_discord_bot_source_uses_duo_texts():

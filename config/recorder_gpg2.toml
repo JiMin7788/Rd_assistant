@@ -1,0 +1,58 @@
+# Recorder configuration of the SECOND Google Play Games window (rdT06: duo joiner, gear bot).
+# Copy of recorder.toml; only the window title and the place differ.
+# Anything that affects env_fingerprint must not change mid-session.
+
+[target]
+window_title_re = "^랜덤 다이스 2 - CumbersomeTutor145$"  # exact title: the 1st GPG window (recorder.toml) and the launcher must not match
+
+# Same window furniture as recorder.toml (same GPG window size, see there for the measurement).
+[target.chrome]
+left   = 132                     # GPG left icon sidebar (128) + 4px black seam
+top    = 72                      # title bar
+right  = 0
+bottom = 0
+
+# Same size as recorder.toml's window, placed LEFT of it on DISPLAY2 (x 436-4276, y 2160-4560)
+# without overlap: 1508 + 1384 = 2892 < 2900 (the first window's x).
+[target.place]
+x      = 1508
+y      = 2160
+width  = 1384
+height = 2304
+
+[capture]
+backend       = "dxcam"
+target_fps    = 30
+out_long_edge = 2059           # native content height (2026-10-07: 1280 made pips ~70px, too small to label)
+codec         = "h264_nvenc"     # auto-falls back to libx264 if unavailable
+crf           = 23
+segment_sec   = 600
+queue_frames  = 120              # ~4s buffer; absorbs ffmpeg process rotation
+monitor_index = 1                # dxcam output index: 1 = DISPLAY2 (3840x2400), where both GPG windows sit
+
+[input]
+tap_radius_n            = 0.012  # normalized distance; tap/drag boundary
+record_moves_while_down = true
+move_throttle_ms        = 8
+
+[calib]
+trials         = 20
+button_uv      = [0.93, 0.05]    # TODO(M0): measure a safe no-op toggle button
+roi_px         = 80
+diff_threshold = 12.0
+max_sigma_ms   = 15.0            # above this, do not start collecting
+
+[hotkeys]
+episode_toggle = "f9"
+discard        = "f10"
+pause          = "f11"
+stop           = "f12"
+
+[limits]
+max_dup_ratio  = 0.02
+min_disk_gb    = 20
+watchdog_sec   = 5
+fps_warn_ratio = 0.8
+
+[data]
+root = "data/sessions"

@@ -2,18 +2,18 @@
 로비로 가기 -> repeat. One process per bot; the role decides how a round gets its partner:
 
   public   today's gear-only loop: 방 생성 (no invite), wait for any joiner, 협동 시작
-  inviter  duo, LD gear bot: invite the partner from config/duo.toml, 협동 시작 when accepted
-  joiner   duo, GPG support bot: wait for the host's invite popup, accept it
+  inviter  duo, gear bot (gpg): invite the partner from config/duo.toml, 협동 시작 when accepted
+  joiner   duo, gear bot (gpg2): wait for the host's invite popup, accept it
 
 Models are hot-reloaded before every round (training runs alongside). Each round's start/end
 (perf_counter, same clock as the recorder) goes to data/gear_rounds.jsonl (gear profile) or
-data/joiner_rounds.jsonl (support profile). Stops after 3 failed rounds in a row (fix the cause,
+data/joiner_rounds.jsonl (joiner role). Stops after 3 failed rounds in a row (fix the cause,
 don't loop blindly).
 
 Exit code: 0 clean (/종료), 3 guard stop (window moved, 3 failed rounds, wrong deck, start check),
 anything else = crash. Real input only with --execute.
 
-  python tools/gear_loop.py [--profile ld|gpg] [--role public|inviter|joiner] [--execute]
+  python tools/gear_loop.py [--profile gpg|gpg2|ld] [--role public|inviter|joiner] [--execute]
 """
 import argparse, datetime, functools, json, os, sys, time, tomllib
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -48,8 +48,8 @@ from rdom.notify.discord import send_status
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA = r"C:\dev\rdom\data"
-GEAR_LOG = os.path.join(DATA, "gear_rounds.jsonl")       # gear profile
-JOINER_LOG = os.path.join(DATA, "joiner_rounds.jsonl")   # support profile
+GEAR_LOG = os.path.join(DATA, "gear_rounds.jsonl")       # public / inviter role
+JOINER_LOG = os.path.join(DATA, "joiner_rounds.jsonl")   # joiner role
 PAUSE = os.path.join(DATA, "PAUSE")
 STOP = os.path.join(DATA, "STOP")                  # /종료 (Discord): end cleanly between games
 DUO_CFG = os.path.join(ROOT, "config", "duo.toml")
@@ -294,7 +294,9 @@ def battle_phase(role, g, inj, prof, rnd, tap_speed=True):
         send_status(WRONG_DECK_TEXT[prof.bot], g.grab())
         return "wrong_deck"
     st = getattr(player, "stats", {})
-    log = GEAR_LOG if prof.bot == "gear" else JOINER_LOG
+    # AI-NOTE: rdT06: both duo bots are gear bots, so the record file follows the role (the joiner keeps
+    # JOINER_LOG), not prof.bot; otherwise inviter and joiner would append to the same file.
+    log = JOINER_LOG if role == "joiner" else GEAR_LOG
     os.makedirs(os.path.dirname(os.path.abspath(log)), exist_ok=True)
     with open(log, "a", encoding="utf-8") as fh:
         fh.write(json.dumps({"round": rnd, "t_start": t_start, "t_end": t_end, "result": res,
@@ -351,7 +353,7 @@ def run_loop(role, prof, duo, g, inj):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--profile", choices=sorted(profiles.PROFILES), default="gpg",
-                    help="ld = LDPlayer (gear), gpg = Google Play Games (support, default)")
+                    help="gpg = Google Play Games window 1 (gear, default), gpg2 = window 2 (gear), ld = LDPlayer (gear, unused)")
     ap.add_argument("--role", choices=("public", "inviter", "joiner"), default="public")
     ap.add_argument("--execute", action="store_true", help="really inject input (default: dry run)")
     a = ap.parse_args(argv)
@@ -360,7 +362,7 @@ def main(argv=None):
     discord.set_tag(prof.tag)
     # AI-NOTE: the start check runs before any injector exists; the duo inviter also checks the
     # partner's window so the two windows are known not to overlap.
-    names = ["ld", "gpg"] if a.role == "inviter" else [a.profile]
+    names = ["gpg", "gpg2"] if a.role == "inviter" else [a.profile]
     results = preflight.check(names)
     for line in preflight.format_lines(results):
         print(line, flush=True)

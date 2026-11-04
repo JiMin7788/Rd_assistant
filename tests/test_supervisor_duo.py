@@ -92,45 +92,45 @@ def mk(tmp_path, monkeypatch, sup_mod):
 
 
 def test_children_commands(mk):
-    e = mk({"ld": [(5, 0)], "gpg": [(5, 0)]})
+    e = mk({"gpg": [(5, 0)], "gpg2": [(5, 0)]})
     assert e.run() == 0
     tails = sorted(c[c.index("--profile"):] for c in e.cmds)
-    assert tails == [["--profile", "gpg", "--role", "joiner", "--execute"],
-                     ["--profile", "ld", "--role", "inviter", "--execute"]]
+    assert tails == [["--profile", "gpg", "--role", "inviter", "--execute"],
+                     ["--profile", "gpg2", "--role", "joiner", "--execute"]]
     assert all(c[-1] == "--execute" and c[4].endswith("gear_loop.py") for c in e.cmds)
-    g = mk({"ld": [(5, 0)]})
+    g = mk({"gpg": [(5, 0)]})
     assert g.run("gear") == 0
-    assert [c[c.index("--profile"):] for c in g.cmds] == [["--profile", "ld", "--role", "public", "--execute"]]
+    assert [c[c.index("--profile"):] for c in g.cmds] == [["--profile", "gpg", "--role", "public", "--execute"]]
 
 
 def test_crashes_counted_per_bot(mk):
-    e = mk({"ld": [(5, 1)] * 4 + [(5, 0)], "gpg": [(20, 1), (100, 0)]})
+    e = mk({"gpg": [(5, 1)] * 4 + [(5, 0)], "gpg2": [(20, 1), (100, 0)]})
     assert e.run() == 0
-    ld = [(t, f) for t, f in e.notes if "[기어]" in t]
-    sp = [(t, f) for t, f in e.notes if "[서폿]" in t]
-    assert [t.split("\n")[0] for t, _ in ld] == [f"⚠ [기어] 봇 오류로 재시작 ({n}/5)" for n in (1, 2, 3, 4)]
-    assert [t.split("\n")[0] for t, _ in sp] == ["⚠ [서폿] 봇 오류로 재시작 (1/5)"]
-    assert all(f == "shot:ld" for _, f in ld) and sp[0][1] == "shot:gpg"
+    ld = [(t, f) for t, f in e.notes if "[기어1]" in t]
+    sp = [(t, f) for t, f in e.notes if "[기어2]" in t]
+    assert [t.split("\n")[0] for t, _ in ld] == [f"⚠ [기어1] 봇 오류로 재시작 ({n}/5)" for n in (1, 2, 3, 4)]
+    assert [t.split("\n")[0] for t, _ in sp] == ["⚠ [기어2] 봇 오류로 재시작 (1/5)"]
+    assert all(f == "shot:gpg" for _, f in ld) and sp[0][1] == "shot:gpg2"
     # last 6 log lines of the crashed run, in a code block
-    assert ld[0][0].split("\n", 1)[1] == "```" + "\n".join(f"ld start 0 line {i}" for i in range(4, 10)) + "```"
-    assert e.starts == {"ld": 5, "gpg": 2}
+    assert ld[0][0].split("\n", 1)[1] == "```" + "\n".join(f"gpg start 0 line {i}" for i in range(4, 10)) + "```"
+    assert e.starts == {"gpg": 5, "gpg2": 2}
     assert not e.exists("STOP")
 
 
 def test_restart_after_10_seconds(mk):
-    e = mk({"ld": [(5, 1), (5, 0)], "gpg": [(300, 0)]})
+    e = mk({"gpg": [(5, 1), (5, 0)], "gpg2": [(300, 0)]})
     starts = []
     orig = e.spawn
     e.spawn = lambda cmd, log: (starts.append((cmd[cmd.index("--profile") + 1], e.now)), orig(cmd, log))[1]
     e.run()
-    ld = [t for p, t in starts if p == "ld"]
+    ld = [t for p, t in starts if p == "gpg"]
     assert ld[1] - (ld[0] + 5) >= 10
 
 
 def test_crashes_older_than_30_minutes_do_not_count(mk):
-    e = mk({"ld": [(5, 1), (2000, 1), (5, 0)], "gpg": [(5, 0)]})
+    e = mk({"gpg": [(5, 1), (2000, 1), (5, 0)], "gpg2": [(5, 0)]})
     assert e.run() == 0
-    assert [t.split("\n")[0] for t in e.texts()] == ["⚠ [기어] 봇 오류로 재시작 (1/5)"] * 2
+    assert [t.split("\n")[0] for t in e.texts()] == ["⚠ [기어1] 봇 오류로 재시작 (1/5)"] * 2
 
 
 def _stopped_while_other_ran(e, other_end):
@@ -139,15 +139,15 @@ def _stopped_while_other_ran(e, other_end):
 
 
 def test_fifth_crash_stops_both_duo(mk):
-    e = mk({"ld": [(5, 1)] * 5, "gpg": [(100, 0)]})
+    e = mk({"gpg": [(5, 1)] * 5, "gpg2": [(100, 0)]})
     assert e.run() == 1
-    assert e.starts == {"ld": 5, "gpg": 1}           # nothing restarted after the 5th crash
+    assert e.starts == {"gpg": 5, "gpg2": 1}           # nothing restarted after the 5th crash
     limit = [(t, f) for t, f in e.notes if t.startswith("⛔")]
     assert len(limit) == 1
     head, tail = limit[0][0].split("\n", 1)
-    assert head == "⛔ [기어] 30분 안에 5번 오류 -- 두 봇 모두 정지 (다른 봇은 지금 판을 끝내고 멈춰요). 확인 필요"
-    assert tail.startswith("```ld start 4 line 4") and limit[0][1] == "shot:ld"
-    assert [t.split("\n")[0] for t in e.texts()][:4] == [f"⚠ [기어] 봇 오류로 재시작 ({n}/5)" for n in (1, 2, 3, 4)]
+    assert head == "⛔ [기어1] 30분 안에 5번 오류 -- 두 봇 모두 정지 (다른 봇은 지금 판을 끝내고 멈춰요). 확인 필요"
+    assert tail.startswith("```gpg start 4 line 4") and limit[0][1] == "shot:gpg"
+    assert [t.split("\n")[0] for t in e.texts()][:4] == [f"⚠ [기어1] 봇 오류로 재시작 ({n}/5)" for n in (1, 2, 3, 4)]
     assert e.texts()[-1] == "■ 두 봇 모두 정지됨"
     gpg_end = T0 + 100
     assert _stopped_while_other_ran(e, gpg_end)       # STOP written while gpg still ran
@@ -155,7 +155,7 @@ def test_fifth_crash_stops_both_duo(mk):
     assert not e.exists("STOP")
 
 
-@pytest.mark.parametrize("bad,bad_tag,other", [("gpg", "[서폿]", "ld"), ("ld", "[기어]", "gpg")])
+@pytest.mark.parametrize("bad,bad_tag,other", [("gpg2", "[기어2]", "gpg"), ("gpg", "[기어1]", "gpg2")])
 def test_guard_stop_of_one_stops_both(mk, bad, bad_tag, other):
     e = mk({bad: [(30, 3)], other: [(100, 0)]})
     assert e.run() == 1
@@ -170,20 +170,20 @@ def test_guard_stop_of_one_stops_both(mk, bad, bad_tag, other):
 
 
 def test_no_restart_of_other_bot_crashing_after_stop(mk):
-    e = mk({"ld": [(10, 3)], "gpg": [(50, 1)]})
+    e = mk({"gpg": [(10, 3)], "gpg2": [(50, 1)]})
     assert e.run() == 1
-    assert e.starts == {"ld": 1, "gpg": 1}
+    assert e.starts == {"gpg": 1, "gpg2": 1}
     assert e.texts()[-1] == "■ 두 봇 모두 정지됨" and len(e.texts()) == 2
 
 
 def test_pending_restart_cancelled_by_stop(mk):
-    e = mk({"ld": [(5, 1)], "gpg": [(7, 3)]})        # ld crash pending its 10 s delay when gpg stops
+    e = mk({"gpg": [(5, 1)], "gpg2": [(7, 3)]})        # ld crash pending its 10 s delay when gpg stops
     assert e.run() == 1
-    assert e.starts == {"ld": 1, "gpg": 1}
+    assert e.starts == {"gpg": 1, "gpg2": 1}
 
 
 def test_clean_exit(mk):
-    e = mk({"ld": [(10, 0)], "gpg": [(40, 0)]})
+    e = mk({"gpg": [(10, 0)], "gpg2": [(40, 0)]})
     assert e.run() == 0
     assert e.notes == []
     assert not any(stop for _, stop, _ in e.sleeps)
@@ -192,32 +192,32 @@ def test_clean_exit(mk):
 
 
 def test_gear_mode_single_child(mk):
-    e = mk({"ld": [(5, 1), (5, 0)]})
+    e = mk({"gpg": [(5, 1), (5, 0)]})
     assert e.run("gear") == 0
-    assert e.starts == {"ld": 2}
-    assert e.texts()[0].split("\n")[0] == "⚠ [기어] 봇 오류로 재시작 (1/5)"
+    assert e.starts == {"gpg": 2}
+    assert e.texts()[0].split("\n")[0] == "⚠ [기어1] 봇 오류로 재시작 (1/5)"
     assert not e.exists("room.json")
 
 
 def test_gear_mode_crash_limit(mk):
-    e = mk({"ld": [(5, 1)] * 5})
+    e = mk({"gpg": [(5, 1)] * 5})
     assert e.run("gear") == 1
-    assert e.starts == {"ld": 5}
-    assert e.texts()[-1].split("\n")[0] == "⛔ [기어] 30분 안에 5번 오류 -- 봇 정지. 확인 필요"
-    assert e.notes[-1][1] == "shot:ld"
+    assert e.starts == {"gpg": 5}
+    assert e.texts()[-1].split("\n")[0] == "⛔ [기어1] 30분 안에 5번 오류 -- 봇 정지. 확인 필요"
+    assert e.notes[-1][1] == "shot:gpg"
     assert "■ 두 봇 모두 정지됨" not in e.texts()
     assert any(stop for _, stop, _ in e.sleeps)       # STOP written, then removed at the end
     assert not e.exists("STOP")
 
 
 def test_gear_mode_guard_stop(mk):
-    e = mk({"ld": [(5, 3)]})
+    e = mk({"gpg": [(5, 3)]})
     assert e.run("gear") == 1
-    assert e.starts == {"ld": 1} and e.notes == []    # the child posted its own guard stop
+    assert e.starts == {"gpg": 1} and e.notes == []    # the child posted its own guard stop
 
 
 def test_bot_mode_and_room_json_duo(mk):
-    e = mk({"ld": [(5, 1), (30, 0)], "gpg": [(60, 0)]})
+    e = mk({"gpg": [(5, 1), (30, 0)], "gpg2": [(60, 0)]})
     seen = {}
     orig = e.sleep
 
@@ -232,26 +232,26 @@ def test_bot_mode_and_room_json_duo(mk):
     assert seen["room"]["code"] is None and seen["room"]["state"] == "duo"
     first = e.sleeps[0][2]
     assert first["mode"] == "duo" and isinstance(first["t"], float)
-    assert first["bots"] == [{"bot": "gear", "tag": "[기어]", "profile": "ld", "pid": 1001},
-                             {"bot": "support", "tag": "[서폿]", "profile": "gpg", "pid": 1002}]
+    assert first["bots"] == [{"bot": "gear", "tag": "[기어1]", "profile": "gpg", "pid": 1001},
+                             {"bot": "gear", "tag": "[기어2]", "profile": "gpg2", "pid": 1002}]
     # the restarted ld child has a new pid in the file
     latest = [m for _, _, m in e.sleeps if m and m["bots"][0]["pid"] == 1003]
     assert latest and latest[0]["bots"][1]["pid"] == 1002
 
 
 def test_bot_mode_json_gear(mk):
-    e = mk({"ld": [(5, 0)]})
+    e = mk({"gpg": [(5, 0)]})
     assert e.run("gear") == 0
     mode = e.sleeps[0][2]
     assert mode["mode"] == "gear"
-    assert mode["bots"] == [{"bot": "gear", "tag": "[기어]", "profile": "ld", "pid": 1001}]
+    assert mode["bots"] == [{"bot": "gear", "tag": "[기어1]", "profile": "gpg", "pid": 1001}]
     assert not e.exists("room.json")                  # room.json only in duo
 
 
 @pytest.mark.parametrize("lives,mode,rc", [
-    ({"ld": [(5, 0)], "gpg": [(5, 0)]}, "duo", 0),
-    ({"ld": [(5, 3)], "gpg": [(9, 0)]}, "duo", 1),
-    ({"ld": [(5, 1)] * 5}, "gear", 1),
+    ({"gpg": [(5, 0)], "gpg2": [(5, 0)]}, "duo", 0),
+    ({"gpg": [(5, 3)], "gpg2": [(9, 0)]}, "duo", 1),
+    ({"gpg": [(5, 1)] * 5}, "gear", 1),
 ])
 def test_runtime_files_removed_at_exit(mk, lives, mode, rc):
     e = mk(lives)
@@ -261,7 +261,7 @@ def test_runtime_files_removed_at_exit(mk, lives, mode, rc):
 
 
 def test_files_removed_when_supervisor_raises(mk):
-    e = mk({"ld": [(5, 0)], "gpg": [(5, 0)]})
+    e = mk({"gpg": [(5, 0)], "gpg2": [(5, 0)]})
     e.sleep = lambda s: (_ for _ in ()).throw(KeyboardInterrupt())
     with pytest.raises(KeyboardInterrupt):
         e.run()
@@ -270,17 +270,26 @@ def test_files_removed_when_supervisor_raises(mk):
 
 
 def test_log_file_per_start(mk):
-    e = mk({"ld": [(5, 1), (5, 1), (5, 0)], "gpg": [(300, 0)]})
+    e = mk({"gpg": [(5, 1), (5, 1), (5, 0)], "gpg2": [(300, 0)]})
     names = []
     orig = e.spawn
     e.spawn = lambda cmd, log: (names.append(os.path.basename(log)), orig(cmd, log))[1]
     e.run()
     stamp = datetime.datetime.fromtimestamp(T0).strftime("%Y%m%d_%H%M")
-    assert names[0] == f"{stamp}_gear.log" and names[1] == f"{stamp}_support.log"
-    ld = [n for n in names if "_gear" in n]
+    assert names[0] == f"{stamp}_gpg.log" and names[1] == f"{stamp}_gpg2.log"
+    ld = [n for n in names if "_gpg." in n or "_gpg_" in n]
     assert len(ld) == 3 and len(set(names)) == len(names)      # one new file per (re)start
-    assert all(re.fullmatch(r"\d{8}_\d{4}_(gear|support)(_\d+)?\.log", n) for n in names)
+    assert all(re.fullmatch(r"\d{8}_\d{4}_(gpg2?)(_\d+)?\.log", n) for n in names)
     assert sorted(os.listdir(os.path.join(e.dir, "bot_logs"))) == sorted(names)
+
+
+def test_duo_children_are_two_gear_bots_on_gpg_and_gpg2(sup_mod):
+    from rdom import profile
+    assert sup_mod.CHILDREN["duo"] == (("gear", "gpg", "inviter"), ("gear", "gpg2", "joiner"))
+    assert sup_mod.CHILDREN["gear"] == (("gear", "gpg", "public"),)
+    p1, p2 = profile.get("gpg"), profile.get("gpg2")
+    assert (p1.bot, p2.bot) == ("gear", "gear") and p1.tag != p2.tag
+    assert (p1.config, p2.config) == ("config/recorder.toml", "config/recorder_gpg2.toml")
 
 
 def test_import_has_no_side_effects(sup_mod):

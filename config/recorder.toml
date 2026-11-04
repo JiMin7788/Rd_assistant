@@ -2,7 +2,7 @@
 # Anything that affects env_fingerprint must not change mid-session.
 
 [target]
-window_title_re = "^랜덤 다이스 2"  # Google Play Games window "랜덤 다이스 2 - <account>"; must match exactly one
+window_title_re = "^랜덤 다이스 2 - CleanCardinal77$"  # exact title: the 2nd GPG window (recorder_gpg2.toml) and the launcher must not match
 
 # Window furniture, excluded from the content area. NOT auto-detected
 # (it is not black, so the letterbox scan misses it). Measure once with

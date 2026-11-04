@@ -1,8 +1,8 @@
-"""No-input check of both game windows (LD + GPG) before the first duo run.
+"""No-input check of both game windows (two Google Play Games windows) before the first duo run.
 
     python tools/duo_check.py
 
-Runs the start check for 'ld' and 'gpg' (places the windows), then starts two child processes at
+Runs the start check for 'gpg' and 'gpg2' (places the windows), then starts two child processes at
 the same time that each grab ONE frame of one window and print its shape, to prove two dxcam
 duplications of the same output work in two processes. It never injects input and never saves
 frames. Prints only 'start check: OK|FAIL ...' lines; exit 0 only when every line is OK.
@@ -18,7 +18,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from rdom import profile  # noqa: E402
 from rdom.capture import preflight  # noqa: E402
 
-NAMES = ["ld", "gpg"]
+NAMES = ["gpg", "gpg2"]
 
 
 def _spawn(name):

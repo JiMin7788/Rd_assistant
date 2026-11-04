@@ -93,8 +93,9 @@ def newest_log(pattern):
 
 
 def duo_logs():
-    # AI-NOTE: the supervisor names child logs YYYYMMDD_HHMM_<bot>[_n].log; one newest file per bot.
-    return {"[기어]": newest_log("*_gear*.log"), "[서폿]": newest_log("*_support*.log")}
+    # AI-NOTE: the supervisor names child logs YYYYMMDD_HHMM_<profile>[_n].log; one newest file per bot.
+    # "gpg[_.]*" does not match gpg2 files.
+    return {"[기어1]": newest_log("*_gpg[_.]*"), "[기어2]": newest_log("*_gpg2*")}
 
 
 def room_now():

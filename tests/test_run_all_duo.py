@@ -21,9 +21,9 @@ def test_supervisor_args():
 
 def test_header_texts():
     m = _load()
-    assert m.header_text(False) == "두 봇 시작 (기어=LD 대변먹는자 · 서폿=구글 배속봇)"
-    assert m.header_text(True) == "기어봇만 시작 (LD)"
-    assert m.header_text(False, "A", "B") == "두 봇 시작 (기어=LD A · 서폿=구글 B)"
+    assert m.header_text(False) == "두 봇 시작 (기어1=구글 대변먹는자 · 기어2=구글 배속봇)"
+    assert m.header_text(True) == "기어봇만 시작 (구글)"
+    assert m.header_text(False, "A", "B") == "두 봇 시작 (기어1=구글 A · 기어2=구글 B)"
 
 
 def test_names_from_duo_toml(tmp_path):
@@ -36,10 +36,10 @@ def test_names_from_duo_toml(tmp_path):
 
 def test_tags_per_log_file():
     m = _load()
-    assert m.tag_for("20261101_1200_gear.log") == "기어"
-    assert m.tag_for("20261101_1200_support.log") == "서폿"
-    assert m.tag_for("20261101_1200_gear_2.log") == "기어"
-    assert m.tag_for("20261101_1200_support_2.log") == "서폿"
+    assert m.tag_for("20261101_1200_gpg.log") == "기어1"
+    assert m.tag_for("20261101_1200_gpg2.log") == "기어2"
+    assert m.tag_for("20261101_1200_gpg_2.log") == "기어1"
+    assert m.tag_for("20261101_1200_gpg2_2.log") == "기어2"
     assert m.tag_for("discord_bot.log") == "디코"
     assert m.tag_for("supervisor.log") is None
 
@@ -47,8 +47,8 @@ def test_tags_per_log_file():
 def test_tail_specs_patterns(tmp_path):
     m = _load()
     specs = m.tail_specs(str(tmp_path))
-    assert [t for _, t in specs] == ["기어", "서폿", "디코"]
-    assert specs[0][0] == os.path.join(str(tmp_path), "bot_logs", "2*_gear*.log")
+    assert [t for _, t in specs] == ["기어1", "기어2", "디코"]
+    assert specs[0][0] == os.path.join(str(tmp_path), "bot_logs", "2*_gpg[_.]*")
     assert not any(p.endswith("2*.log") for p, _ in specs)
 
 
