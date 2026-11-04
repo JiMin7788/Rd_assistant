@@ -268,6 +268,19 @@ def test_no_effect_merge_is_banned(capsys, monkeypatch):
     assert len(swipes_of(inj, 1, 2)) == 2                   # a die's type changed -> ban lifted
 
 
+def test_unconfirmed_merge_swipe_is_not_banned_and_retried(capsys, monkeypatch):
+    fails = []
+    monkeypatch.setattr(sp.collect, "save_fail", lambda f, a, b: fails.append(1))
+    p, g, inj, perc, clock = make(MERGE)
+    inj.last_gesture_ok = False                             # rdT10: the swipe was not confirmed in front
+    ticks(p, 3)
+    out = capsys.readouterr().out
+    assert "merge 1->2 not confirmed in front -- retry" in out and "had no effect" not in out
+    assert p.stats["fails"] == 0 and fails == [] and not p._banned
+    ticks(p, 3)
+    assert len(swipes_of(inj, 1, 2)) >= 2                   # retried on a later tick
+
+
 def test_pip_flicker_keeps_ban():
     p, g, inj, perc, clock = make(MERGE)
     ticks(p, 3)

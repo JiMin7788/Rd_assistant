@@ -74,6 +74,7 @@ def play(g, inj, minutes=30, tick=0.6):
     support_last = -1e9; power_last = -1e9; summon_last = -1e9; hunt_last = -1e9
     banned = {}                       # (from, to) -> (from die, to die) when it failed
     pending = None                    # (from, to, before-board) of the last merge
+    swipe_ok = True                   # inj.last_gesture_ok right after that merge swipe
     prev_sig = None; post_hits = 0
     acted_at = -1e9
     doom_mem = {}                      # cell -> [corner base, centre seen] (2026-10-09)
@@ -205,6 +206,11 @@ def play(g, inj, minutes=30, tick=0.6):
             fr, to, before = pending; pending = None
             if all(bc[c]["type"] == before[c]["type"] and bc[c]["pip"] == before[c]["pip"]
                    for c in (fr, to)):
+                if not swipe_ok:
+                    # AI-NOTE: the swipe may have been swallowed (window not in front / lock timeout):
+                    # unchanged dice prove nothing, so no ban and no fail pair -- the planner retries it.
+                    print(f"   merge {fr}->{to} not confirmed in front -- retry", flush=True)
+                    continue
                 # banned until either die changes: a timed ban retried the same
                 # misread Adjust-3 pair 11x in the 2026-10-07 bot game
                 banned[(fr, to)] = (cellsig(fr), cellsig(to), now + 90.0)
@@ -243,6 +249,7 @@ def play(g, inj, minutes=30, tick=0.6):
                   f"avg{ev['gear_avg']} -> merge {act['from']}->{act['to']}", flush=True)
             inj.swipe(*cell_uv(act["from"]), *cell_uv(act["to"]))
             pending = (act["from"], act["to"], bc); acted_at = now; stats["merges"] += 1
+            swipe_ok = getattr(inj, "last_gesture_ok", True)   # False: swipe not confirmed in front
         elif act["op"] == "wait" and now - power_last > POWER_EVERY and now > hold_power_until:
             # nothing to do on the board -> spend SP on gears (user also powers up
             # before the field is complete; a stuck board sat on 168k SP 2026-10-07)

@@ -9,7 +9,8 @@ Background input WITHOUT focus is NOT possible with two GPG instances (the Maste
 2026-11-05 probe): a posted click to the render child of the non-foreground window is
 ignored (3 of 3), while WM_ACTIVATEAPP + WM_NCACTIVATE + WM_ACTIVATE to the top window and
 WM_SETFOCUS to the render child made it work (2 of 2) and really made that window the
-foreground window; each of those messages alone did not. So every gesture of the executing
+foreground window; the probe tried only single messages and WM_ACTIVATE+WM_SETFOCUS, no
+other subset. Activation waits until the window is really in front (ACTIVATE_SETTLE_S). So every gesture of the executing
 Injector first takes a cross-process named mutex (the two bots take turns, one bot's drag is
 never cut by the other activating its window), activates its own window, then posts.
 Rendering/capture of a background window is unaffected. The game windows therefore take the
@@ -47,12 +48,18 @@ _user32.PostMessageW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, 
 _user32.SendMessageW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
 _user32.GetForegroundWindow.restype = wintypes.HWND
 _user32.SetForegroundWindow.argtypes = [wintypes.HWND]
+_user32.BringWindowToTop.argtypes = [wintypes.HWND]
+_user32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, wintypes.LPDWORD]
+_user32.GetWindowThreadProcessId.restype = wintypes.DWORD
+_user32.AttachThreadInput.argtypes = [wintypes.DWORD, wintypes.DWORD, wintypes.BOOL]
+_user32.keybd_event.argtypes = [wintypes.BYTE, wintypes.BYTE, wintypes.DWORD, ctypes.c_size_t]
 _kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
 _kernel32.CreateMutexW.argtypes = [wintypes.LPVOID, wintypes.BOOL, wintypes.LPCWSTR]
 _kernel32.CreateMutexW.restype = wintypes.HANDLE
 _kernel32.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
 _kernel32.WaitForSingleObject.restype = wintypes.DWORD
 _kernel32.ReleaseMutex.argtypes = [wintypes.HANDLE]
+_kernel32.GetCurrentThreadId.restype = wintypes.DWORD
 _WNDENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
 WM_KEYDOWN, WM_KEYUP = 0x100, 0x101
 WM_MOUSEMOVE, WM_LBUTTONDOWN, WM_LBUTTONUP = 0x200, 0x201, 0x202
@@ -60,7 +67,16 @@ WM_ACTIVATE, WM_SETFOCUS, WM_NCACTIVATE, WM_ACTIVATEAPP = 0x6, 0x7, 0x86, 0x1C
 MK_LBUTTON = 0x1
 INPUT_MUTEX = "Local\\rdom_input"     # shared by every bot process on this desktop session
 LOCK_TIMEOUT_MS = 5000                # a gesture that cannot get the lock in 5 s is skipped
-SETTLE_S = 0.03                       # pause after activation, before the first posted message
+# AI-NOTE: the user saw joiner accept taps swallowed with a 0.03 s settle; the game needs time after the
+# window really is in front before it accepts a touch.
+ACTIVATE_SETTLE_S = 0.15              # pause after the window is confirmed foreground, before the first post
+FG_POLL_S = 0.02                      # GetForegroundWindow poll period while waiting for the switch
+FG_POLL_MAX_S = 0.6                   # give up waiting for the foreground switch after this
+FG_WARN_EVERY_S = 60.0                # rate limit of the "did not become foreground" log line
+# AI-NOTE: fair turn-taking: a Windows mutex is not FIFO, so a bot that releases and at once re-takes it
+# starves the other bot; sleeping this long after the release lets the waiting bot's thread wake and grab it.
+LOCK_YIELD_S = 0.015
+VK_MENU, KEYEVENTF_KEYUP = 0x12, 0x2
 WAIT_OBJECT_0, WAIT_ABANDONED = 0, 0x80
 VK_ESCAPE = 0x1B
 RENDER_CLASS = "CROSVM"            # GPG's game surface child window (CROSVM_1)
@@ -125,6 +141,8 @@ def _render_child(top):
 class _ActionBase:
     """Policy-action execution shared by both input backends: the cheong (90 s)
     and switch cooldowns and the op dispatch. A backend only supplies tap/swipe."""
+
+    last_gesture_ok = True      # AdbInjector / dry run: always confirmed
 
     def __init__(self):
         self._cheong_last = -1e9
@@ -196,7 +214,9 @@ class Injector(_ActionBase):
         set_dpi_awareness()
         self._top = self._render = None
         self._mutex = None
-        self._fg_warned = False
+        self._fg_warn_at = -1e9
+        self.last_gesture_ok = True      # False: last gesture lock-timed-out or window not confirmed in front
+        self.stats = {"gestures": 0, "switches": 0, "not_foreground": 0, "lock_timeouts": 0}
         if execute:
             self._target()
             print(f"input: window messages -> hwnd {self._render}", flush=True)
@@ -232,34 +252,66 @@ class Injector(_ActionBase):
         print(f"    input lock timeout ({LOCK_TIMEOUT_MS} ms) -- gesture skipped", flush=True)
         return False
 
+    def _force_foreground(self, top):
+        """Robust foreground switch: attach to the current foreground thread's input queue, press and
+        release a synthetic ALT (lifts the foreground lock), SetForegroundWindow + BringWindowToTop, detach."""
+        fg = _user32.GetForegroundWindow()
+        cur = _kernel32.GetCurrentThreadId()
+        fg_thread = _user32.GetWindowThreadProcessId(fg, None) if fg else 0
+        attached = bool(fg_thread and fg_thread != cur and _user32.AttachThreadInput(cur, fg_thread, True))
+        try:
+            _user32.keybd_event(VK_MENU, 0, 0, 0)
+            _user32.keybd_event(VK_MENU, 0, KEYEVENTF_KEYUP, 0)
+            _user32.SetForegroundWindow(top)
+            _user32.BringWindowToTop(top)
+        finally:
+            if attached:
+                _user32.AttachThreadInput(cur, fg_thread, False)
+
     def _activate(self):
         """Make our window the foreground window; background posts are ignored with two GPG
-        instances (module docstring). The message sequence is exactly the one the probe proved."""
+        instances (module docstring). True when it is confirmed in front, False if it never got there."""
         top, render = self._top, self._render
+        if _user32.GetForegroundWindow() == top:
+            return True                      # no switch, no delay
+        self.stats["switches"] += 1
         _user32.SendMessageW(top, WM_ACTIVATEAPP, 1, 0)
         _user32.SendMessageW(top, WM_NCACTIVATE, 1, 0)
         _user32.SendMessageW(top, WM_ACTIVATE, 1, 0)
         _user32.SendMessageW(render, WM_SETFOCUS, 0, 0)
-        if _user32.GetForegroundWindow() != top:
-            _user32.SetForegroundWindow(top)
-            if _user32.GetForegroundWindow() != top and not self._fg_warned:
-                self._fg_warned = True
-                print("    window did not become the foreground window (input may be ignored)", flush=True)
-        time.sleep(SETTLE_S)
+        if _user32.GetForegroundWindow() != top:     # the messages alone did not do it
+            self._force_foreground(top)
+        deadline = time.monotonic() + FG_POLL_MAX_S
+        while _user32.GetForegroundWindow() != top:
+            if time.monotonic() >= deadline:
+                self.stats["not_foreground"] += 1
+                if time.monotonic() - self._fg_warn_at >= FG_WARN_EVERY_S:
+                    self._fg_warn_at = time.monotonic()
+                    print("    window did not become the foreground window (input may be ignored)", flush=True)
+                return False
+            time.sleep(FG_POLL_S)
+        time.sleep(ACTIVATE_SETTLE_S)
+        return True
 
     @contextlib.contextmanager
     def _gesture(self):
         """Lock + activate for the WHOLE gesture; yields False (post nothing) when the lock timed
-        out. The lock is released in a finally, also when posting raises."""
+        out. The lock is released in a finally, also when posting raises. Sets last_gesture_ok."""
         self._target()
+        self.stats["gestures"] += 1
         if not self._lock():
+            self.stats["lock_timeouts"] += 1
+            self.last_gesture_ok = False
             yield False
             return
         try:
-            self._activate()
+            # AI-NOTE: posts go out even when the window never came to front (they may still work); the
+            # caller learns from last_gesture_ok that the gesture is not trustworthy.
+            self.last_gesture_ok = self._activate()
             yield True
         finally:
             _kernel32.ReleaseMutex(self._mutex)
+            time.sleep(LOCK_YIELD_S)
 
     def _post(self, msg, wparam, lparam):
         if not _user32.PostMessageW(self._render, msg, wparam, lparam):

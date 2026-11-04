@@ -332,6 +332,7 @@ class PlayPlayer(BasePlayer):
         self._prev_sig = None
         self._hist = {}                        # cell -> last BUFF_STEADY reads
         self._banned = {}                      # (from, to) -> (from type, to type, expiry)
+        self._swipe_ok = True                  # inj.last_gesture_ok right after the pending merge swipe
         self._pending = None                   # [from, to, {cell: (type, pip)} at the swipe, undecided ticks]
         self.memory = CellMemory(support.READ_CONF_MIN, empty_conf_min=support.EMPTY_CONF_MIN)
         self.burster = Burster(self)
@@ -567,6 +568,11 @@ class PlayPlayer(BasePlayer):
                     # AI-NOTE: the memory was just dropped; this tick's effective board must not keep the stale die.
                     bc[c].update(type="junk", variant="junk", pip=0, src="unknown")
             return
+        if not self._swipe_ok:
+            # AI-NOTE: the swipe may have been swallowed (window not in front / lock timeout): unchanged dice
+            # prove nothing, so no ban, no fail pair, no fail count -- the planner proposes it again.
+            print(f"   merge {fr}->{to} not confirmed in front -- retry", flush=True)
+            return
         # AI-NOTE: ban keyed on type only, as in gear_bot -- a flickering pip read must not clear it.
         self._banned[(fr, to)] = (bc[fr]["type"], bc[to]["type"], now + BAN_FOR)
         print(f"   merge {fr}->{to} had no effect -> banned until those dice change")
@@ -645,6 +651,7 @@ class PlayPlayer(BasePlayer):
             print(f"{fmt_board(b)} | R7 {ev['res7']} L7 {ev['align7']} B{ev['bubbles']} "
                   f"-> merge {act['from']}->{act['to']}", flush=True)
             self.inj.swipe(*cell_uv(act["from"]), *cell_uv(act["to"]))
+            self._swipe_ok = getattr(self.inj, "last_gesture_ok", True)
             self._pending = [act["from"], act["to"],
                              {c: (bc[c]["type"], bc[c]["pip"]) for c in (act["from"], act["to"])}, 0]
             self.memory.own_action([act["from"], act["to"]])

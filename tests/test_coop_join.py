@@ -113,7 +113,29 @@ def test_no_room_within_join_s_fails():
 def test_popup_still_up_after_join_s_fails():
     res, inj, _, _ = run([popup()], join_s=10)
     assert res == "failed"
-    assert inj.taps == [ACCEPT, CLOSE]
+    assert inj.taps == [ACCEPT, ACCEPT, ACCEPT, CLOSE]     # rdT10: 3 accept taps, then the failure X
+
+
+def test_accept_retapped_after_2s_up_to_3_taps(capsys):
+    res, inj, _, clk = run([popup()], join_s=20)
+    out = capsys.readouterr().out
+    assert inj.taps[:3] == [ACCEPT] * 3 and res == "failed"
+    assert "accept again (2/3)" in out and "accept again (3/3)" in out and "accept again (4/3)" not in out
+
+
+def test_accept_not_retapped_when_popup_goes_within_2s():
+    res, inj, _, _ = run([popup()] * 2 + [ROOM] + [BATTLE])
+    assert res == "battle" and inj.taps == [ACCEPT]
+
+
+def test_decline_x_retapped_after_2s_max_3(capsys):
+    n = [0]
+    def stop():
+        n[0] += 1
+        return "stop" if n[0] > 40 else None
+    res, inj, _, clk = run([popup("엉뚱한")], stop=stop)
+    assert res == "stopped" and inj.taps[:3] == [CLOSE] * 3
+    assert "decline again (2/3)" in capsys.readouterr().out
 
 
 def test_room_gone_for_5s_fails():
