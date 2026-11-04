@@ -3,7 +3,7 @@
 # Anything that affects env_fingerprint must not change mid-session.
 
 [target]
-window_title_re = "^랜덤 다이스 2 - CumbersomeTutor145$"  # exact title: the 1st GPG window (recorder.toml) and the launcher must not match
+window_title_re = "^랜덤 다이스 2 - CleanCardinal77$"  # 배속봇 (partner/joiner); exact title: the 1st GPG window (recorder.toml) and the launcher must not match
 
 # Same window furniture as recorder.toml (same GPG window size, see there for the measurement).
 [target.chrome]

@@ -9,7 +9,7 @@ from rdom.recorder import window
 from rdom.recorder.config import load_config
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-TITLES = {1: "랜덤 다이스 2 - CleanCardinal77", 2: "랜덤 다이스 2 - CumbersomeTutor145", 3: "Google Play Games"}
+TITLES = {1: "랜덤 다이스 2 - CumbersomeTutor145", 2: "랜덤 다이스 2 - CleanCardinal77", 3: "Google Play Games"}
 
 
 def target(name):
@@ -35,6 +35,12 @@ def fake_windows(monkeypatch):
 @pytest.mark.parametrize("name,hwnd", [("gpg", 1), ("gpg2", 2)])
 def test_each_profile_regex_finds_only_its_own_window(fake_windows, name, hwnd):
     assert window.find_window(target(name).window_title_re) == hwnd
+
+
+def test_inviter_profile_is_the_cumbersome_window_and_joiner_the_clean_window():
+    # AI-NOTE: 대변먹는자 (host/inviter, profile gpg) is CumbersomeTutor145; 배속봇 (joiner, gpg2) is CleanCardinal77.
+    assert target("gpg").window_title_re == "^랜덤 다이스 2 - CumbersomeTutor145$"
+    assert target("gpg2").window_title_re == "^랜덤 다이스 2 - CleanCardinal77$"
 
 
 @pytest.mark.parametrize("name", ["gpg", "gpg2"])
