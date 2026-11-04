@@ -188,28 +188,28 @@ def run_duo(capsys, check_results, codes):
     return rc, capsys.readouterr().out.splitlines(), log
 
 
-OK = [("ld", True, "LD플레이어 준비됐어요"), ("gpg", True, "구글플레이게임즈 랜덤 다이스 준비됐어요")]
+OK = [("gpg", True, "구글플레이게임즈 랜덤 다이스 준비됐어요"), ("gpg2", True, "구글플레이게임즈 랜덤 다이스(CumbersomeTutor145) 준비됐어요")]
 
 
 def test_duo_check_ok_starts_both_before_waiting(capsys):
-    rc, out, log = run_duo(capsys, OK, {"ld": 0, "gpg": 0})
+    rc, out, log = run_duo(capsys, OK, {"gpg": 0, "gpg2": 0})
     assert rc == 0
-    assert log == [("start", "ld"), ("start", "gpg"), ("wait", "ld"), ("wait", "gpg")]
-    assert out == ["start check: OK LD플레이어 준비됐어요",
-                   "start check: OK 구글플레이게임즈 랜덤 다이스 준비됐어요",
-                   "start check: OK ld 프레임 (1994, 1122, 3)",
-                   "start check: OK gpg 프레임 (1994, 1122, 3)"]
+    assert log == [("start", "gpg"), ("start", "gpg2"), ("wait", "gpg"), ("wait", "gpg2")]
+    assert out == ["start check: OK 구글플레이게임즈 랜덤 다이스 준비됐어요",
+                   "start check: OK 구글플레이게임즈 랜덤 다이스(CumbersomeTutor145) 준비됐어요",
+                   "start check: OK gpg 프레임 (1994, 1122, 3)",
+                   "start check: OK gpg2 프레임 (1994, 1122, 3)"]
 
 
 def test_duo_check_child_failure_exits_1(capsys):
-    rc, out, _ = run_duo(capsys, OK, {"ld": 0, "gpg": 1})
-    assert rc == 1 and out[-1] == "start check: FAIL gpg 프레임을 못 읽었어요"
+    rc, out, _ = run_duo(capsys, OK, {"gpg": 0, "gpg2": 1})
+    assert rc == 1 and out[-1] == "start check: FAIL gpg2 프레임을 못 읽었어요"
 
 
 def test_duo_check_preflight_failure_spawns_nothing(capsys):
-    bad = [("ld", False, "LD플레이어 창이 없어요")]
-    rc, out, log = run_duo(capsys, bad, {"ld": 0, "gpg": 0})
-    assert rc == 1 and log == [] and out == ["start check: FAIL LD플레이어 창이 없어요"]
+    bad = [("gpg", False, "구글플레이게임즈 랜덤 다이스 창이 없어요")]
+    rc, out, log = run_duo(capsys, bad, {"gpg": 0, "gpg2": 0})
+    assert rc == 1 and log == [] and out == ["start check: FAIL 구글플레이게임즈 랜덤 다이스 창이 없어요"]
 
 
 def test_duo_check_source_has_no_injector_or_writer():

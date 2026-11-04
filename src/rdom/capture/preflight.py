@@ -22,8 +22,10 @@ ROOT = Path(__file__).resolve().parents[3]
 MISSING = {
     "ld": "LD플레이어 창이 없어요",
     "gpg": "구글플레이게임즈 랜덤 다이스 창이 없어요",
+    "gpg2": "구글플레이게임즈 랜덤 다이스 창(CumbersomeTutor145)이 없어요",
 }
-LABEL = {"ld": "LD플레이어", "gpg": "구글플레이게임즈 랜덤 다이스"}
+LABEL = {"ld": "LD플레이어", "gpg": "구글플레이게임즈 랜덤 다이스",
+         "gpg2": "구글플레이게임즈 랜덤 다이스(CumbersomeTutor145)"}
 MANY = "{title_re} 창이 2개 이상이에요"
 COVERED = "다른 창이 게임 화면을 가리고 있어요"
 NO_ADB = "LD플레이어 adb 연결이 안 돼요 (LD 설정 → 기타 설정 → ADB 디버깅: 로컬 연결)"

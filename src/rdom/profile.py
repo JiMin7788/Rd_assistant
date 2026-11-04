@@ -37,7 +37,10 @@ _LD_UI = MappingProxyType({
 
 PROFILES = {
     "ld": Profile("ld", "gear", "[기어]", "config/recorder_ld.toml", _LD_UI),
-    "gpg": Profile("gpg", "support", "[서폿]", "config/recorder.toml"),
+    # AI-NOTE: rdT06: LD is unused; the duo is two gear bots on two Google Play Games windows,
+    # each found by its own exact window title (see the two recorder tomls).
+    "gpg": Profile("gpg", "gear", "[기어1]", "config/recorder.toml"),
+    "gpg2": Profile("gpg2", "gear", "[기어2]", "config/recorder_gpg2.toml"),
 }
 
 

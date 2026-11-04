@@ -252,15 +252,15 @@ def test_failed_round_counter_resets_after_a_battle(env, monkeypatch):
 
 @pytest.mark.parametrize("profile,text", [
     ("ld", "⛔ 기어덱이 아니에요 -- 덱 확인 후 다시 시작해 주세요"),
-    ("gpg", "⛔ 서포팅덱이 아니에요 -- 덱 확인 후 다시 시작해 주세요"),
+    ("gpg", "⛔ 기어덱이 아니에요 -- 덱 확인 후 다시 시작해 주세요"),
 ])
 def test_wrong_deck_is_guard_without_further_input(env, capsys, profile, text):
     env.battle_res = "wrong_deck"
     assert env.gl.main(["--profile", profile, "--role", "joiner" if profile == "gpg" else "inviter"]) == 3
     assert (text, "frame") in env.status
     assert env.inj.taps == [SPEED_UV]              # only the 배속 tap before the deck was seen
-    assert env.battles[0]["expect"] == ("gear" if profile == "ld" else "support")
-    assert f"wrong deck: expected {'gear' if profile == 'ld' else 'support'}" in capsys.readouterr().out
+    assert env.battles[0]["expect"] == "gear"
+    assert f"wrong deck: expected gear" in capsys.readouterr().out
     assert not (env.stop.parent / "gear_rounds.jsonl").exists()
     assert not (env.stop.parent / "joiner_rounds.jsonl").exists()
 
@@ -276,10 +276,10 @@ def test_start_check_failure_is_guard_before_any_injector(env, capsys):
 
 def test_start_check_covers_the_own_window_and_the_pair_for_the_inviter(env):
     env.stop.write_text("")
-    env.gl.main(["--profile", "ld", "--role", "inviter"])
-    env.gl.main(["--role", "joiner"])
+    env.gl.main(["--profile", "gpg", "--role", "inviter"])
+    env.gl.main(["--profile", "gpg2", "--role", "joiner"])
     env.gl.main(["--profile", "ld"])
-    assert env.checks == [["ld", "gpg"], ["gpg"], ["ld"]]
+    assert env.checks == [["gpg", "gpg2"], ["gpg2"], ["ld"]]
 
 
 @pytest.mark.parametrize("raiser", ["lobby", "battle"])
@@ -317,8 +317,8 @@ def test_tag_set_at_start_and_ld_scales(env):
     assert env.status[0] == ("tag", "[기어]")
     assert env.gl.gear_bot.SUPPORT_SCALES == env.gl.gear_bot.LD_SUPPORT_SCALES
     env.gl.gear_bot.SUPPORT_SCALES = None
-    env.gl.main(["--role", "joiner"])
-    assert ("tag", "[서폿]") in env.status and env.gl.gear_bot.SUPPORT_SCALES is None
+    env.gl.main(["--profile", "gpg2", "--role", "joiner"])
+    assert ("tag", "[기어2]") in env.status and env.gl.gear_bot.SUPPORT_SCALES is None
 
 
 def test_duo_config_file():
@@ -435,7 +435,7 @@ def test_duo_support_play_sets_duo_flag_and_stats(env, monkeypatch):
 @pytest.mark.parametrize("args,fname,other,bot,mode", [
     (["--profile", "ld", "--role", "inviter"], "gear_rounds.jsonl", "joiner_rounds.jsonl", "gear", "duo"),
     (["--profile", "ld"], "gear_rounds.jsonl", "joiner_rounds.jsonl", "gear", "gear"),
-    (["--role", "joiner"], "joiner_rounds.jsonl", "gear_rounds.jsonl", "support", "duo"),
+    (["--profile", "gpg2", "--role", "joiner"], "joiner_rounds.jsonl", "gear_rounds.jsonl", "gear", "duo"),
 ])
 def test_round_record_goes_to_the_bots_file(env, args, fname, other, bot, mode):
     assert env.gl.main(args) == 0
