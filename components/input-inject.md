@@ -2,7 +2,7 @@
 title: Input injection (M2)
 type: component
 updated: 2026-11-05
-sources: [seed, rdf04-t2, rdf04-r1-s5, rdf05-t3, rdT07]
+sources: [seed, rdf04-t2, rdf04-r1-s5, rdf05-t3, rdT07, rdT10]
 ---
 # Input injection (M2)
 
@@ -23,6 +23,19 @@ render child (`CROSVM_1`); it is dry-run by default and only injects with `execu
   does none of it. A window messages sequence missing any one of the four did not work in the probe.
   The joiner's accept tap (`coop_join.wait_and_accept`, `tap` -> `inj.tap`) goes through the same
   `Injector`, so it is activated and locked too. Tests: `tests/test_rdt07_input_lock.py`.
+- **Real-foreground wait, fair lock, gesture trust (rdT10)** replaces the `SETTLE_S` 0.03 s tail above (it let
+  joiner accept taps be swallowed). `_activate()` returns at once when `GetForegroundWindow() == top`.
+  Otherwise it counts a switch, sends the four messages, and if still not in front calls `_force_foreground`
+  (AttachThreadInput to the foreground thread, synthetic ALT down/up, SetForegroundWindow + BringWindowToTop).
+  It then polls every `FG_POLL_S` 0.02 s up to `FG_POLL_MAX_S` 0.6 s; once in front it sleeps
+  `ACTIVATE_SETTLE_S` 0.15 s before the first post. Never in front -> returns False (the "did not become the
+  foreground window" line is limited to one per `FG_WARN_EVERY_S` 60 s). The probe only proved single
+  messages and WM_ACTIVATE+WM_SETFOCUS, not other subsets. After `ReleaseMutex`, `_gesture` sleeps
+  `LOCK_YIELD_S` 0.015 s: a Windows mutex is not FIFO, so an immediate re-take starved the other bot.
+  Posts still go out when the window never came to front; `last_gesture_ok` (default True; False after a
+  lock timeout or unconfirmed foreground) tells the caller the gesture is untrustworthy. `Injector.stats`
+  counts gestures / switches / not_foreground / lock_timeouts. `AdbInjector` and dry run keep
+  `last_gesture_ok` True and have no stats.
 - (u,v) → screen px of the same content rect the capture grabs → `ScreenToClient(render)`.
   ±4 px position jitter and randomised press/drag durations are added.
 - Ops: `summon`, `destroy` (cell → Cheong, 90 s cooldown tracked here), `switch`, `merge`,
@@ -79,6 +92,7 @@ and touches neither the window nor adb.
   [policy-minigame](policy-minigame.md) LatencyCal).
 
 ## Evidence
+- commit `9c8ce09` (rdT10) — `src/rdom/input/inject.py` `ACTIVATE_SETTLE_S`, `FG_POLL_S`, `FG_POLL_MAX_S`, `FG_WARN_EVERY_S`, `LOCK_YIELD_S`, `Injector._force_foreground/_activate/_gesture`, `last_gesture_ok`, `stats`; tests in `tests/test_rdt07_input_lock.py`.
 - commit `c5aec51` (rdT07) — `src/rdom/input/inject.py` `INPUT_MUTEX`, `LOCK_TIMEOUT_MS`, `SETTLE_S`, `Injector._lock/_activate/_gesture`, `tap/swipe/back` inside `_gesture()`; the same commit adds the input-lock test file (fake user32/kernel32; on task/rdT07, not in this checkout until merge, so not lint-checked). `press/release/cancel` were not changed by rdT07 (no lock/activation there).
 - `src/rdom/input/inject.py` — `Injector.press/release/cancel/release_swipe`, `_point(clamp=)`, `PRESS_LEAD_*`, `CANCEL_DV`; `AdbInjector.probe_release_method/_release_method/press/release/cancel/release_swipe/_spawn`, `parse_getevent`, `method_line` (commit `5152657`, rdf05-t3)
 - commit `5152657` (task/rdf05-t3) — adds the test_inject_press tests: press/release/cancel messages and sendevent/swipe command cases

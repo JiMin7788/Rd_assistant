@@ -1,8 +1,8 @@
 ---
 title: Support players (Perception, BasePlayer, CollectPlayer, PlayPlayer)
 type: component
-updated: 2026-10-30
-sources: [rdf01-t10, rdf01-t11, rdf01-t16, rdf01-i1, rdf02-t5, rdf02-t6, rdf02-i1, rdf02-m1, rdT03, rdf03-t2, rdf03-t6, rdf03-t9, rdf03-i1, rdf03-m2, rdf03-m3, rdf03-m4]
+updated: 2026-11-05
+sources: [rdT10, rdf01-t10, rdf01-t11, rdf01-t16, rdf01-i1, rdf02-t5, rdf02-t6, rdf02-i1, rdf02-m1, rdT03, rdf03-t2, rdf03-t6, rdf03-t9, rdf03-i1, rdf03-m2, rdf03-m3, rdf03-m4]
 ---
 # Support players (Perception, BasePlayer, CollectPlayer, PlayPlayer)
 
@@ -53,7 +53,11 @@ Summons (tap `summon`, >= 1 s apart); at battle time >= 120 s (`PANEL_AT`) taps 
 - Importing the module has no side effects; it only inserts `src` on `sys.path`.
 - Tick order mirrors `tools/gear_bot.py` `play()`.
 
+## Swallowed-swipe aware merge check (rdT10)
+`PlayPlayer` stores `_swipe_ok = inj.last_gesture_ok` right after each merge swipe. When the pending merge's dice are unchanged and `_swipe_ok` is False (window not confirmed in front, or lock timeout), the verification logs `merge a->b not confirmed in front -- retry` and sets no ban, no fail pair and no fail count, so the planner proposes the merge again. `tools/gear_bot.py` does the same with its `swipe_ok`.
+
 ## Evidence
+- commit `9c8ce09` (rdT10) — `tools/support_players.py` `PlayPlayer._swipe_ok` and the merge verification branch, `tools/gear_bot.py` `swipe_ok`; tests in `tests/test_support_play_player.py`, `tests/test_gear_bot_handover.py`.
 - commit `5c1591d` (branch task/rdf03-m4) — tools/support_players.py `power_visit` (price from `read_price` only, AI-NOTE with the 750/1000 case, `PRICE_NONE_SAVE_MAX`, `_price_saves`), tests/test_support_play_power.py (`test_visit_never_buys_on_the_last_price_when_the_price_is_unreadable`, `test_visit_with_a_read_price_keeps_the_reserve`, `test_visit_unreadable_price_saves_the_panel_frame_with_a_cap`), CLAUDE_CODE_TODO.md runbook line telling to keep the panel_price_none frames.
 - commit `61d2be3` (branch task/rdf03-m3) — tools/support_players.py `power_visit` (`sp0 is None` before the keep-unknown branch), tests/test_support_play_power.py `test_visit_unreadable_sp_with_unknown_cost_gives_sp_unreadable`, CLAUDE_CODE_TODO.md runbook table lines for `SP unreadable` and `nothing to buy ... keep ?`.
 - commit `5115ba1` — support_players.py calls `start_visit(read, set(found))` and prints the line from `levels` directly; test `test_power_visit_missing_card_does_not_make_src_count` in test_support_play_power; cited by commit because the files are not yet in the main checkout

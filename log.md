@@ -334,3 +334,7 @@
 - With two GPG windows a post to the non-foreground window is ignored; every Injector tap/swipe/back now takes the named mutex `Local\rdom_input`, activates its window (ACTIVATEAPP/NCACTIVATE/ACTIVATE + SETFOCUS), posts, releases. run_all and supervisor refuse a second copy.
 - find_friend_in_popup tries 4 thresholds and saves failures to data/coop_debug/; gear_loop confirms 배속 2.0 (max 3 taps, also on a resumed battle) and retries 로비로 가기 once, saving the frame on a second failure.
 - pages: components/input-inject.md (updated), decisions/input-coordinates.md (updated), components/gear-loop.md (updated), components/coop-invite.md (updated), components/supervisor.md (updated), components/run-all.md (updated), components/capture-live.md (updated)
+
+## 2026-11-05 · rdT10 · Activation timing for every input
+- Injector waits until its window is really foreground (+0.15 s settle), yields the lock after release, exposes last_gesture_ok/stats; a merge whose swipe was not confirmed in front is retried without a ban; joiner accept/X taps repeat after 2 s (max 3); 배속 caption re-read up to 3 s.
+- pages: components/input-inject.md (updated), components/coop-join.md (updated), components/gear-loop.md (updated), components/support-players.md (updated)
