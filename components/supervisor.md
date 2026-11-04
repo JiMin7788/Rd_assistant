@@ -1,17 +1,17 @@
 ---
 title: Supervisor (duo / gear modes)
 type: component
-updated: 2026-11-01
-sources: [rdf04-t9, rdf04-t10]
+updated: 2026-11-05
+sources: [rdf04-t9, rdf04-t10, rdT06]
 ---
 # Supervisor (duo / gear modes)
 
 `tools/supervisor.py` runs one or two `gear_loop.py` children, restarts a crashed bot, and stops both bots on a guard stop or a bot's 5th crash in 30 minutes. Started by `run_all.py` with an explicit `--mode` ([run-all](run-all.md)).
 
 ## Modes and children
-- `--mode duo` (default): `gear_loop.py --profile ld --role inviter --execute` (bot `gear`, tag [기어]) and `--profile gpg --role joiner --execute` (bot `support`, tag [서폿]). `--mode gear`: only `--profile ld --role public --execute`. The table is `CHILDREN`; tags come from `rdom.profile`.
+- `--mode duo` (default, since rdT06): two gear bots on two Google Play Games windows: `gear_loop.py --profile gpg --role inviter --execute` (tag [기어1]) and `--profile gpg2 --role joiner --execute` (tag [기어2]). `--mode gear`: only `--profile gpg --role public --execute`. The table is `CHILDREN`; tags come from `rdom.profile`.
 - `Supervisor(mode, data_dir, spawn, clock, sleep, notify, screenshot)` takes everything injectable, so tests use fake children and a tmp data dir. Module import has no side effects: pid file, `bot_mode.json` and `room.json` are written in `run()` only.
-- Each (re)start gets a new log `data/bot_logs/YYYYMMDD_HHMM_<bot>.log`; a restart inside the same minute gets `_2`, `_3` so the log of the crash just reported is not overwritten.
+- Each (re)start gets a new log `data/bot_logs/YYYYMMDD_HHMM_<profile>.log` (`gpg` / `gpg2`; named by profile because both duo bots are bot `gear`); a restart inside the same minute gets `_2`, `_3` so the log of the crash just reported is not overwritten.
 
 ## Exit handling (poll every 1 s)
 - Exit 0: that child is done. Exit 3 (guard): stop-both. Anything else: crash.
@@ -26,4 +26,5 @@ sources: [rdf04-t9, rdf04-t10]
 ## Evidence
 - `tools/supervisor.py` — `CHILDREN`, exit-code constants, text constants, `Supervisor._exited` / `_stop_both` / `run`, `_log_path` collision suffix, `_write_mode`.
 - `tools/gear_loop.py` — exit 0/3/crash contract the supervisor relies on (see [gear-loop](gear-loop.md)).
+- commit `87f0696` (rdT06, branch task/rdT06, not yet merged into this checkout) — `tools/supervisor.py` `CHILDREN` (duo = gpg inviter + gpg2 joiner, both gear) and `_log_path` (profile-named logs); tests/test_supervisor_duo.py asserts the children.
 - rdf04-t9 diff (the supervisor duo test file added on the task branch) — fake-child tests for per-bot crash counts, stop-both, files at exit.

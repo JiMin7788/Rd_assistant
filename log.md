@@ -321,3 +321,7 @@
 ## 2026-11-02 · rdf05-q1 · replay summary verdict per gauge, QA scenario tests
 - Replay now logs a 확인 불가 verdict for gauges stopped before any plan or still open at video end/Ctrl+C, so yellow + unknown = gauges (recording: 2 yellow, 6 unknown); named tests for S5, S15, S17, S28, S30.
 - pages: components/minigame-bot.md (updated)
+
+## 2026-11-05 · rdT06 · Duo on two Google Play Games windows (both gear bots)
+- Duo is now profile `gpg` (CleanCardinal77, inviter) + `gpg2` (CumbersomeTutor145, joiner), both bot `gear`, tags [기어1]/[기어2]; exact `$`-anchored window titles; child logs named by profile; round record file follows the role.
+- pages: components/supervisor.md (updated), components/profiles-ld.md (updated), components/preflight.md (updated), components/gear-loop.md (updated), components/run-all.md (updated), components/discord-bot.md (updated)

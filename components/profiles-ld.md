@@ -1,18 +1,18 @@
 ---
 title: Capture profiles (LDPlayer / GPG) and the LD offline check
 type: component
-updated: 2026-11-01
-sources: [rdf04-t1, rdf04-r1-s2]
+updated: 2026-11-05
+sources: [rdf04-t1, rdf04-r1-s2, rdT06]
 ---
 # Capture profiles (LDPlayer / GPG) and the LD offline check
 
-rdF04 runs the gear bot on LDPlayer and the support bot on Google Play Games. `rdom.profile` names each one
+rdF04 first ran the gear bot on LDPlayer and the support bot on Google Play Games; since rdT06 LD is unused and the duo is two gear bots on two Google Play Games windows (profiles `gpg` and `gpg2`; LD code is kept until a later removal task). `rdom.profile` names each one
 (bot, Discord tag, recorder toml, UI overrides); `config/recorder_ld.toml` describes the LD window. Nothing
 calls the profile module yet, and the adb input path does not exist yet (rdf04-t2).
 
 ## Profile module
 - `Profile(name, bot, tag, config, ui)` is frozen. `PROFILES["ld"]` = gear, `[기어]`, `config/recorder_ld.toml`;
-  `PROFILES["gpg"]` = support, `[서폿]`, `config/recorder.toml`. `get(name)` raises KeyError listing known names.
+  `PROFILES["gpg"]` = gear, `[기어1]`, `config/recorder.toml` (title `^랜덤 다이스 2 - CleanCardinal77$`, inviter / public bot); `PROFILES["gpg2"]` = gear, `[기어2]`, `config/recorder_gpg2.toml` (title `^랜덤 다이스 2 - CumbersomeTutor145$`, same chrome 132/72/0/0 and size 1384x2304 at y 2160, placed left of window 1 at x 1508 so they do not overlap). The `$`-anchored titles keep each regex from matching the other window or the `Google Play Games` launcher. `get(name)` raises KeyError listing known names.
 - `uv(profile, key)` returns the profile's override, else the shared constant of that name in `rdom.input.inject`
   (measured on GPG). Only the LD profile has overrides: `COOP_UV = (0.497, 0.823)`, the pre-GPG LD value of
   commit `3a70f61^`.
@@ -54,4 +54,5 @@ the README names each source. LD crops are 1122x1994, GPG crops 1244x2224.
 ## Evidence
 - commit `8d88a7a` (branch task/rdf04-t1, not yet merged into this checkout, so paths are not lint-checked) — adds config/recorder_ld.toml (chrome measurement comment, place, monitor_index, adb keys, UNVERIFIED note), src/rdom/profile.py (Profile, PROFILES, get, uv, COOP_UV override and its OPEN comment) and the InputCfg backend/adb/serial fields in src/rdom/recorder/config.py.
 - commit `1f2bcbb` (branch task/rdf04-r1-s2, not yet merged into this checkout, so paths are not lint-checked) — check_ld_profile.py content_of and main (window-grab crop, info line, NOT 9:16 hint); test_profile_ld.py tests test_check_ld_profile_crops_window_grab_and_reports_chrome and test_check_ld_profile_reports_window_size_for_off_aspect.
+- commit `87f0696` (rdT06, branch task/rdT06, not yet merged into this checkout) — `src/rdom/profile.py` `PROFILES`, `config/recorder.toml` `window_title_re`, new config/recorder_gpg2.toml (title, place, chrome); tests/test_gpg_windows.py checks each regex matches exactly its own window.
 - commit `8d88a7a` — tools/check_ld_profile.py docstring holds the run (expected vs read, mismatches, findings); tests/test_profile_ld.py asserts config loads, 9:16 content, profile lookups and fixture detector results; tests/fixtures/rdf04/README.md names each fixture's source.

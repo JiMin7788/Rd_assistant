@@ -1,17 +1,17 @@
 ---
 title: gear_loop roles, exit codes and records
 type: component
-updated: 2026-11-01
-sources: [rdf04-t8, rdf04-i1]
+updated: 2026-11-05
+sources: [rdf04-t8, rdf04-i1, rdT06]
 ---
 # gear_loop roles, exit codes and records
 
-`tools/gear_loop.py` runs one round loop per bot: `--role public` (gear-only, today's public room), `inviter` (LD gear bot, invites the partner) or `joiner` (GPG support bot, accepts the host's invite). `main(argv=None)` returns an exit code; `__main__` is `sys.exit(main())`; importing the module has no side effects.
+`tools/gear_loop.py` runs one round loop per bot: `--role public` (gear-only, today's public room), `inviter` (gear bot on profile `gpg`, invites the partner) or `joiner` (gear bot on profile `gpg2`, accepts the host's invite; since rdT06 both duo bots are gear). `main(argv=None)` returns an exit code; `__main__` is `sys.exit(main())`; importing the module has no side effects.
 
 ## CLI and start
-- `--profile {ld,gpg}` (default gpg), `--role {public,inviter,joiner}` (default public), `--execute`. Without `--execute` the injector is `make_injector(cfg, execute=False)` (dry run); `cfg = os.path.join(ROOT, prof.config)` also feeds `LiveGrabber`.
+- `--profile {ld,gpg,gpg2}` (default gpg), `--role {public,inviter,joiner}` (default public), `--execute`. Without `--execute` the injector is `make_injector(cfg, execute=False)` (dry run); `cfg = os.path.join(ROOT, prof.config)` also feeds `LiveGrabber`.
 - config/duo.toml (new): `host` (inviter's game name, joiner accepts only it), `partner` (joiner's name, inviter invites it), `invite_wait_s` (300).
-- Order in `main`: `discord.set_tag(prof.tag)` -> `capture.preflight.check([own])` (the inviter checks `['ld','gpg']` for window overlap) -> on failure status `⛔ 시작 점검 실패: <reason>` and return 3, before any injector exists -> `gear_bot.SUPPORT_SCALES = LD_SUPPORT_SCALES` for ld -> `▶ 봇 시작`. A clean exit sends the tagged `■ 봇 종료`.
+- Order in `main`: `discord.set_tag(prof.tag)` -> `capture.preflight.check([own])` (the inviter checks `['gpg','gpg2']` for window overlap) -> on failure status `⛔ 시작 점검 실패: <reason>` and return 3, before any injector exists -> `gear_bot.SUPPORT_SCALES = LD_SUPPORT_SCALES` for ld -> `▶ 봇 시작`. A clean exit sends the tagged `■ 봇 종료`.
 
 ## Exit codes (supervisor contract)
 `EXIT_CLEAN = 0` (STOP seen between games), `EXIT_GUARD = 3` (window moved, 3 failed rounds in a row, wrong deck, start check failed), anything else is a crash (an exception propagates, never turned into 0 or 3). Each guard sends its status (per-role text in `FAIL_TEXT`, `WRONG_DECK_TEXT`) before returning.
@@ -26,7 +26,7 @@ sources: [rdf04-t8, rdf04-i1]
 - `battle_phase`: wait up to 90 s for battle, tap 배속 **once** (every role; skipped when the round resumed an already running battle), `run_battle(expect=prof.bot)`; duo roles pass a `support_play` wrapper that sets the `duo` flag. `wrong_deck` -> status + screenshot, no record, no 로비로 가기, exit 3.
 
 ## Records
-Gear profile -> `data/gear_rounds.jsonl`, support profile -> `data/joiner_rounds.jsonl`; each line has `bot` and `mode` (`duo` for inviter/joiner, `gear` for public) plus the old fields. `room.json` is written only by the public role.
+The file follows the **role** (rdT06): joiner -> `data/joiner_rounds.jsonl`, public / inviter -> `data/gear_rounds.jsonl` (`battle_phase`). It used to follow `prof.bot`, which would send both duo gear bots to one file; each line has `bot` and `mode` (`duo` for inviter/joiner, `gear` for public) plus the old fields. `room.json` is written only by the public role.
 
 ## Discord tag
 `rdom.notify.discord.set_tag(tag)`; `send_status` inserts the tag after the leading emoji (`▶ 봇 시작` -> `▶ [기어] 봇 시작`), emoji stays first so the colour lookup is unchanged.
@@ -38,5 +38,6 @@ Gear profile -> `data/gear_rounds.jsonl`, support profile -> `data/joiner_rounds
 - commit `215efdc` — gear_loop roles, profiles, exit codes, per-bot records, tagged status, config/duo.toml, `set_tag`.
 - commit `f9009fc` — `recover_step` returns `(frame, gave_up)`, joiner give-up ends `wait_and_accept` as failed, joiner skips round-start recover, config path under ROOT.
 - commit `3827a9b` (rdf04-i1) — `stop_on` in `recover_step` / `_joiner_recover`; three tests in the gear_loop roles test file (not in this checkout until merge) (invite popup, STOP file, invite during the unknown wait: no BACK, no tap).
+- commit `87f0696` (rdT06, branch task/rdT06, not yet merged into this checkout) — `tools/gear_loop.py` `battle_phase` (`log = JOINER_LOG if role == "joiner" else GEAR_LOG`), `main` (`names = ["gpg", "gpg2"]` for the inviter), `--profile` help.
 - `tools/gear_loop.py` — current main-checkout copy (pre-t8 until merge); tests/test_gear_loop_roles.py and config/duo.toml are added by the same commits on branch task/rdf04-t8 (not in this checkout until merge, so not lint-checked).
 - [coop-join](coop-join.md), [coop-invite](coop-invite.md), [preflight](preflight.md), [support-bot-core](support-bot-core.md) — the pieces it wires.

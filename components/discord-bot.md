@@ -1,8 +1,8 @@
 ---
 title: Discord bot (duo / gear texts, /시작 대상)
 type: component
-updated: 2026-11-01
-sources: [rdf04-t11]
+updated: 2026-11-05
+sources: [rdf04-t11, rdT06]
 ---
 # Discord bot (duo / gear texts, /시작 대상)
 
@@ -20,15 +20,16 @@ sources: [rdf04-t11]
 - `/정지` and `/종료` use `pause_reply` / `stop_reply` ("두 봇 모두" in duo).
 - `/상태`: title from `status_title(mode, paused, stopping)`, room line from `room_line`; in duo the log section is `log_blocks(duo_logs(), 6, 1800)`.
 - `/로그`: in duo one message with a header and code block per bot, lines clamped to 1..60; budget `limit // n_tags` per tag, whole message cut to 1900 chars.
-- `/스샷`: `screens_for(mode)`. Duo sends two files (`[기어]` from `config/recorder_ld.toml` as `gear.jpg`, `[서폿]` from `config/recorder.toml` as `support.jpg`) with content `SHOT_CONTENT`. Gear-only and off send the LD screen as `screen.jpg`. `screencap(config)` takes the recorder config path.
+- `/스샷`: `screens_for(mode)`. Duo sends two files (`[기어1]` from `config/recorder.toml` as `gear.jpg`, `[기어2]` from `config/recorder_gpg2.toml` as `gear2.jpg`) with content `SHOT_CONTENT`. Gear-only and off send the first GPG window as `screen.jpg`. Since rdT06 the duo texts name the two Google windows (`기어1=구글 대변먹는자 · 기어2=구글 배속봇`), no LD. `screencap(config)` takes the recorder config path.
 - Presence: duo "랜다2 봇 두 대 · 오늘 N판", gear "랜다2 협동 · 오늘 N판 · 대기 N명", off "꺼짐" with status idle; a PAUSE file overrides with idle "일시정지".
 
 ## Pitfalls
-- `duo_logs()` picks the newest file per bot with the globs `*_gear*.log` and `*_support*.log` in `data/bot_logs/`, matching the supervisor's per-bot log names. A missing log gives the text `(로그 없음)` for that tag.
+- `duo_logs()` picks the newest file per bot with the globs `*_gpg[_.]*` and `*_gpg2*` (logs are named by profile) in `data/bot_logs/`, matching the supervisor's per-bot log names. A missing log gives the text `(로그 없음)` for that tag.
 - `data/bot_mode.json` alone is not trusted: a stale file with a dead supervisor reads as `off`.
 - The commit rewrote `tools/discord_bot.py` with a whole-file line-ending change (about 1086 changed lines in `git diff --stat`); the real change is about 150 lines. Use `git diff -w --ignore-cr-at-eol` to review it.
 - Tests: `tests/test_duo_texts.py` covers the pure helpers; the Discord wiring itself has no automated test.
 
 ## Evidence
 - `tools/discord_bot.py` — mode_now/duo_logs, tick duo early-return, cmd_start choices and `--mode`, cmd_reserve block, cmd_shot, cmd_log, status_embed, presence_loop.
+- commit `87f0696` (rdT06, branch task/rdT06, not yet merged into this checkout) — `src/rdom/notify/duo_texts.py` (`DUO_STATUS`, `START_REPLY`, `screens_for`) and `tools/discord_bot.py` `duo_logs`.
 - commit `62b1d25` — rdf04-t11 change. It adds src/rdom/notify/duo_texts.py (mode_now, texts, card_for, log_blocks, screens_for, presence) and tests/test_duo_texts.py (helper unit tests); the line-ending note comes from its diffstat.
