@@ -97,7 +97,22 @@ def after_battle(res, g, inj, exit_fn=exit_to_lobby, battle_fn=is_battle, report
         if battle_fn(g.grab()):
             print("battle still on screen -- 로비로 가기 skipped", flush=True)
         else:
-            print("로비로 가기:", exit_fn(g, inj), flush=True)
+            ok = exit_fn(g, inj)
+            if not ok:
+                # AI-NOTE: 2026-11-05 CleanCardinal never left the result screen; one more full try
+                # after a pause, then keep the frame for measuring.
+                print("로비로 가기 failed -- retrying once", flush=True)
+                time.sleep(3.0)
+                f = g.grab()
+                if battle_fn(f):
+                    print("battle still on screen -- 로비로 가기 skipped", flush=True)
+                    ok = None
+                else:
+                    ok = exit_fn(g, inj)
+                    if not ok:
+                        path = friend_coop.save_debug_frame("lobby_fail", g.grab())
+                        print(f"로비로 가기 failed again -- frame saved: {path}", flush=True)
+            print("로비로 가기:", ok, flush=True)
         time.sleep(3.0)
     return False
 
@@ -260,6 +275,27 @@ def _duo_support_play(g, inj, minutes):
     return res
 
 
+SPEED_TAPS_MAX = 3
+
+
+def confirm_speed(g, inj, prof, tap_first):
+    """Get the battle to 2.0x: tap 배속, re-read the caption and tap again (max 3 taps, ~1 s apart)
+    until it reads 2.0. tap_first=False (a resumed battle) taps only when the caption is legible and
+    below 2.0. An unreadable caption after a tap ends the loop: another blind tap could cycle 2.0 -> 1.0."""
+    before = read_speed(g.grab())
+    if not tap_first and (before is None or before >= 2.0):
+        print(f"배속 {before} -> {before}", flush=True)
+        return before
+    after, taps = before, 0
+    while taps < SPEED_TAPS_MAX:
+        inj.tap(*profiles.uv(prof, "SPEED_UV")); taps += 1
+        time.sleep(1.0)
+        after = read_speed(g.grab())
+        if after is None or after >= 2.0: break
+    print(f"배속 {before} -> {after}", flush=True)
+    return after
+
+
 def battle_phase(role, g, inj, prof, rnd, tap_speed=True):
     """Wait for the battle, 배속 once, play, record, leave.
     -> "ok" | "wrong_deck" | "moved" (the loop stops with EXIT_GUARD on the last two).
@@ -272,8 +308,10 @@ def battle_phase(role, g, inj, prof, rnd, tap_speed=True):
         for _ in range(30):
             if read_speed(g.grab()) is not None: break
             time.sleep(0.5)
-        print("배속 tap (once)", flush=True); inj.tap(*profiles.uv(prof, "SPEED_UV"))
+        confirm_speed(g, inj, prof, tap_first=True)
         send_status(f"🎮 {rnd}판 시작")
+    else:
+        confirm_speed(g, inj, prof, tap_first=False)
     rl = gear.reload_if_changed()
     if rl: print("models reloaded:", rl, flush=True)
     rl = support.reload_if_changed()

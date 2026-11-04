@@ -194,11 +194,30 @@ class Supervisor:
                     pass
 
 
+def running_supervisor(pid_path):
+    """pid of ANOTHER live python process named in `pid_path`, else None (missing/stale file).
+    AI-NOTE: 2026-11-05 two full stacks ran at once and every window got two bots; run_all and the
+    Discord /시작 both start supervisors, so the supervisor itself must refuse a second copy."""
+    try:
+        import psutil
+        pid = int(open(pid_path).read())
+        if pid != os.getpid() and psutil.pid_exists(pid) and "python" in psutil.Process(pid).name().lower():
+            return pid
+    except Exception:
+        pass
+    return None
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--mode", choices=sorted(CHILDREN), default="duo")
     a = ap.parse_args(argv)
-    return Supervisor(a.mode, os.path.join(ROOT, "data")).run()
+    data = os.path.join(ROOT, "data")
+    other = running_supervisor(os.path.join(data, "supervisor.pid"))
+    if other:
+        print(f"이미 실행 중이에요 -- 두 번째 실행은 무시합니다 (pid {other})", flush=True)
+        return 2                                   # non-zero, no bot was started
+    return Supervisor(a.mode, data).run()
 
 
 if __name__ == "__main__":

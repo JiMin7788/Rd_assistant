@@ -83,7 +83,7 @@ def test_timeout_only_logs(gl, monkeypatch, capsys):
 def test_report_runs_between_result_line_and_exit(gl, monkeypatch, capsys):
     monkeypatch.setattr(gl.time, "sleep", lambda s: None)
     order = []
-    gl.after_battle("clear", FakeGrabber(), "inj", exit_fn=lambda g, i: order.append("exit"),
+    gl.after_battle("clear", FakeGrabber(), "inj", exit_fn=lambda g, i: order.append("exit") or True,
                     battle_fn=lambda f: False, report=lambda: order.append("report"))
     assert order == ["report", "exit"]
 
