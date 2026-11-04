@@ -276,6 +276,19 @@ def _duo_support_play(g, inj, minutes):
 
 
 SPEED_TAPS_MAX = 3
+SPEED_REREAD_S = 3.0      # an unreadable speed caption after a tap is re-read (every 0.5 s) this long
+
+
+def log_input_stats(inj):
+    """One 'input: ...' line per round from the Injector's counters, then reset them (per-round numbers).
+    AdbInjector has no counters -> nothing."""
+    s = getattr(inj, "stats", None)
+    if not s:
+        return
+    print(f"input: {s['gestures']} gestures, {s['switches']} switches, {s['not_foreground']} not in front, "
+          f"{s['lock_timeouts']} lock timeouts", flush=True)
+    for k in s:
+        s[k] = 0
 
 
 def confirm_speed(g, inj, prof, tap_first):
@@ -291,6 +304,12 @@ def confirm_speed(g, inj, prof, tap_first):
         inj.tap(*profiles.uv(prof, "SPEED_UV")); taps += 1
         time.sleep(1.0)
         after = read_speed(g.grab())
+        # AI-NOTE: the caption can be unreadable for a moment right after the tap (2026-11-05: '1.0 -> None'
+        # ended the loop); re-read for up to SPEED_REREAD_S before deciding.
+        waited = 0.0
+        while after is None and waited < SPEED_REREAD_S:
+            time.sleep(0.5); waited += 0.5
+            after = read_speed(g.grab())
         if after is None or after >= 2.0: break
     print(f"배속 {before} -> {after}", flush=True)
     return after
@@ -324,6 +343,7 @@ def battle_phase(role, g, inj, prof, rnd, tap_speed=True):
         kw["support_play"] = _duo_support_play
     res, player = support_bot.run_battle(g, inj, **kw)
     t_end = time.perf_counter()
+    log_input_stats(inj)
     if res == "wrong_deck":
         # AI-NOTE: no record, no 로비로 가기 and no other tap -- the wrong deck stays on screen for the user.
         print(f"wrong deck: expected {prof.bot}", flush=True)

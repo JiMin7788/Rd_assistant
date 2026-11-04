@@ -19,7 +19,7 @@ TOP, RENDER = 11, 22
 
 class World:
     def __init__(self, wait=0, post_raises=False):
-        self.log, self.fg, self.wait, self.post_raises = [], TOP, wait, post_raises
+        self.log, self.fg, self.wait, self.post_raises = [], 7, wait, post_raises   # another window in front
         self.fg_after_set = TOP
         self.activation_works = True
         u = types.SimpleNamespace()
@@ -29,10 +29,15 @@ class World:
         u.SendMessageW = self._send
         u.PostMessageW = self._post
         u.SetForegroundWindow = self._setfg
+        u.BringWindowToTop = lambda h: self.log.append(("top", h))
+        u.GetWindowThreadProcessId = lambda h, p: 5
+        u.AttachThreadInput = lambda a, b, on: self.log.append(("attach", on)) or 1
+        u.keybd_event = lambda vk, sc, fl, ex: self.log.append(("alt", fl))
         self.user32 = u
         k = types.SimpleNamespace()
         k.CreateMutexW = lambda a, b, name: self.log.append(("mutex", name)) or 99
         k.WaitForSingleObject = lambda h, ms: self.log.append(("wait",)) or self.wait
+        k.GetCurrentThreadId = lambda: 4
         k.ReleaseMutex = lambda h: self.log.append(("release",)) or 1
         self.kernel32 = k
 
@@ -124,14 +129,114 @@ def test_lock_timeout_skips_the_gesture(monkeypatch, capsys):
     assert "input lock timeout" in capsys.readouterr().out
 
 
-def test_foreground_fallback_and_single_warning(monkeypatch, capsys):
+# ---- rdT10: activation timing, last_gesture_ok, counters, fair yield
+class Clock:
+    """Fake inject.time: sleep advances the clock and records the pause."""
+    def __init__(self):
+        self.t, self.sleeps = 1000.0, []
+
+    def monotonic(self):
+        return self.t
+
+    def sleep(self, s):
+        self.sleeps.append(s)
+        self.t += s
+
+
+def make_clock(monkeypatch, world):
+    inj = make(monkeypatch, world)
+    clk = Clock()
+    monkeypatch.setattr(inject, "time", clk)
+    return inj, clk
+
+
+def test_already_foreground_no_delay_no_switch(monkeypatch):
     w = World()
-    w.activation_works, w.fg, w.fg_after_set = False, 7, 7
-    inj = make(monkeypatch, w)
+    w.fg = TOP
+    inj, clk = make_clock(monkeypatch, w)
     inj.tap(0.5, 0.5)
+    assert "send" not in w.kinds() and inject.ACTIVATE_SETTLE_S not in clk.sleeps
+    assert inj.last_gesture_ok is True and inj.stats["switches"] == 0 and inj.stats["gestures"] == 1
+
+
+def test_switch_polls_then_settles_before_first_post(monkeypatch):
+    w = World()
+    w.activation_works, w.fg_after_set = False, 7
+    inj, clk = make_clock(monkeypatch, w)
+    calls = []
+    def fg():
+        calls.append(1)
+        if len(calls) > 8:
+            w.fg = TOP                       # becomes foreground only after a few polls
+        return w.fg
+    w.user32.GetForegroundWindow = fg
     inj.tap(0.5, 0.5)
-    assert w.kinds().count("setfg") == 2
+    assert inject.FG_POLL_S in clk.sleeps and inject.ACTIVATE_SETTLE_S in clk.sleeps
+    assert clk.sleeps.index(inject.ACTIVATE_SETTLE_S) > clk.sleeps.index(inject.FG_POLL_S)
+    assert inj.last_gesture_ok is True and inj.stats["switches"] == 1 and inj.stats["not_foreground"] == 0
+    assert w.kinds().count("post") == 3
+
+
+def test_force_path_only_when_messages_did_not_work(monkeypatch):
+    w = World()                              # messages make it foreground
+    inj, clk = make_clock(monkeypatch, w)
+    inj.tap(0.5, 0.5)
+    assert not {"alt", "attach", "setfg", "top"} & set(w.kinds())
+    w2 = World()
+    w2.activation_works = False              # only SetForegroundWindow works
+    inj2, clk2 = make_clock(monkeypatch, w2)
+    inj2.tap(0.5, 0.5)
+    k = w2.kinds()
+    assert k.count("attach") == 2 and k.count("alt") == 2 and "setfg" in k and "top" in k
+    assert w2.log[k.index("attach")] == ("attach", True) and inj2.last_gesture_ok is True
+
+
+def test_never_foreground_posts_anyway_flags_not_ok_and_warns_once_per_60s(monkeypatch, capsys):
+    w = World()
+    w.activation_works, w.fg_after_set = False, 7
+    inj, clk = make_clock(monkeypatch, w)
+    inj.tap(0.5, 0.5)
+    assert inj.last_gesture_ok is False and w.kinds().count("post") == 3
+    assert inject.ACTIVATE_SETTLE_S not in clk.sleeps and sum(clk.sleeps) >= inject.FG_POLL_MAX_S
+    inj.tap(0.5, 0.5)
     assert capsys.readouterr().out.count("did not become the foreground") == 1
+    clk.t += inject.FG_WARN_EVERY_S
+    inj.tap(0.5, 0.5)
+    assert capsys.readouterr().out.count("did not become the foreground") == 1
+    assert inj.stats["not_foreground"] == 3 and inj.stats["gestures"] == 3
+
+
+def test_lock_timeout_counted_and_not_ok(monkeypatch):
+    w = World(wait=0x102)
+    inj, clk = make_clock(monkeypatch, w)
+    inj.tap(0.5, 0.5)
+    assert inj.last_gesture_ok is False and inj.stats["lock_timeouts"] == 1
+
+
+def test_lock_release_yields_to_the_waiting_bot(monkeypatch):
+    w = World()
+    inj, clk = make_clock(monkeypatch, w)
+    order = []
+    w.kernel32.ReleaseMutex = lambda h: order.append("release") or 1
+    orig = clk.sleep
+    clk.sleep = lambda s: (order.append(("sleep", s)), orig(s))
+    inj.tap(0.5, 0.5)
+    i = order.index("release")
+    assert order[i + 1] == ("sleep", inject.LOCK_YIELD_S) and i + 2 == len(order)
+
+
+def test_gear_loop_input_stats_line(capsys):
+    spec = importlib.util.spec_from_file_location("gear_loop_t10", ROOT / "tools" / "gear_loop.py")
+    sys.path.insert(0, str(ROOT / "tools"))
+    try:
+        m = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(m)
+    finally:
+        sys.path.remove(str(ROOT / "tools"))
+    inj = types.SimpleNamespace(stats={"gestures": 9, "switches": 4, "not_foreground": 1, "lock_timeouts": 2})
+    m.log_input_stats(inj)
+    assert "input: 9 gestures, 4 switches, 1 not in front, 2 lock timeouts" in capsys.readouterr().out
+    assert inj.stats["gestures"] == 0
 
 
 # ---- single instance

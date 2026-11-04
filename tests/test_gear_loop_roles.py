@@ -417,6 +417,23 @@ def test_speed_taps_until_2x_and_stops(env, monkeypatch, capsys):
     assert "배속 1.0 -> 2.0" in capsys.readouterr().out
 
 
+def test_speed_none_after_tap_is_reread_then_succeeds(env, monkeypatch, capsys):
+    _speed_reads(monkeypatch, env.gl, [1.0, None, None, 2.0])   # before, tap 1 -> unreadable twice -> 2.0
+    assert env.gl.confirm_speed(env.g, env.inj, profiles.get("gpg"), tap_first=True) == 2.0
+    assert len(env.inj.taps) == 1
+    assert "배속 1.0 -> 2.0" in capsys.readouterr().out
+
+
+def test_speed_none_for_3s_then_ends(env, monkeypatch, capsys):
+    reads = []
+    def rd(f):
+        reads.append(1)
+        return 1.0 if len(reads) == 1 else None
+    monkeypatch.setattr(env.gl, "read_speed", rd)
+    assert env.gl.confirm_speed(env.g, env.inj, profiles.get("gpg"), tap_first=True) is None
+    assert len(env.inj.taps) == 1 and len(reads) == 1 + 1 + 6      # initial, after tap, 6 re-reads (3 s)
+
+
 def test_speed_gives_up_after_three_taps(env, monkeypatch, capsys):
     _speed_reads(monkeypatch, env.gl, [1.0])
     assert env.gl.confirm_speed(env.g, env.inj, profiles.get("gpg"), tap_first=True) == 1.0

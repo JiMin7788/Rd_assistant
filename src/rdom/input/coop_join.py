@@ -15,6 +15,8 @@ NAME_READS_MAX = 5      # reads before an unreadable / foreign name is declined
 NAME_STREAK = 2         # R2: two identical consecutive reads before accepting
 ROOM_GONE_S = 5.0       # joined room not seen for this long -> failed
 WAIT_LOG_S = 60.0
+ACCEPT_RETRY_S = 2.0    # popup still up this long after an accept / X tap -> the tap was swallowed, tap again
+TAPS_MAX = 3            # at most this many accept taps (and X taps) per invite
 
 
 def _log(msg):
@@ -34,6 +36,7 @@ def wait_and_accept(g, inj, host, should_stop, recover, now=time.monotonic,
     phase = "wait"            # wait -> joining (accepted) -> room (joined_room seen)
     t_accept = room_since = room_gone = None
     streak = reads = 0; last_name = ""
+    accepts = declines = 0; t_tap = t_decline = t0      # taps so far / time of the last accept or X tap
 
     def tap(uv):
         inj.tap(*uv)
@@ -55,12 +58,27 @@ def wait_and_accept(g, inj, host, should_stop, recover, now=time.monotonic,
 
         popup = invite.invite_popup(f)       # BEFORE recover: recover would tap the modal X on it
         if popup is not None:
+            if phase == "wait" and declines:
+                # AI-NOTE: a swallowed X tap leaves the popup up: tap X again after ACCEPT_RETRY_S (max 3 taps)
+                if t - t_decline < ACCEPT_RETRY_S:
+                    sleep(TICK_S); continue
+                if declines < TAPS_MAX:
+                    declines += 1; t_decline = now()
+                    _log(f"decline again ({declines}/{TAPS_MAX})")
+                    tap(popup["close_uv"])
+                    sleep(TICK_S); continue
+                declines = 0                 # 3 X taps did not close it: read the popup afresh
             if phase == "joining":
                 if t - t_accept > join_s:
                     _log("invite popup still up after accept -- failed")
                     if inj.execute:
                         tap(popup["close_uv"])
                     return "failed"
+                if accepts < TAPS_MAX and t - t_tap >= ACCEPT_RETRY_S:
+                    # AI-NOTE: the accept tap can be swallowed (window activation race); tap again
+                    accepts += 1; t_tap = now()
+                    _log(f"accept again ({accepts}/{TAPS_MAX})")
+                    tap(popup["accept_uv"])
             else:
                 matched, name = invite.invite_name_matches(f, host)
                 reads += 1
@@ -72,17 +90,19 @@ def wait_and_accept(g, inj, host, should_stop, recover, now=time.monotonic,
                     if not inj.execute:
                         _log("would accept"); return "stopped"
                     tap(popup["accept_uv"])
-                    phase = "joining"; t_accept = now()
+                    phase = "joining"; t_accept = t_tap = now(); accepts = 1
                 elif reads >= NAME_READS_MAX:
                     _log(f"invite from {last_name or '?'} -- declined")
                     if not inj.execute:
                         _log("would decline"); return "stopped"
                     tap(popup["close_uv"])
+                    declines = 1; t_decline = now()
                     streak = reads = 0; last_name = ""
-                    sleep(1.0)               # let the popup close before the next frame
+                    sleep(1.0)              # let the popup close before the next frame
                     continue
             sleep(TICK_S); continue
         streak = reads = 0; last_name = ""   # popup gone: the next one starts a fresh read
+        declines = 0
 
         if invite.joined_room(f):
             room_gone = None
