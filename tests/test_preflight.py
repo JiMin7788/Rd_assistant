@@ -188,7 +188,7 @@ def run_duo(capsys, check_results, codes):
     return rc, capsys.readouterr().out.splitlines(), log
 
 
-OK = [("gpg", True, "구글플레이게임즈 랜덤 다이스 준비됐어요"), ("gpg2", True, "구글플레이게임즈 랜덤 다이스(CumbersomeTutor145) 준비됐어요")]
+OK = [("gpg", True, "구글플레이게임즈 랜덤 다이스 준비됐어요"), ("gpg2", True, "구글플레이게임즈 랜덤 다이스(CleanCardinal77) 준비됐어요")]
 
 
 def test_duo_check_ok_starts_both_before_waiting(capsys):
@@ -196,7 +196,7 @@ def test_duo_check_ok_starts_both_before_waiting(capsys):
     assert rc == 0
     assert log == [("start", "gpg"), ("start", "gpg2"), ("wait", "gpg"), ("wait", "gpg2")]
     assert out == ["start check: OK 구글플레이게임즈 랜덤 다이스 준비됐어요",
-                   "start check: OK 구글플레이게임즈 랜덤 다이스(CumbersomeTutor145) 준비됐어요",
+                   "start check: OK 구글플레이게임즈 랜덤 다이스(CleanCardinal77) 준비됐어요",
                    "start check: OK gpg 프레임 (1994, 1122, 3)",
                    "start check: OK gpg2 프레임 (1994, 1122, 3)"]
 
