@@ -12,7 +12,7 @@ calls the profile module yet, and the adb input path does not exist yet (rdf04-t
 
 ## Profile module
 - `Profile(name, bot, tag, config, ui)` is frozen. `PROFILES["ld"]` = gear, `[기어]`, `config/recorder_ld.toml`;
-  `PROFILES["gpg"]` = gear, `[기어1]`, `config/recorder.toml` (title `^랜덤 다이스 2 - CleanCardinal77$`, inviter / public bot); `PROFILES["gpg2"]` = gear, `[기어2]`, `config/recorder_gpg2.toml` (title `^랜덤 다이스 2 - CumbersomeTutor145$`, same chrome 132/72/0/0 and size 1384x2304 at y 2160, placed left of window 1 at x 1508 so they do not overlap). The `$`-anchored titles keep each regex from matching the other window or the `Google Play Games` launcher. `get(name)` raises KeyError listing known names.
+  `PROFILES["gpg"]` = gear, `[기어1]`, `config/recorder.toml` (title `^랜덤 다이스 2 - CumbersomeTutor145$` = 대변먹는자, inviter / public bot; swapped by rdT08, rdT06 had it the wrong way round); `PROFILES["gpg2"]` = gear, `[기어2]`, `config/recorder_gpg2.toml` (title `^랜덤 다이스 2 - CleanCardinal77$` = 배속봇, joiner, same chrome 132/72/0/0 and size 1384x2304 at y 2160, placed left of window 1 at x 1508 so they do not overlap). The `$`-anchored titles keep each regex from matching the other window or the `Google Play Games` launcher. `get(name)` raises KeyError listing known names.
 - `uv(profile, key)` returns the profile's override, else the shared constant of that name in `rdom.input.inject`
   (measured on GPG). Only the LD profile has overrides: `COOP_UV = (0.497, 0.823)`, the pre-GPG LD value of
   commit `3a70f61^`.

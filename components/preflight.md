@@ -19,7 +19,7 @@ concurrent one-frame grab. Neither injects input or saves a frame. Not called fr
   This depends on the wording of that error text.
 - With two profiles and both passed, a last entry `("overlap", ...)` compares the two content rects with
   `live.rects_cover` ("두 게임 창이 겹쳐요" / "두 게임 창이 겹치지 않아요"). Touching edges do not count.
-- `MISSING` / `LABEL` have `gpg2` entries (`구글플레이게임즈 랜덤 다이스 창(CumbersomeTutor145)이 없어요`); the overlap check takes any two profiles, so gpg+gpg2 is covered (rdT06).
+- `MISSING` / `LABEL` have `gpg2` entries (`구글플레이게임즈 랜덤 다이스 창(CleanCardinal77)이 없어요`; gpg2 is the 배속봇 / joiner window CleanCardinal77, swapped by rdT08); the overlap check takes any two profiles, so gpg+gpg2 is covered (rdT06).
 - Reason texts are module constants (`MISSING`, `MANY`, `COVERED`, `NO_ADB`, `OVERLAP`); success reason is
   `<LABEL> 준비됐어요`. `format_lines` gives `start check: OK|FAIL <reason>`.
 - Seams for tests: `finder`, `placer`, `grabber_factory`, `adb_probe`. Grabbers are closed in `finally`.

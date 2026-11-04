@@ -11,6 +11,7 @@ sources: [rdf04-t10, rdf04-i1, rdT06]
 ## Flags and header
 - `--no-game`: Discord bot only (unchanged). `--gear-only`: supervisor gets `--mode gear`; default gets `--mode duo`. The mode is always passed explicitly (`supervisor_args`), even though the supervisor defaults to duo too.
 - Header printed after the supervisor starts: `두 봇 시작 (기어1=구글 <host> · 기어2=구글 <partner>)` or `기어봇만 시작 (구글)` (`header_text`). Names come from `config/duo.toml` keys `host` / `partner` (`load_names`); a missing file or key falls back to `대변먹는자` / `배속봇`.
+- **Single instance (rdT07):** if `data/run_all.pid` names another live python process, `main` prints `이미 실행 중이에요 -- 두 번째 실행은 무시합니다 (pid N)...`, waits `SECOND_COPY_WAIT_S` (5 s) and returns 1 without starting a bot or touching the lock. (2026-11-05 two full stacks ran at once and every window had two bots tapping.) Discord `/시작` already refuses when `supervisor.pid` is alive ("이미 실행 중입니다."), and the supervisor itself now refuses too.
 - If `data/supervisor.pid` is alive the supervisor is left alone ("게임봇은 이미 실행 중"), so the flags then have no effect. `PAUSE` / `STOP` are removed before a fresh start, as before.
 
 ## Tails and SHOW

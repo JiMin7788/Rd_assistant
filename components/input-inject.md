@@ -11,7 +11,18 @@ render child (`CROSVM_1`); it is dry-run by default and only injects with `execu
 
 ## How it works
 - No adb on GPG: `WM_MOUSEMOVE/LBUTTONDOWN/UP` and `WM_KEYDOWN/UP` (Esc = Android BACK) are
-  `PostMessage`d to the render child. Cursor is not moved, focus not needed.
+  `PostMessage`d to the render child. Cursor is not moved.
+- **Activation + cross-process lock (rdT07).** With two GPG windows a post to the non-foreground window is
+  ignored (Master's probe 2026-11-05: 3 of 3 ignored; activation first: 2 of 2 worked). In execute mode
+  `tap`, `swipe` and `back` run inside `Injector._gesture()`: `WaitForSingleObject` on the named mutex
+  `Local\rdom_input` (`INPUT_MUTEX`, `LOCK_TIMEOUT_MS` 5000; on timeout the gesture is logged and
+  skipped), then `_activate()` = `SendMessageW(top, WM_ACTIVATEAPP, 1, 0)`, `WM_NCACTIVATE`, `WM_ACTIVATE`,
+  `SendMessageW(render, WM_SETFOCUS, 0, 0)`, check `GetForegroundWindow() == top` (else
+  `SetForegroundWindow(top)`, one log line if it still fails), `SETTLE_S` 0.03 s settle, then the posts,
+  and `ReleaseMutex` in a `finally` (also when posting raises). The lock covers the whole swipe. Dry run
+  does none of it. A window messages sequence missing any one of the four did not work in the probe.
+  The joiner's accept tap (`coop_join.wait_and_accept`, `tap` -> `inj.tap`) goes through the same
+  `Injector`, so it is activated and locked too. Tests: `tests/test_rdt07_input_lock.py`.
 - (u,v) → screen px of the same content rect the capture grabs → `ScreenToClient(render)`.
   ±4 px position jitter and randomised press/drag durations are added.
 - Ops: `summon`, `destroy` (cell → Cheong, 90 s cooldown tracked here), `switch`, `merge`,

@@ -1,8 +1,8 @@
 ---
 title: Live screen capture
 type: component
-updated: 2026-11-02
-sources: [rdf02-t7, seed, rdf01-t6, rdf02-t5, rdf05-t4]
+updated: 2026-11-05
+sources: [rdf02-t7, seed, rdf01-t6, rdf02-t5, rdf05-t4, rdT08]
 ---
 # Live screen capture
 
@@ -10,7 +10,12 @@ sources: [rdf02-t7, seed, rdf01-t6, rdf02-t5, rdf05-t4]
 ndarray, so frame pixels map 1:1 to content-normalised (u,v) — the same space input uses.
 
 ## How it works
-- Window found by `[target].window_title_re` (`^랜덤 다이스 2`, Google Play Games); content =
+- Window found by `[target].window_title_re`; with two Google Play Games windows these are two EXACT titles
+  (rdT07, swapped by rdT08): `^랜덤 다이스 2 - CumbersomeTutor145$` in `config/recorder.toml` (profile gpg,
+  대변먹는자 inviter) and `^랜덤 다이스 2 - CleanCardinal77$` in `config/recorder_gpg2.toml` (gpg2, 배속봇
+  joiner), so neither pattern
+  matches the other window or the launcher. Capture of a background window keeps working (it keeps
+  animating); only input needs the window activated ([input-inject](input-inject.md)). Content =
   client − `[target.chrome]` (left 132, top 72 on GPG, measured 2026-10-16) via `geometry.fit_chrome`.
 - dxcam output = `[capture].monitor_index` (1 = DISPLAY2, where the GPG window sits).
 - `place_game_window()` moves the window to `[target.place]` at bot start.
@@ -70,6 +75,7 @@ ndarray, so frame pixels map 1:1 to content-normalised (u,v) — the same space 
 - `tools/save_frame.py` — `claim_file` ('xb' exclusive create, `_2`..`_99` suffix), covered check before claiming
 - commit `d4aff7c` (not yet merged into the main checkout), test_save_frame_tool.py — never-overwrite, skips pre-created suffix, exhausted -> `None`
 - task rdf01-t6 branch (not yet merged into the main checkout): tests/test_support_collect.py writer/rects tests
+- `config/recorder.toml`, `config/recorder_gpg2.toml` — `window_title_re` = CumbersomeTutor145 (gpg) / CleanCardinal77 (gpg2), commit rdT08 swap
 - `config/recorder.toml` — `[target]`, `[target.chrome]`, `[target.place]`, `monitor_index = 1`
 - `docs/01_GAME_SPEC.md` — emulator section (GPG since 2026-10-16, chrome 132/72)
 - `docs/05_AMENDMENTS.md` — A1 chrome insets, A2 capture covers content

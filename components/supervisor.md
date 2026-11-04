@@ -19,6 +19,9 @@ sources: [rdf04-t9, rdf04-t10, rdT06]
 - Stop-both writes `data/STOP`, cancels pending restarts, never restarts afterwards, waits for every child (the other bot finishes its current game), notifies `■ 두 봇 모두 정지됨` (duo only) and returns 1. A guard stop in duo also notifies `⛔ [<tag>] 봇이 멈춰서 두 봇 모두 정지 ...`; in gear mode it is silent here because the child already reported it.
 - All children exit 0 -> return 0. On any exit `supervisor.pid`, `bot_mode.json` and `STOP` are removed (`finally`).
 
+## Single instance (rdT07)
+`main` calls `running_supervisor(data/supervisor.pid)` first; another live python pid there -> prints `이미 실행 중이에요 -- 두 번째 실행은 무시합니다 (pid N)` and returns 2, nothing started (`Supervisor.run` is unchanged; tests drive it directly). Covers run_all and Discord `/시작` alike (2026-11-05 two stacks ran at once, two bots per window). Test: `tests/test_rdt07_input_lock.py::test_supervisor_refuses_second_copy`.
+
 ## Files written
 - `data/supervisor.pid` (read by `discord_bot.running()`), `data/bot_mode.json` `{mode, bots:[{bot, tag, profile, pid}], t}` rewritten atomically on every (re)start so pids stay current, and in duo `room.json` `{code: null, state: 'duo'}` via `room_state.write_room`.
 - Status texts are constants (`RESTART_TEXT`, `LIMIT_TEXT_*`, `GUARD_TEXT`, `ENDED_TEXT`) matching spec.md.

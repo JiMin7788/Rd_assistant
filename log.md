@@ -325,3 +325,7 @@
 ## 2026-11-05 · rdT06 · Duo on two Google Play Games windows (both gear bots)
 - Duo is now profile `gpg` (CleanCardinal77, inviter) + `gpg2` (CumbersomeTutor145, joiner), both bot `gear`, tags [기어1]/[기어2]; exact `$`-anchored window titles; child logs named by profile; round record file follows the role.
 - pages: components/supervisor.md (updated), components/profiles-ld.md (updated), components/preflight.md (updated), components/gear-loop.md (updated), components/run-all.md (updated), components/discord-bot.md (updated)
+
+## 2026-11-05 · rdT08 · GPG window titles swapped (inviter = CumbersomeTutor145, joiner = CleanCardinal77)
+- rdT06 had the two Google windows the wrong way round: profile `gpg` (대변먹는자, inviter) is window CumbersomeTutor145, `gpg2` (배속봇, joiner) is CleanCardinal77; config titles, preflight gpg2 texts and tests follow.
+- pages: components/profiles-ld.md (updated), components/preflight.md (updated), components/capture-live.md (updated)
