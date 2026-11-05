@@ -68,6 +68,7 @@ def env(gl, monkeypatch, tmp_path):
     monkeypatch.setattr(gl, "GEAR_LOG", str(tmp_path / "gear_rounds.jsonl"))
     monkeypatch.setattr(gl, "JOINER_LOG", str(tmp_path / "joiner_rounds.jsonl"))
     monkeypatch.setattr(gl.time, "sleep", lambda s: None)
+    monkeypatch.setattr(friend_coop, "COOP_DEBUG_DIR", str(tmp_path / "coop_debug"))   # never write data/
     monkeypatch.setattr(gl, "send_status", lambda text, frame=None: e.status.append((text, frame)))
     monkeypatch.setattr(gl, "write_room", lambda code, state: e.rooms.append((code, state)))
     monkeypatch.setattr(gl.discord, "set_tag", lambda t: e.status.append(("tag", t)))
@@ -400,7 +401,7 @@ def test_speed_tapped_once_per_battle_by_every_role(env, args):
 
 
 def test_inviter_resumed_battle_below_2x_is_tapped(env, monkeypatch):
-    _speed_reads(monkeypatch, env.gl, [1.0, 1.5])
+    _speed_reads(monkeypatch, env.gl, [1.0, 2.0])
     assert env.gl.battle_phase("inviter", env.g, env.inj, profiles.get("gpg"), 1, tap_speed=False) == "ok"
     assert len(env.inj.taps) == 1
 
@@ -429,25 +430,54 @@ def _speed_reads(monkeypatch, gl, seq):
     monkeypatch.setattr(gl, "read_speed", rd)
 
 
-def test_speed_stops_after_own_tap_raised_it(env, monkeypatch, capsys):
-    _speed_reads(monkeypatch, env.gl, [1.0, 1.5, 2.0])   # before, after tap 1 (rose -> stop)
-    assert env.gl.confirm_speed(env.g, env.inj, profiles.get("gpg"), tap_first=True) == 1.5
-    assert len(env.inj.taps) == 1
-    assert "배속 1.0 -> 1.5" in capsys.readouterr().out
-
-
-def test_speed_1_5_to_2_0_stops(env, monkeypatch, capsys):
-    _speed_reads(monkeypatch, env.gl, [1.5, 2.0, 1.0])
+def test_speed_a_rise_does_not_stop_it_taps_until_2_0(env, monkeypatch, capsys):
+    _speed_reads(monkeypatch, env.gl, [1.0, 1.5, 2.0, 1.0])   # before, tap 1 -> 1.5 (keep going), tap 2 -> 2.0
     assert env.gl.confirm_speed(env.g, env.inj, profiles.get("gpg"), tap_first=True) == 2.0
-    assert len(env.inj.taps) == 1
-    assert "배속 1.5 -> 2.0" in capsys.readouterr().out
-
-
-def test_speed_retaps_only_while_it_did_not_rise(env, monkeypatch, capsys):
-    _speed_reads(monkeypatch, env.gl, [1.0, 1.0, 1.5])   # tap 1 swallowed, tap 2 raised it
-    assert env.gl.confirm_speed(env.g, env.inj, profiles.get("gpg"), tap_first=True) == 1.5
     assert len(env.inj.taps) == 2
-    assert "배속 1.0 -> 1.5" in capsys.readouterr().out
+    assert "배속 1.0 -> 2.0" in capsys.readouterr().out
+
+
+def test_speed_already_2_0_is_not_tapped(env, monkeypatch, capsys):
+    _speed_reads(monkeypatch, env.gl, [2.0])
+    assert env.gl.confirm_speed(env.g, env.inj, profiles.get("gpg"), tap_first=True) == 2.0
+    assert env.inj.taps == []
+    assert "배속 2.0 -> 2.0" in capsys.readouterr().out
+
+
+def test_speed_1_5_never_rising_taps_5_times_then_stops(env, monkeypatch, capsys):
+    _speed_reads(monkeypatch, env.gl, [1.5])
+    assert env.gl.confirm_speed(env.g, env.inj, profiles.get("gpg"), tap_first=True) == 1.5
+    assert len(env.inj.taps) == env.gl.SPEED_TAPS_MAX == 5
+    assert "배속 1.5 -> 1.5" in capsys.readouterr().out
+
+
+def test_speed_tap_log_line_and_not_in_front(env, monkeypatch, capsys):
+    _speed_reads(monkeypatch, env.gl, [1.0, 1.5, 2.0])
+    env.inj.last_gesture_ok = True
+    def tap(u, v):
+        env.inj.taps.append((u, v))
+        env.inj.last_gesture_ok = len(env.inj.taps) != 2     # tap 2 not confirmed in front
+    env.inj.tap = tap
+    env.gl.confirm_speed(env.g, env.inj, profiles.get("gpg"), tap_first=True)
+    out = capsys.readouterr().out
+    assert "  배속 tap 1/5: 1.0 -> 1.5 (front ok)" in out
+    assert "  배속 tap 2/5: 1.5 -> 2.0 (NOT in front)" in out
+
+
+def test_speed_frames_saved_to_patched_dir_and_capped(env, monkeypatch, tmp_path):
+    import numpy as np
+    d = tmp_path / "coop_debug"
+    d.mkdir()
+    for i in range(30):                                     # 30 old speed files already there
+        (d / f"speed_gpg_20200101_000000_{i}.png").write_bytes(b"x")
+        os.utime(d / f"speed_gpg_20200101_000000_{i}.png", (1000 + i, 1000 + i))
+    monkeypatch.setattr(env.g, "grab", lambda: np.zeros((8, 8, 3), np.uint8))
+    _speed_reads(monkeypatch, env.gl, [1.0, 1.5, 2.0])
+    env.gl.confirm_speed(env.g, env.inj, profiles.get("gpg"), tap_first=True)
+    files = sorted(os.listdir(d))
+    assert len(files) == 30                                 # 30 old + 3 new (before, tap 1, tap 2), oldest removed
+    assert sum(f.endswith(("_0.png", "_1.png", "_2.png")) and not f.startswith("speed_gpg_2020") for f in files) == 3
+    assert "speed_gpg_20200101_000000_0.png" not in files
 
 
 def test_speed_none_after_tap_is_reread_then_succeeds(env, monkeypatch, capsys):
@@ -467,17 +497,18 @@ def test_speed_none_for_3s_then_ends(env, monkeypatch, capsys):
     assert len(env.inj.taps) == 1 and len(reads) == 1 + 1 + 6      # initial, after tap, 6 re-reads (3 s)
 
 
-def test_speed_gives_up_after_three_taps(env, monkeypatch, capsys):
+def test_speed_window_ends_the_loop(env, monkeypatch):
     _speed_reads(monkeypatch, env.gl, [1.0])
-    assert env.gl.confirm_speed(env.g, env.inj, profiles.get("gpg"), tap_first=True) == 1.0
-    assert len(env.inj.taps) == 3
-    assert "배속 1.0 -> 1.0" in capsys.readouterr().out
+    clock = iter(range(0, 1000, 8))                          # monotonic jumps 8 s per call: t0=0, 8, 16, 24
+    monkeypatch.setattr(env.gl.time, "monotonic", lambda: next(clock))
+    env.gl.confirm_speed(env.g, env.inj, profiles.get("gpg"), tap_first=True)
+    assert len(env.inj.taps) == 2                            # 20 s window ran out before the 5-tap cap
 
 
-def test_resumed_battle_below_2x_is_tapped(env, monkeypatch):
-    _speed_reads(monkeypatch, env.gl, [1.5, 2.0])
+def test_resumed_battle_below_2x_is_tapped_toward_2_0(env, monkeypatch):
+    _speed_reads(monkeypatch, env.gl, [1.5, 1.5, 2.0])
     env.gl.confirm_speed(env.g, env.inj, profiles.get("gpg"), tap_first=False)
-    assert len(env.inj.taps) == 1
+    assert len(env.inj.taps) == 2
 
 
 @pytest.mark.parametrize("seen", [2.0, None])

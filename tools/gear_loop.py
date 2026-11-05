@@ -15,7 +15,7 @@ anything else = crash. Real input only with --execute.
 
   python tools/gear_loop.py [--profile gpg|gpg2|ld] [--role public|inviter|joiner] [--execute]
 """
-import argparse, datetime, functools, json, os, sys, time, tomllib
+import argparse, datetime, functools, glob, json, os, sys, time, tomllib
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))
 from rdom import profile as profiles
@@ -281,7 +281,10 @@ def _duo_support_play(g, inj, minutes):
     return res
 
 
-SPEED_TAPS_MAX = 3
+SPEED_TAPS_MAX = 5
+SPEED_WINDOW_S = 20.0     # confirm_speed gives up after this long
+SPEED_RETAP_S = 1.5       # wait after a tap before the caption is re-read
+SPEED_DEBUG_KEEP = 30     # speed_* debug frames kept in COOP_DEBUG_DIR
 SPEED_REREAD_S = 3.0      # an unreadable speed caption after a tap is re-read (every 0.5 s) this long
 
 
@@ -301,30 +304,58 @@ def log_input_stats(inj):
         s[k] = 0
 
 
+def _save_speed_frame(prof, stamp, n, frame):
+    """Save frame as COOP_DEBUG_DIR/speed_<profile>_<stamp>_<n>.png, keep the newest SPEED_DEBUG_KEEP
+    speed_* files. Never raises (a debug dump must not break the bot)."""
+    try:
+        d = friend_coop.COOP_DEBUG_DIR
+        os.makedirs(d, exist_ok=True)
+        cv2, np = friend_coop.cv2, friend_coop.np
+        cv2.imwrite(os.path.join(d, f"speed_{prof.name}_{stamp}_{n}.png"),
+                    cv2.cvtColor(np.asarray(frame), cv2.COLOR_RGB2BGR))
+        old = sorted(glob.glob(os.path.join(d, "speed_*.png")), key=os.path.getmtime)
+        for p in old[:-SPEED_DEBUG_KEEP]:
+            os.remove(p)
+    except Exception as e:
+        print(f"speed frame not saved: {e}", flush=True)
+
+
 def confirm_speed(g, inj, prof, tap_first):
-    """Tap 배속 and re-read the caption (max 3 taps, ~1 s apart) until it rose above the reading before
-    our first tap or reads >= 2.0; re-tap only while it did not rise (the tap was swallowed).
-    tap_first=False (a resumed battle) taps only when the caption is legible and below 2.0.
+    """Tap 배속 until the caption reads >= 2.0: at most SPEED_TAPS_MAX taps SPEED_RETAP_S apart within
+    SPEED_WINDOW_S. A rise caused by us does not stop the loop. Each tap logs one line and saves frames.
+    tap_first=False (a resumed battle) taps only when the first reading is legible and below 2.0.
     An unreadable caption after a tap ends the loop: another blind tap could cycle 2.0 -> 1.0."""
-    before = read_speed(g.grab())
-    if not tap_first and (before is None or before >= 2.0):
+    frame = g.grab()
+    before = read_speed(frame)
+    if (not tap_first and before is None) or (before is not None and before >= 2.0):
         print(f"배속 {before} -> {before}", flush=True)
         return before
-    after, taps = before, 0
-    while taps < SPEED_TAPS_MAX:
+    stamp = time.strftime("%Y%m%d_%H%M%S")
+    after, taps, cur, t0 = before, 0, before, time.monotonic()
+    while taps < SPEED_TAPS_MAX and time.monotonic() - t0 < SPEED_WINDOW_S:
+        if taps == 0:
+            _save_speed_frame(prof, stamp, 0, frame)      # the frame read right before the first tap
         inj.tap(*profiles.uv(prof, "SPEED_UV")); taps += 1
-        time.sleep(1.0)
-        after = read_speed(g.grab())
+        time.sleep(SPEED_RETAP_S)
+        frame = g.grab()
+        after = read_speed(frame)
         # AI-NOTE: the caption can be unreadable for a moment right after the tap (2026-11-05: '1.0 -> None'
         # ended the loop); re-read for up to SPEED_REREAD_S before deciding.
         waited = 0.0
         while after is None and waited < SPEED_REREAD_S:
             time.sleep(0.5); waited += 0.5
-            after = read_speed(g.grab())
-        # AI-NOTE: user 2026-11-05 '아 둘 다 배속 사용': both duo bots use 배속 and each use raises the shared
-        # speed one step (17:19 logs: inviter '1.0 -> 1.5', then joiner '1.5 -> 2.0'). Our own tap worked once
-        # the reading is above the pre-tap one; more taps by us would do nothing (or cycle 2.0 -> 1.0).
-        if after is None or after >= 2.0 or (before is not None and after > before): break
+            frame = g.grab()
+            after = read_speed(frame)
+        front = "front ok" if getattr(inj, "last_gesture_ok", True) else "NOT in front"
+        print(f"  배속 tap {taps}/{SPEED_TAPS_MAX}: {cur} -> {after} ({front})", flush=True)
+        _save_speed_frame(prof, stamp, taps, frame)
+        cur = after
+        # AI-NOTE: user 2026-11-05 23:5x '배속 둘 다 눌러서 2.0 만들어야한다고 대변먹는자가 안누르잖아'. Live run
+        # 23:14 (rdT12 stopped at the first rise): round 3 inviter '배속 1.5 -> 1.5' after 3 taps, joiner
+        # '1.0 -> 1.5'; rounds ended at 1.5. Whether a press adds a step, toggles a vote or is swallowed is
+        # unknown, so every bot keeps tapping until 2.0 (or the cap / window); per-tap lines and speed_*
+        # frames are the evidence for the next run.
+        if after is None or after >= 2.0: break
     print(f"배속 {before} -> {after}", flush=True)
     return after
 
