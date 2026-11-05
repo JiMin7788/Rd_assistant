@@ -41,6 +41,13 @@ LD_SUPPORT_SCALES = (1.25, 1.2, 1.15, 1.1, 1.05, 1.0)
 POWER_EVERY = 20.0
 POWER_TAPS = 6
 SUMMON_GAP = 0.5
+# AI-NOTE: user 2026-11-05: '첫 합성까지 소환속도 올리기' -- until the game's first merge swipe the loop
+# sleeps OPENING_TICK and a summon decision taps in one burst (up to min(empty cells, OPENING_BURST_MAX)
+# taps, OPENING_SUMMON_GAP apart; SUMMON_GAP does not apply inside it). The burst stays in one window
+# turn because of the Injector's foreground lease (rdT11).
+OPENING_TICK = 0.2
+OPENING_BURST_MAX = 5
+OPENING_SUMMON_GAP = 0.12
 
 
 def fmt(b):
@@ -83,8 +90,10 @@ def play(g, inj, minutes=30, tick=0.6):
     t_end = time.monotonic() + minutes * 60
     print(f"gear bot {'EXECUTE' if inj.execute else 'DRY-RUN'}", flush=True)
 
+    opening_t0 = time.monotonic(); opening_taps = 0   # the opening lasts until stats["merges"] > 0
+
     while time.monotonic() < t_end:
-        time.sleep(tick)
+        time.sleep(OPENING_TICK if stats["merges"] == 0 else tick)
         try:
             if g.window_moved():
                 print("window moved -- stopping"); return "moved"
@@ -242,13 +251,23 @@ def play(g, inj, minutes=30, tick=0.6):
         if act["op"] in ("merge", "support") and shaky:
             continue                                   # buffed cell not steady yet
         if act["op"] == "summon":
-            if now - summon_last >= SUMMON_GAP:
+            if stats["merges"] == 0:
+                n = max(1, min(ev["empty"], OPENING_BURST_MAX))
+                for i in range(n):
+                    if i:
+                        time.sleep(OPENING_SUMMON_GAP)
+                    tap("summon")
+                opening_taps += n; summon_last = acted_at = time.monotonic()
+            elif now - summon_last >= SUMMON_GAP:
                 tap("summon"); summon_last = now; acted_at = now
         elif act["op"] == "merge":
             print(f"{fmt(b)} | G{ev['gears']} {_keepfmt(ev)} clu{ev['largest_cluster']} "
                   f"avg{ev['gear_avg']} -> merge {act['from']}->{act['to']}", flush=True)
             inj.swipe(*cell_uv(act["from"]), *cell_uv(act["to"]))
             pending = (act["from"], act["to"], bc); acted_at = now; stats["merges"] += 1
+            if stats["merges"] == 1:
+                print(f"opening done: {opening_taps} summon taps in "
+                      f"{time.monotonic() - opening_t0:.1f} s", flush=True)
             swipe_ok = getattr(inj, "last_gesture_ok", True)   # False: swipe not confirmed in front
         elif act["op"] == "wait" and now - power_last > POWER_EVERY and now > hold_power_until:
             # nothing to do on the board -> spend SP on gears (user also powers up
