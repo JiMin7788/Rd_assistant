@@ -138,11 +138,39 @@ def test_decline_x_retapped_after_2s_max_3(capsys):
     assert "decline again (2/3)" in capsys.readouterr().out
 
 
-def test_room_gone_for_5s_fails():
-    res, inj, _, clk = run([popup()] * 2 + [ROOM] * 3 + [LOBBY])
-    assert res == "failed"
-    assert inj.taps == [ACCEPT]        # room already gone: no X tap
-    assert clk.t < 20
+def test_room_gone_waits_for_the_battle_without_recover_or_taps():
+    # rdT11: the room disappearing is the room -> battle loading, not a failure
+    def boom(f):
+        raise AssertionError("recover called")
+    res, inj, _, clk = run([popup()] * 2 + [ROOM] * 3 + [LOBBY] * 40 + [BATTLE], recover=boom)
+    assert res == "battle" and inj.taps == [ACCEPT]
+    assert 15 < clk.t < coop_join.ROOM_TO_BATTLE_S
+
+
+def test_room_gone_for_30s_fails_without_recover_or_taps():
+    calls = []
+    res, inj, _, clk = run([popup()] * 2 + [ROOM] * 3 + [LOBBY], recover=lambda f: calls.append(f))
+    assert res == "failed" and coop_join.ROOM_TO_BATTLE_S == 30.0
+    assert inj.taps == [ACCEPT] and calls == []        # room already gone: no X tap, no recover
+    assert 30 <= clk.t < 40
+
+
+def test_accept_not_retapped_when_the_frame_shows_the_room(capsys):
+    # popup drawn on two frames >= 2 s after the tap, but the join already shows (room frame) -> no re-tap
+    frames = [popup()] * 2 + [LOBBY] * 0 + [ROOM] * 6 + [BATTLE]
+    res, inj, _, _ = run(frames)
+    assert res == "battle" and inj.taps == [ACCEPT] and "accept again" not in capsys.readouterr().out
+
+
+def test_accept_retap_needs_two_consecutive_popup_frames_and_no_room(monkeypatch):
+    # popup frame, then a lobby frame (streak broken), popup again: each popup frame alone never re-taps
+    seq = [popup()] * 2 + [LOBBY, popup()] * 10
+    res, inj, _, _ = run(seq + [BATTLE])
+    assert inj.taps == [ACCEPT]
+    # a popup frame that also reports joined_room is never re-tapped
+    both = {"popup": True, "name": HOST, "room": True}
+    res, inj, _, _ = run([popup()] * 2 + [both] * 10 + [BATTLE])
+    assert res == "battle" and inj.taps == [ACCEPT]
 
 
 def test_room_s_runs_out_fails_and_leaves_room():

@@ -60,12 +60,27 @@ class World:
         return [e[0] for e in self.log]
 
 
-def make(monkeypatch, world, execute=True):
+class FakeStore:
+    """In-memory stand-in for the shared-memory lease (tests never open the real named memory)."""
+    def __init__(self):
+        self.st = {"owner": 0, "waiting": 0, "lease_until": 0.0, "owner_since": 0.0}
+
+    def read(self):
+        return dict(self.st)
+
+    def write(self, st):
+        self.st = dict(st)
+
+
+def make(monkeypatch, world, execute=True, pid=100, store=None):
     monkeypatch.setattr(inject, "_user32", world.user32)
     monkeypatch.setattr(inject, "_kernel32", world.kernel32)
     monkeypatch.setattr(inject.time, "sleep", lambda s: None)
+    store = store if store is not None else FakeStore()
+    monkeypatch.setattr(inject, "_open_lease_store", lambda: store)
+    monkeypatch.setattr(inject, "_pid_alive", lambda p: True)
     inj = Injector(execute=False, config=str(ROOT / "config" / "recorder.toml"))
-    inj.execute, inj._top, inj._render = execute, TOP, RENDER
+    inj.execute, inj._top, inj._render, inj._pid, inj.fake_store = execute, TOP, RENDER, pid, store
     monkeypatch.setattr(inj, "_point", lambda u, v, jitter=4: (5, 6))
     return inj
 
@@ -213,16 +228,109 @@ def test_lock_timeout_counted_and_not_ok(monkeypatch):
     assert inj.last_gesture_ok is False and inj.stats["lock_timeouts"] == 1
 
 
-def test_lock_release_yields_to_the_waiting_bot(monkeypatch):
+# ---- rdT11: foreground lease (HOLD_S burst, QUANTUM_S hand-over), switch timing stats
+A_PID, B_PID = 100, 200
+
+
+def make_pair(monkeypatch):
+    """Two injectors (two bot processes) sharing one lease store, one world and one fake clock."""
+    w = World()
+    a = make(monkeypatch, w, pid=A_PID)
+    b = make(monkeypatch, w, pid=B_PID, store=a.fake_store)
+    clk = Clock()
+    monkeypatch.setattr(inject, "time", clk)
+    return a, b, clk, a.fake_store
+
+
+def test_lease_constants():
+    assert inject.HOLD_S == 0.8 and inject.QUANTUM_S == 2.5 and inject.LEASE_POLL_S == 0.02
+
+
+def test_owner_renews_within_hold_s_and_the_other_bot_does_not_take_over(monkeypatch):
+    a, b, clk, store = make_pair(monkeypatch)
+    a.tap(0.5, 0.5)
+    clk.t += 0.5
+    a.tap(0.5, 0.5)                                    # within HOLD_S of the last gesture: renewed
+    assert store.st["owner"] == A_PID and store.st["lease_until"] == pytest.approx(clk.t + inject.HOLD_S)
+    clk.t += inject.HOLD_S - 0.1                       # still inside the lease
+    assert b._must_wait(store.read(), clk.t) is True
+    assert a._must_wait(store.read(), clk.t) is False
+
+
+def test_other_bot_takes_over_after_hold_s_idle(monkeypatch):
+    a, b, clk, store = make_pair(monkeypatch)
+    a.tap(0.5, 0.5)
+    clk.t += inject.HOLD_S + 0.01
+    t_b = clk.t
+    b.tap(0.5, 0.5)
+    assert store.st["owner"] == B_PID and b.stats["waited"] == 0
+    assert store.st["owner_since"] == t_b                                         # a new turn started
+    a.tap(0.5, 0.5)                                    # B's lease is fresh: A has to wait for it
+    assert a.stats["waited"] == 1 and a.stats["waited_ms_max"] >= (inject.HOLD_S - 0.1) * 1000
+    assert store.st["owner"] == A_PID
+
+
+def test_quantum_hands_over_when_the_other_bot_waits(monkeypatch):
+    a, b, clk, store = make_pair(monkeypatch)
+    # A's turn is 2.4 s old (< QUANTUM_S), B is waiting: A's gesture (>= 0.2 s with activation) ends past
+    # the quantum and must NOT renew the lease
+    store.st.update(owner=A_PID, waiting=B_PID, lease_until=clk.t + 0.5, owner_since=clk.t - 2.4)
+    t_a = clk.t
+    a.tap(0.5, 0.5)
+    assert clk.t - store.st["owner_since"] >= inject.QUANTUM_S
+    assert store.st["lease_until"] <= clk.t and store.st["lease_until"] > t_a   # ended now, not now + HOLD_S
+    assert a._must_wait(store.read(), clk.t) is True          # A's next gesture waits for B's turn
+    b.tap(0.5, 0.5)
+    assert store.st["owner"] == B_PID and store.st["waiting"] == 0 and b.stats["waited"] == 0
+    assert a._must_wait(store.read(), clk.t) is True          # now A waits for B's lease
+    # while the quantum is not over, the same waiting bot does not stop A from renewing
+    store.st.update(owner=A_PID, waiting=B_PID, lease_until=clk.t + 0.5, owner_since=clk.t - 0.2)
+    a.tap(0.5, 0.5)
+    assert store.st["lease_until"] == pytest.approx(clk.t + inject.HOLD_S)
+
+
+def test_expired_lease_and_dead_owner_never_block(monkeypatch):
+    a, b, clk, store = make_pair(monkeypatch)
+    store.st.update(owner=A_PID, lease_until=clk.t - 0.01, owner_since=clk.t - 1)      # expired
+    assert b._must_wait(store.read(), clk.t) is False
+    store.st.update(lease_until=clk.t + 10, owner_since=clk.t)                          # live lease ...
+    assert b._must_wait(store.read(), clk.t) is True
+    monkeypatch.setattr(inject, "_pid_alive", lambda p: p != A_PID)                    # ... but A is gone
+    assert b._must_wait(store.read(), clk.t) is False
+    b.tap(0.5, 0.5)
+    assert store.st["owner"] == B_PID and b.stats["waited"] == 0 and b.stats["gestures"] == 1
+
+
+def test_lease_wait_counts_toward_the_lock_timeout(monkeypatch, capsys):
+    w = World()
+
+    class Busy(FakeStore):                             # the other bot is always mid-burst
+        def read(self):
+            return {"owner": B_PID, "waiting": 0, "lease_until": clk.t + 1, "owner_since": clk.t}
+    inj, clk = make_clock(monkeypatch, w)
+    inj._store = Busy()
+    t0 = clk.t
+    inj.tap(0.5, 0.5)
+    assert inj.stats["lock_timeouts"] == 1 and inj.last_gesture_ok is False
+    assert not {"post", "send"} & set(w.kinds()) and "input lock timeout" in capsys.readouterr().out
+    assert inject.LOCK_TIMEOUT_MS / 1000 - 0.01 <= clk.t - t0 < inject.LOCK_TIMEOUT_MS / 1000 + 0.1
+    assert w.kinds().count("release") >= 100           # polled (mutex released between checks)
+
+
+def test_stats_record_start_to_post_time(monkeypatch):
     w = World()
     inj, clk = make_clock(monkeypatch, w)
-    order = []
-    w.kernel32.ReleaseMutex = lambda h: order.append("release") or 1
-    orig = clk.sleep
-    clk.sleep = lambda s: (order.append(("sleep", s)), orig(s))
+    inj.tap(0.5, 0.5)                                  # switches: poll + settle on a fake clock
+    assert inj.stats["ready_ms_total"] == inj.stats["ready_ms_max"] >= inject.ACTIVATE_SETTLE_S * 1000 - 1
+    assert inj.stats["waited"] == 0
+
+
+def test_dry_run_touches_no_lease(monkeypatch):
+    w = World()
+    inj = make(monkeypatch, w, execute=False)
+    monkeypatch.setattr(inject, "_open_lease_store", lambda: pytest.fail("lease opened"))
     inj.tap(0.5, 0.5)
-    i = order.index("release")
-    assert order[i + 1] == ("sleep", inject.LOCK_YIELD_S) and i + 2 == len(order)
+    assert w.log == [] and inj.fake_store.st["owner"] == 0
 
 
 def test_gear_loop_input_stats_line(capsys):
@@ -233,10 +341,13 @@ def test_gear_loop_input_stats_line(capsys):
         spec.loader.exec_module(m)
     finally:
         sys.path.remove(str(ROOT / "tools"))
-    inj = types.SimpleNamespace(stats={"gestures": 9, "switches": 4, "not_foreground": 1, "lock_timeouts": 2})
+    inj = types.SimpleNamespace(stats={"gestures": 9, "switches": 4, "not_foreground": 1, "lock_timeouts": 2,
+                                       "waited": 41, "waited_ms_total": 8610.0, "waited_ms_max": 1900.0,
+                                       "ready_ms_total": 900.0, "ready_ms_max": 1900.0})
     m.log_input_stats(inj)
-    assert "input: 9 gestures, 4 switches, 1 not in front, 2 lock timeouts" in capsys.readouterr().out
-    assert inj.stats["gestures"] == 0
+    assert ("input: 9 gestures, 4 switches, 1 not in front, 2 lock timeouts, "
+            "waited 41 (avg 210 ms, max 1900 ms)") in capsys.readouterr().out
+    assert inj.stats["gestures"] == 0 and inj.stats["waited"] == 0
 
 
 # ---- single instance

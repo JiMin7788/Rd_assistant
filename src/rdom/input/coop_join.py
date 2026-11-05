@@ -13,7 +13,9 @@ from rdom.perception import board, invite
 TICK_S = 0.5            # frame period; should_stop() is checked every tick (<= 2 s required)
 NAME_READS_MAX = 5      # reads before an unreadable / foreign name is declined
 NAME_STREAK = 2         # R2: two identical consecutive reads before accepting
-ROOM_GONE_S = 5.0       # joined room not seen for this long -> failed
+# AI-NOTE: the joined room disappearing is the room -> battle loading screen after the host's 협동 시작, which
+# lasted well over the old 5 s (2026-11-05: every invite round failed); wait this long for the battle.
+ROOM_TO_BATTLE_S = 30.0
 WAIT_LOG_S = 60.0
 ACCEPT_RETRY_S = 2.0    # popup still up this long after an accept / X tap -> the tap was swallowed, tap again
 TAPS_MAX = 3            # at most this many accept taps (and X taps) per invite
@@ -37,6 +39,7 @@ def wait_and_accept(g, inj, host, should_stop, recover, now=time.monotonic,
     t_accept = room_since = room_gone = None
     streak = reads = 0; last_name = ""
     accepts = declines = 0; t_tap = t_decline = t0      # taps so far / time of the last accept or X tap
+    popup_run = 0             # consecutive popup frames while joining (an accept re-tap needs two)
 
     def tap(uv):
         inj.tap(*uv)
@@ -74,9 +77,13 @@ def wait_and_accept(g, inj, host, should_stop, recover, now=time.monotonic,
                     if inj.execute:
                         tap(popup["close_uv"])
                     return "failed"
-                if accepts < TAPS_MAX and t - t_tap >= ACCEPT_RETRY_S:
-                    # AI-NOTE: the accept tap can be swallowed (window activation race); tap again
-                    accepts += 1; t_tap = now()
+                popup_run += 1
+                # AI-NOTE: the accept tap can be swallowed (window activation race), but the popup stays drawn
+                # for a moment even after a good accept (2026-11-05: needless 2nd/3rd taps): re-tap only on two
+                # consecutive popup frames, ACCEPT_RETRY_S after the last tap, with no sign of the room.
+                if (accepts < TAPS_MAX and popup_run >= 2 and t - t_tap >= ACCEPT_RETRY_S
+                        and not invite.joined_room(f)):
+                    accepts += 1; t_tap = now(); popup_run = 0
                     _log(f"accept again ({accepts}/{TAPS_MAX})")
                     tap(popup["accept_uv"])
             else:
@@ -102,7 +109,7 @@ def wait_and_accept(g, inj, host, should_stop, recover, now=time.monotonic,
                     continue
             sleep(TICK_S); continue
         streak = reads = 0; last_name = ""   # popup gone: the next one starts a fresh read
-        declines = 0
+        declines = popup_run = 0
 
         if invite.joined_room(f):
             room_gone = None
@@ -120,8 +127,9 @@ def wait_and_accept(g, inj, host, should_stop, recover, now=time.monotonic,
                 _log("did not reach the room in time -- failed")
                 return "failed"
         elif phase == "room":
+            # AI-NOTE: no recover(), BACK or tap here -- the room -> battle loading screen is "unknown" to them.
             room_gone = t if room_gone is None else room_gone
-            if t - room_gone >= ROOM_GONE_S:
+            if t - room_gone >= ROOM_TO_BATTLE_S:
                 _log("joined room gone -- failed")
                 return "failed"
         else:
