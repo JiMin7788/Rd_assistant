@@ -107,9 +107,9 @@ def test_crashes_counted_per_bot(mk):
     e = mk({"gpg": [(5, 1)] * 4 + [(5, 0)], "gpg2": [(20, 1), (100, 0)]})
     assert e.run() == 0
     ld = [(t, f) for t, f in e.notes if "[기어1]" in t]
-    sp = [(t, f) for t, f in e.notes if "[기어2]" in t]
+    sp = [(t, f) for t, f in e.notes if "[서폿]" in t]
     assert [t.split("\n")[0] for t, _ in ld] == [f"⚠ [기어1] 봇 오류로 재시작 ({n}/5)" for n in (1, 2, 3, 4)]
-    assert [t.split("\n")[0] for t, _ in sp] == ["⚠ [기어2] 봇 오류로 재시작 (1/5)"]
+    assert [t.split("\n")[0] for t, _ in sp] == ["⚠ [서폿] 봇 오류로 재시작 (1/5)"]
     assert all(f == "shot:gpg" for _, f in ld) and sp[0][1] == "shot:gpg2"
     # last 6 log lines of the crashed run, in a code block
     assert ld[0][0].split("\n", 1)[1] == "```" + "\n".join(f"gpg start 0 line {i}" for i in range(4, 10)) + "```"
@@ -155,7 +155,7 @@ def test_fifth_crash_stops_both_duo(mk):
     assert not e.exists("STOP")
 
 
-@pytest.mark.parametrize("bad,bad_tag,other", [("gpg2", "[기어2]", "gpg"), ("gpg", "[기어1]", "gpg2")])
+@pytest.mark.parametrize("bad,bad_tag,other", [("gpg2", "[서폿]", "gpg"), ("gpg", "[기어1]", "gpg2")])
 def test_guard_stop_of_one_stops_both(mk, bad, bad_tag, other):
     e = mk({bad: [(30, 3)], other: [(100, 0)]})
     assert e.run() == 1
@@ -233,7 +233,7 @@ def test_bot_mode_and_room_json_duo(mk):
     first = e.sleeps[0][2]
     assert first["mode"] == "duo" and isinstance(first["t"], float)
     assert first["bots"] == [{"bot": "gear", "tag": "[기어1]", "profile": "gpg", "pid": 1001},
-                             {"bot": "gear", "tag": "[기어2]", "profile": "gpg2", "pid": 1002}]
+                             {"bot": "support", "tag": "[서폿]", "profile": "gpg2", "pid": 1002}]
     # the restarted ld child has a new pid in the file
     latest = [m for _, _, m in e.sleeps if m and m["bots"][0]["pid"] == 1003]
     assert latest and latest[0]["bots"][1]["pid"] == 1002
@@ -283,12 +283,12 @@ def test_log_file_per_start(mk):
     assert sorted(os.listdir(os.path.join(e.dir, "bot_logs"))) == sorted(names)
 
 
-def test_duo_children_are_two_gear_bots_on_gpg_and_gpg2(sup_mod):
+def test_duo_children_are_gear_inviter_gpg_and_support_joiner_gpg2(sup_mod):
     from rdom import profile
-    assert sup_mod.CHILDREN["duo"] == (("gear", "gpg", "inviter"), ("gear", "gpg2", "joiner"))
+    assert sup_mod.CHILDREN["duo"] == (("gear", "gpg", "inviter"), ("support", "gpg2", "joiner"))
     assert sup_mod.CHILDREN["gear"] == (("gear", "gpg", "public"),)
     p1, p2 = profile.get("gpg"), profile.get("gpg2")
-    assert (p1.bot, p2.bot) == ("gear", "gear") and p1.tag != p2.tag
+    assert (p1.bot, p2.bot) == ("gear", "support") and (p1.tag, p2.tag) == ("[기어1]", "[서폿]")
     assert (p1.config, p2.config) == ("config/recorder.toml", "config/recorder_gpg2.toml")
 
 

@@ -69,7 +69,7 @@ def test_profiles():
     assert (ld.bot, ld.tag, ld.config) == ("gear", "[기어]", "config/recorder_ld.toml")
     assert (gpg.bot, gpg.tag, gpg.config) == ("gear", "[기어1]", "config/recorder.toml")
     gpg2 = profile.get("gpg2")
-    assert (gpg2.bot, gpg2.tag, gpg2.config) == ("gear", "[기어2]", "config/recorder_gpg2.toml")
+    assert (gpg2.bot, gpg2.tag, gpg2.config) == ("support", "[서폿]", "config/recorder_gpg2.toml")
     assert set(profile.PROFILES) == {"ld", "gpg", "gpg2"}
     with pytest.raises(KeyError):
         profile.get("nope")

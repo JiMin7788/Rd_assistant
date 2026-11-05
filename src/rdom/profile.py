@@ -1,4 +1,5 @@
-"""Capture/bot profiles: LDPlayer (gear bot) and Google Play Games (support bot), rdF04.
+"""Capture/bot profiles, rdF04: LDPlayer (gear bot, unused) and two Google Play Games windows
+(gpg = gear bot, gpg2 = support bot since rdT15).
 
 A profile names the window config, the bot and the Discord tag. UI tap targets default to the
 shared constants in :mod:`rdom.input.inject` (measured on GPG); ``ui`` holds the per-profile
@@ -37,10 +38,11 @@ _LD_UI = MappingProxyType({
 
 PROFILES = {
     "ld": Profile("ld", "gear", "[기어]", "config/recorder_ld.toml", _LD_UI),
-    # AI-NOTE: rdT06: LD is unused; the duo is two gear bots on two Google Play Games windows,
-    # each found by its own exact window title (see the two recorder tomls).
+    # AI-NOTE: rdT06: LD is unused; the duo runs on two Google Play Games windows, each found by its
+    # own exact window title (see the two recorder tomls). rdT15: gpg2 (배속봇, CleanCardinal77) plays a
+    # support deck again, so its bot is "support" (tag [서폿]); gpg stays the gear bot.
     "gpg": Profile("gpg", "gear", "[기어1]", "config/recorder.toml"),
-    "gpg2": Profile("gpg2", "gear", "[기어2]", "config/recorder_gpg2.toml"),
+    "gpg2": Profile("gpg2", "support", "[서폿]", "config/recorder_gpg2.toml"),
 }
 
 
