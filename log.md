@@ -347,3 +347,7 @@
 ## 2026-11-05 · rdT12 · Duo 배속 by both bots again
 - Every role taps 배속 (rdT11 inviter exception removed); confirm_speed stops once its reading rose above the pre-tap reading or reached 2.0, re-taps only while it did not rise (max 3).
 - pages: components/gear-loop.md (updated)
+
+## 2026-11-05 · rdT13 · Faster summoning until the first merge
+- gear_bot.play(): opening phase until the first merge swipe: loop sleep 0.2 s, summon burst of min(empty, 5) taps 0.12 s apart; logs `opening done: <n> summon taps in <s> s`.
+- pages: components/policy.md (updated)
