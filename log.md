@@ -351,3 +351,7 @@
 ## 2026-11-05 · rdT13 · Faster summoning until the first merge
 - gear_bot.play(): opening phase until the first merge swipe: loop sleep 0.2 s, summon burst of min(empty, 5) taps 0.12 s apart; logs `opening done: <n> summon taps in <s> s`.
 - pages: components/policy.md (updated)
+
+## 2026-11-06 · rdT14 · 배속 until 2.0
+- gear_loop.confirm_speed: every bot taps 배속 until the caption reads 2.0 (max 5 taps, 1.5 s apart, 20 s window); per-tap log line `  배속 tap n/5: a -> b (front ok|NOT in front)` and `speed_*` debug frames (newest 30).
+- pages: components/gear-loop.md (updated)
