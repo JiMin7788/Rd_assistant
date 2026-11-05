@@ -2,7 +2,7 @@
 title: Input injection (M2)
 type: component
 updated: 2026-11-05
-sources: [seed, rdf04-t2, rdf04-r1-s5, rdf05-t3, rdT07, rdT10]
+sources: [seed, rdf04-t2, rdf04-r1-s5, rdf05-t3, rdT07, rdT10, rdT11]
 ---
 # Input injection (M2)
 
@@ -20,7 +20,9 @@ render child (`CROSVM_1`); it is dry-run by default and only injects with `execu
   `SendMessageW(render, WM_SETFOCUS, 0, 0)`, check `GetForegroundWindow() == top` (else
   `SetForegroundWindow(top)`, one log line if it still fails), `SETTLE_S` 0.03 s settle, then the posts,
   and `ReleaseMutex` in a `finally` (also when posting raises). The lock covers the whole swipe. Dry run
-  does none of it. A window messages sequence missing any one of the four did not work in the probe.
+  does none of it. Probe 2026-11-05, exactly: the four-message sequence worked and made the window the
+  foreground window; variants that did not change the foreground window were WM_SETFOCUS only, WM_ACTIVATEAPP
+  only, WM_NCACTIVATE only and WM_ACTIVATE+WM_SETFOCUS on the render child. Nothing else was tried.
   The joiner's accept tap (`coop_join.wait_and_accept`, `tap` -> `inj.tap`) goes through the same
   `Injector`, so it is activated and locked too. Tests: `tests/test_rdt07_input_lock.py`.
 - **Real-foreground wait, fair lock, gesture trust (rdT10)** replaces the `SETTLE_S` 0.03 s tail above (it let
@@ -29,13 +31,30 @@ render child (`CROSVM_1`); it is dry-run by default and only injects with `execu
   (AttachThreadInput to the foreground thread, synthetic ALT down/up, SetForegroundWindow + BringWindowToTop).
   It then polls every `FG_POLL_S` 0.02 s up to `FG_POLL_MAX_S` 0.6 s; once in front it sleeps
   `ACTIVATE_SETTLE_S` 0.15 s before the first post. Never in front -> returns False (the "did not become the
-  foreground window" line is limited to one per `FG_WARN_EVERY_S` 60 s). The probe only proved single
-  messages and WM_ACTIVATE+WM_SETFOCUS, not other subsets. After `ReleaseMutex`, `_gesture` sleeps
-  `LOCK_YIELD_S` 0.015 s: a Windows mutex is not FIFO, so an immediate re-take starved the other bot.
+  foreground window" line is limited to one per `FG_WARN_EVERY_S` 60 s).
   Posts still go out when the window never came to front; `last_gesture_ok` (default True; False after a
-  lock timeout or unconfirmed foreground) tells the caller the gesture is untrustworthy. `Injector.stats`
-  counts gestures / switches / not_foreground / lock_timeouts. `AdbInjector` and dry run keep
-  `last_gesture_ok` True and have no stats.
+  lock timeout or unconfirmed foreground) tells the caller the gesture is untrustworthy. `AdbInjector` and
+  dry run keep `last_gesture_ok` True and have no stats.
+- **Foreground lease (rdT11)** replaces rdT10's `LOCK_YIELD_S` sleep (removed). The mutex alone was released
+  after every gesture, so two bots acting at once flipped the foreground on almost every gesture (live run:
+  ~470 gestures and ~170 switches per bot per round). The lease is a 64-byte named shared memory
+  (`mmap.mmap(-1, 64, tagname=LEASE_TAG "rdom_input_lease")`, `_LeaseStore`, struct `<IIdd` = owner pid,
+  waiting pid, lease_until, owner_since in monotonic seconds), read/written only while holding the mutex.
+  `_take_turn` loops: take the mutex with the time left of `LOCK_TIMEOUT_MS` (the whole lease wait counts
+  against it; on timeout the gesture is skipped as before), read the lease, `_must_wait`; if free become owner
+  (`owner_since` = now when the owner changed or the lease had expired) and go on holding the mutex; else set
+  `waiting` = our pid, release the mutex, sleep `LEASE_POLL_S` 0.02 s, retry. A foreign lease blocks only while
+  `lease_until > now`, the owner's turn is younger than `QUANTUM_S` 2.5 s and `_pid_alive(owner)`
+  (OpenProcess/GetExitCodeProcess), so an expired lease or dead owner never blocks. After each gesture `_renew`
+  (mutex held) sets `lease_until = now + HOLD_S` 0.8 s (a burst: power-panel taps, consecutive merges); once
+  the owner's turn is older than `QUANTUM_S` and a live other pid waits it does not renew, and its next gesture
+  waits for the other bot (`_must_wait` owner branch). If the shared memory cannot be opened it prints
+  `input lease unavailable ... -- mutex only` and falls back to the mutex alone. Tests use a fake lease store.
+- **Switch timing stats (rdT11).** `Injector.stats` = gestures / switches / not_foreground / lock_timeouts plus
+  `ready_ms_total/max` (gesture start -> posting, i.e. lock + lease wait + activation, all gestures) and
+  `waited` / `waited_ms_total/max` (gestures that had to wait for the other bot's lease).
+  `gear_loop.log_input_stats` prints them once per round and resets: `input: N gestures, N switches, N not in
+  front, N lock timeouts, waited N (avg X ms, max Y ms), start-to-post avg X ms, max Y ms`.
 - (u,v) → screen px of the same content rect the capture grabs → `ScreenToClient(render)`.
   ±4 px position jitter and randomised press/drag durations are added.
 - Ops: `summon`, `destroy` (cell → Cheong, 90 s cooldown tracked here), `switch`, `merge`,
@@ -92,6 +111,7 @@ and touches neither the window nor adb.
   [policy-minigame](policy-minigame.md) LatencyCal).
 
 ## Evidence
+- `src/rdom/input/inject.py` (rdT11, task/rdT11) — `LEASE_TAG`, `HOLD_S`, `QUANTUM_S`, `LEASE_POLL_S`, `_LeaseStore`, `_pid_alive`, `Injector._must_wait/_take_turn/_renew/_gesture`, the extended `stats`, the module docstring with the probe variants; `LOCK_YIELD_S` is gone; tests in `tests/test_rdt07_input_lock.py`.
 - commit `9c8ce09` (rdT10) — `src/rdom/input/inject.py` `ACTIVATE_SETTLE_S`, `FG_POLL_S`, `FG_POLL_MAX_S`, `FG_WARN_EVERY_S`, `LOCK_YIELD_S`, `Injector._force_foreground/_activate/_gesture`, `last_gesture_ok`, `stats`; tests in `tests/test_rdt07_input_lock.py`.
 - commit `c5aec51` (rdT07) — `src/rdom/input/inject.py` `INPUT_MUTEX`, `LOCK_TIMEOUT_MS`, `SETTLE_S`, `Injector._lock/_activate/_gesture`, `tap/swipe/back` inside `_gesture()`; the same commit adds the input-lock test file (fake user32/kernel32; on task/rdT07, not in this checkout until merge, so not lint-checked). `press/release/cancel` were not changed by rdT07 (no lock/activation there).
 - `src/rdom/input/inject.py` — `Injector.press/release/cancel/release_swipe`, `_point(clamp=)`, `PRESS_LEAD_*`, `CANCEL_DV`; `AdbInjector.probe_release_method/_release_method/press/release/cancel/release_swipe/_spawn`, `parse_getevent`, `method_line` (commit `5152657`, rdf05-t3)

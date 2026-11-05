@@ -338,3 +338,8 @@
 ## 2026-11-05 · rdT10 · Activation timing for every input
 - Injector waits until its window is really foreground (+0.15 s settle), yields the lock after release, exposes last_gesture_ok/stats; a merge whose swipe was not confirmed in front is retried without a ban; joiner accept/X taps repeat after 2 s (max 3); 배속 caption re-read up to 3 s.
 - pages: components/input-inject.md (updated), components/coop-join.md (updated), components/gear-loop.md (updated), components/support-players.md (updated)
+
+## 2026-11-05 · rdT11 · Foreground lease, room->battle wait, joiner-only 배속, switch timing stats
+- Shared-memory foreground lease (HOLD_S 0.8, QUANTUM_S 2.5) keeps a burst of gestures with one bot; LOCK_YIELD_S removed; stats gain start-to-post and waited timings on the per-round input line. Probe description corrected to the exact variants tried.
+- coop_join: joined room disappearing = room->battle loading, wait ROOM_TO_BATTLE_S 30 s with no recover/BACK/tap; accept re-tap needs two popup frames and no joined room. Duo 배속 tapped only by the joiner; joiner unknown-screen BACK waits 15 s.
+- pages: components/input-inject.md (updated), components/coop-join.md (updated), components/gear-loop.md (updated)
