@@ -258,7 +258,8 @@ def test_wrong_deck_is_guard_without_further_input(env, capsys, profile, text):
     env.battle_res = "wrong_deck"
     assert env.gl.main(["--profile", profile, "--role", "joiner" if profile == "gpg" else "inviter"]) == 3
     assert (text, "frame") in env.status
-    assert env.inj.taps == [SPEED_UV]              # only the 배속 tap before the deck was seen
+    # only the joiner's 배속 tap before the deck was seen (rdT11: the duo inviter never taps 배속)
+    assert env.inj.taps == ([SPEED_UV] if profile == "gpg" else [])
     assert env.battles[0]["expect"] == "gear"
     assert f"wrong deck: expected gear" in capsys.readouterr().out
     assert not (env.stop.parent / "gear_rounds.jsonl").exists()
@@ -391,11 +392,36 @@ def test_lobby_phase_results(env, monkeypatch):
         assert env.gl.lobby_phase("public", env.g, env.inj, prof, duo) == want
 
 
-@pytest.mark.parametrize("args", [["--profile", "ld", "--role", "inviter"], ["--role", "joiner"],
-                                  ["--profile", "ld"]])
-def test_speed_tapped_once_per_battle(env, args):
+@pytest.mark.parametrize("args,taps", [(["--profile", "ld", "--role", "inviter"], 0), (["--role", "joiner"], 1),
+                                       (["--profile", "ld"], 1)])
+def test_speed_tapped_once_per_battle_but_never_by_the_duo_inviter(env, args, taps):
+    # rdT11: 배속 is shared in coop -> the inviter never taps it; the joiner and the public role do
     assert env.gl.main(args) == 0
-    assert env.inj.taps.count(SPEED_UV) == 1 and len(env.battles) == 1
+    assert env.inj.taps.count(SPEED_UV) == taps and len(env.battles) == 1
+
+
+def test_inviter_only_reads_the_speed_and_logs_partner_sets_it(env, monkeypatch, capsys):
+    _speed_reads(monkeypatch, env.gl, [1.5])
+    assert env.gl.confirm_speed(env.g, env.inj, profiles.get("gpg"), tap_first=True, tap_allowed=False) == 1.5
+    assert env.inj.taps == [] and "배속 1.5 (partner sets it)" in capsys.readouterr().out
+
+
+def test_inviter_resumed_battle_below_2x_is_not_tapped(env, monkeypatch, capsys):
+    _speed_reads(monkeypatch, env.gl, [1.0])
+    assert env.gl.battle_phase("inviter", env.g, env.inj, profiles.get("gpg"), 1, tap_speed=False) == "ok"
+    assert env.inj.taps == [] and "(partner sets it)" in capsys.readouterr().out
+
+
+def test_joiner_unknown_screen_waits_15s_before_back_others_5s(env, monkeypatch):
+    inj = _unknown_screen(env, monkeypatch)
+    monkeypatch.setattr(coop_join.invite, "invite_popup", lambda f: None)
+    sleeps = []
+    monkeypatch.setattr(env.gl.time, "sleep", lambda s: sleeps.append(s))
+    env.gl._joiner_recover("frame", env.g, inj, profiles.get("gpg"))
+    assert sleeps[0] == 15.0 and env.gl.JOINER_UNKNOWN_WAIT_S == 15.0 and inj.backs >= 1
+    sleeps.clear()
+    env.real_recover("frame", env.g, _unknown_screen(env, monkeypatch), profiles.get("gpg"))
+    assert sleeps[0] == 5.0
 
 
 # ---- rdT07: 배속 confirm / resume, 로비로 가기 retry
@@ -456,7 +482,7 @@ def test_resumed_battle_at_2x_or_unreadable_is_not_tapped(env, monkeypatch, seen
 
 def test_battle_phase_resumed_applies_speed(env, monkeypatch):
     _speed_reads(monkeypatch, env.gl, [1.0, 2.0])
-    assert env.gl.battle_phase("inviter", env.g, env.inj, profiles.get("gpg"), 1, tap_speed=False) == "ok"
+    assert env.gl.battle_phase("joiner", env.g, env.inj, profiles.get("gpg"), 1, tap_speed=False) == "ok"
     assert len(env.inj.taps) == 1
 
 

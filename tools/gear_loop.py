@@ -153,7 +153,13 @@ def round_start(g, rnd):
     return None
 
 
-def recover_step(f, g, inj, prof, stop_on=None):
+UNKNOWN_WAIT_S = 5.0          # unknown screen: look again after this long before the first BACK
+# AI-NOTE: the joiner's room -> battle loading screen is "unknown" and lasted well over 5 s (2026-11-05: two
+# BACKs right before its battle); 15 s makes sure a loading screen is never BACKed.
+JOINER_UNKNOWN_WAIT_S = 15.0
+
+
+def recover_step(f, g, inj, prof, stop_on=None, unknown_wait_s=UNKNOWN_WAIT_S):
     """Get from whatever is on screen to a screen a round can start from (lobby, 친구와 하기
     menu, coop room or battle): relaunch a closed game, close popups, BACK on unknown screens.
     Returns (frame to go on with, gave_up). gave_up is True when the game cannot be relaunched or
@@ -214,8 +220,8 @@ def recover_step(f, g, inj, prof, stop_on=None):
             # game popups (on the lobby it opens the exit dialog, cancelled above).
             # Never tap blind -- a popup is full of buy buttons.
             # A loading / transition screen is "unknown" too and BACK there can close
-            # the game (2026-10-11, right after a relaunch): give it 5 s first.
-            time.sleep(5.0); f2 = g.grab()
+            # the game (2026-10-11, right after a relaunch): give it unknown_wait_s first.
+            time.sleep(unknown_wait_s); f2 = g.grab()
             if (is_lobby(f2) or has_popup_close(f2) or has_modal_x(f2) or is_battle(f2)
                     or is_coop_room(f2) or is_exit_dialog(f2) or network_error(f2)):
                 f = f2; continue
@@ -235,7 +241,7 @@ def _joiner_recover(f, g, inj, prof):
     # so recover_step must stop itself on them -- a BACK/MODAL_X would close an incoming invite.
     def stop_on(fr):
         return coop_join.invite.invite_popup(fr) is not None or should_stop() is not None
-    return recover_step(f, g, inj, prof, stop_on=stop_on)[1]
+    return recover_step(f, g, inj, prof, stop_on=stop_on, unknown_wait_s=JOINER_UNKNOWN_WAIT_S)[1]
 
 
 def _invite_uvs(prof):
@@ -285,17 +291,26 @@ def log_input_stats(inj):
     s = getattr(inj, "stats", None)
     if not s:
         return
-    print(f"input: {s['gestures']} gestures, {s['switches']} switches, {s['not_foreground']} not in front, "
-          f"{s['lock_timeouts']} lock timeouts", flush=True)
+    n, w = s["gestures"], s.get("waited", 0)
+    print(f"input: {n} gestures, {s['switches']} switches, {s['not_foreground']} not in front, "
+          f"{s['lock_timeouts']} lock timeouts, waited {w} "
+          f"(avg {s.get('waited_ms_total', 0) / w if w else 0:.0f} ms, max {s.get('waited_ms_max', 0):.0f} ms), "
+          f"start-to-post avg {s.get('ready_ms_total', 0) / n if n else 0:.0f} ms, "
+          f"max {s.get('ready_ms_max', 0):.0f} ms", flush=True)
     for k in s:
         s[k] = 0
 
 
-def confirm_speed(g, inj, prof, tap_first):
+def confirm_speed(g, inj, prof, tap_first, tap_allowed=True):
     """Get the battle to 2.0x: tap 배속, re-read the caption and tap again (max 3 taps, ~1 s apart)
     until it reads 2.0. tap_first=False (a resumed battle) taps only when the caption is legible and
     below 2.0. An unreadable caption after a tap ends the loop: another blind tap could cycle 2.0 -> 1.0."""
     before = read_speed(g.grab())
+    if not tap_allowed:
+        # AI-NOTE: 배속 is one shared button in coop; both bots tapping it cost extra window switches and
+        # could cycle 2.0 -> 1.0, so in duo only the joiner taps and the inviter just reads.
+        print(f"배속 {before} (partner sets it)", flush=True)
+        return before
     if not tap_first and (before is None or before >= 2.0):
         print(f"배속 {before} -> {before}", flush=True)
         return before
@@ -327,10 +342,10 @@ def battle_phase(role, g, inj, prof, rnd, tap_speed=True):
         for _ in range(30):
             if read_speed(g.grab()) is not None: break
             time.sleep(0.5)
-        confirm_speed(g, inj, prof, tap_first=True)
+        confirm_speed(g, inj, prof, tap_first=True, tap_allowed=role != "inviter")
         send_status(f"🎮 {rnd}판 시작")
     else:
-        confirm_speed(g, inj, prof, tap_first=False)
+        confirm_speed(g, inj, prof, tap_first=False, tap_allowed=role != "inviter")
     rl = gear.reload_if_changed()
     if rl: print("models reloaded:", rl, flush=True)
     rl = support.reload_if_changed()

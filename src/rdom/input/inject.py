@@ -9,10 +9,12 @@ Background input WITHOUT focus is NOT possible with two GPG instances (the Maste
 2026-11-05 probe): a posted click to the render child of the non-foreground window is
 ignored (3 of 3), while WM_ACTIVATEAPP + WM_NCACTIVATE + WM_ACTIVATE to the top window and
 WM_SETFOCUS to the render child made it work (2 of 2) and really made that window the
-foreground window; the probe tried only single messages and WM_ACTIVATE+WM_SETFOCUS, no
-other subset. Activation waits until the window is really in front (ACTIVATE_SETTLE_S). So every gesture of the executing
+foreground window. Variants that did not change the foreground window: WM_SETFOCUS only,
+WM_ACTIVATEAPP only, WM_NCACTIVATE only, WM_ACTIVATE+WM_SETFOCUS on the render child.
+Activation waits until the window is really in front (ACTIVATE_SETTLE_S). So every gesture of the executing
 Injector first takes a cross-process named mutex (the two bots take turns, one bot's drag is
-never cut by the other activating its window), activates its own window, then posts.
+never cut by the other activating its window) and the foreground lease (a burst of gestures
+stays with one bot, see HOLD_S / QUANTUM_S), activates its own window, then posts.
 Rendering/capture of a background window is unaffected. The game windows therefore take the
 foreground on every input while the bots run (accepted by the user).
 
@@ -31,9 +33,11 @@ from the config.
 from __future__ import annotations
 import contextlib
 import ctypes
+import mmap
 import os
 import random
 import re
+import struct
 import subprocess
 import time
 from ctypes import wintypes
@@ -60,6 +64,10 @@ _kernel32.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
 _kernel32.WaitForSingleObject.restype = wintypes.DWORD
 _kernel32.ReleaseMutex.argtypes = [wintypes.HANDLE]
 _kernel32.GetCurrentThreadId.restype = wintypes.DWORD
+_kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+_kernel32.OpenProcess.restype = wintypes.HANDLE
+_kernel32.GetExitCodeProcess.argtypes = [wintypes.HANDLE, wintypes.LPDWORD]
+_kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
 _WNDENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
 WM_KEYDOWN, WM_KEYUP = 0x100, 0x101
 WM_MOUSEMOVE, WM_LBUTTONDOWN, WM_LBUTTONUP = 0x200, 0x201, 0x202
@@ -73,9 +81,15 @@ ACTIVATE_SETTLE_S = 0.15              # pause after the window is confirmed fore
 FG_POLL_S = 0.02                      # GetForegroundWindow poll period while waiting for the switch
 FG_POLL_MAX_S = 0.6                   # give up waiting for the foreground switch after this
 FG_WARN_EVERY_S = 60.0                # rate limit of the "did not become foreground" log line
-# AI-NOTE: fair turn-taking: a Windows mutex is not FIFO, so a bot that releases and at once re-takes it
-# starves the other bot; sleeping this long after the release lets the waiting bot's thread wake and grab it.
-LOCK_YIELD_S = 0.015
+# AI-NOTE: foreground lease (rdT11). The mutex alone is released after every gesture, so two bots acting at
+# once flipped the foreground on almost every gesture (~170 switches per round, each ~0.2 s). The lease lives
+# in named shared memory (read/written only while holding the mutex): the bot that owns it keeps the foreground
+# for a burst; the other bot waits (polling) instead of grabbing the mutex between two gestures.
+LEASE_TAG = "rdom_input_lease"        # named shared memory shared by every bot process
+HOLD_S = 0.8                          # a burst: the lease stays with the owner this long after its last gesture
+QUANTUM_S = 2.5                       # max continuous turn while the other bot waits, then hand over
+LEASE_POLL_S = 0.02                   # sleep between lease checks while the other bot owns it
+_LEASE_FMT = "<IIdd"                  # owner pid, waiting pid, lease_until, owner_since (monotonic seconds)
 VK_MENU, KEYEVENTF_KEYUP = 0x12, 0x2
 WAIT_OBJECT_0, WAIT_ABANDONED = 0, 0x80
 VK_ESCAPE = 0x1B
@@ -136,6 +150,40 @@ def _render_child(top):
     if not hit:
         raise RuntimeError(f"no {RENDER_CLASS}* child under the game window")
     return hit[0]
+
+
+class _LeaseStore:
+    """The lease record in named shared memory. Callers hold the input mutex while using it."""
+
+    def __init__(self, tag=LEASE_TAG):
+        self._m = mmap.mmap(-1, 64, tagname=tag)     # zero-filled when first created: no owner
+
+    def read(self):
+        owner, waiting, until, since = struct.unpack_from(_LEASE_FMT, self._m, 0)
+        return {"owner": owner, "waiting": waiting, "lease_until": until, "owner_since": since}
+
+    def write(self, st):
+        struct.pack_into(_LEASE_FMT, self._m, 0, st["owner"], st["waiting"], st["lease_until"], st["owner_since"])
+
+
+def _open_lease_store():
+    try:
+        return _LeaseStore()
+    except (OSError, ValueError) as e:
+        print(f"    input lease unavailable ({e}) -- mutex only", flush=True)
+        return None
+
+
+def _pid_alive(pid):
+    """True while a process with this pid exists (a dead owner never blocks)."""
+    h = _kernel32.OpenProcess(0x1000, False, pid)      # PROCESS_QUERY_LIMITED_INFORMATION
+    if not h:
+        return ctypes.get_last_error() == 5            # access denied: it exists
+    try:
+        code = wintypes.DWORD()
+        return bool(_kernel32.GetExitCodeProcess(h, ctypes.byref(code))) and code.value == 259   # STILL_ACTIVE
+    finally:
+        _kernel32.CloseHandle(h)
 
 
 class _ActionBase:
@@ -216,7 +264,11 @@ class Injector(_ActionBase):
         self._mutex = None
         self._fg_warn_at = -1e9
         self.last_gesture_ok = True      # False: last gesture lock-timed-out or window not confirmed in front
-        self.stats = {"gestures": 0, "switches": 0, "not_foreground": 0, "lock_timeouts": 0}
+        self.stats = {"gestures": 0, "switches": 0, "not_foreground": 0, "lock_timeouts": 0,
+                      "ready_ms_total": 0.0, "ready_ms_max": 0.0,      # gesture start -> post, all gestures
+                      "waited": 0, "waited_ms_total": 0.0, "waited_ms_max": 0.0}   # same, gestures that waited for the lease
+        self._store = None          # lease store, opened on the first executing gesture (False = unavailable)
+        self._pid = os.getpid()
         if execute:
             self._target()
             print(f"input: window messages -> hwnd {self._render}", flush=True)
@@ -242,15 +294,67 @@ class Injector(_ActionBase):
         _user32.ScreenToClient(render, ctypes.byref(pt))
         return pt.x, pt.y
 
-    def _lock(self):
-        """Take the cross-process input mutex. False (logged) on timeout."""
+    def _lock(self, timeout_ms):
+        """Take the cross-process input mutex. False on timeout."""
         if self._mutex is None:
             self._mutex = _kernel32.CreateMutexW(None, False, INPUT_MUTEX)
-        r = _kernel32.WaitForSingleObject(self._mutex, LOCK_TIMEOUT_MS)
-        if r in (WAIT_OBJECT_0, WAIT_ABANDONED):      # abandoned = the other bot died holding it: ours now
-            return True
-        print(f"    input lock timeout ({LOCK_TIMEOUT_MS} ms) -- gesture skipped", flush=True)
-        return False
+        r = _kernel32.WaitForSingleObject(self._mutex, timeout_ms)
+        return r in (WAIT_OBJECT_0, WAIT_ABANDONED)   # abandoned = the other bot died holding it: ours now
+
+    def _other_waiting(self, st):
+        w = st["waiting"]
+        return w not in (0, self._pid) and _pid_alive(w)
+
+    def _must_wait(self, st, now):
+        """True when the other bot's lease (or our own hand-over) keeps us from starting a gesture now."""
+        o = st["owner"]
+        if o == self._pid:
+            # our turn ran past QUANTUM_S and the other bot waits: it gets the next turn (we did not renew)
+            return (now - st["owner_since"] >= QUANTUM_S and now - st["lease_until"] < HOLD_S
+                    and self._other_waiting(st))
+        if o == 0 or st["lease_until"] <= now or now - st["owner_since"] >= QUANTUM_S:
+            return False
+        return _pid_alive(o)
+
+    def _take_turn(self, t_begin):
+        """Mutex + lease. -> (got the turn with the mutex held, had to wait for the other bot's lease).
+        The lease wait counts against LOCK_TIMEOUT_MS."""
+        deadline = t_begin + LOCK_TIMEOUT_MS / 1000
+        if self._store is None:
+            self._store = _open_lease_store() or False
+        waited = False
+        while True:
+            left_ms = int((deadline - time.monotonic()) * 1000)
+            if left_ms <= 0 or not self._lock(left_ms):
+                print(f"    input lock timeout ({LOCK_TIMEOUT_MS} ms) -- gesture skipped", flush=True)
+                return False, waited
+            if not self._store:
+                return True, waited
+            st, now = self._store.read(), time.monotonic()
+            if not self._must_wait(st, now):
+                if st["owner"] != self._pid or st["lease_until"] <= now:
+                    st["owner_since"] = now              # a new turn
+                st["owner"] = self._pid
+                if st["waiting"] == self._pid:
+                    st["waiting"] = 0
+                self._store.write(st)
+                return True, waited
+            if st["owner"] != self._pid:
+                st["waiting"] = self._pid
+                self._store.write(st)
+            _kernel32.ReleaseMutex(self._mutex)
+            waited = True
+            time.sleep(LEASE_POLL_S)
+
+    def _renew(self):
+        """End of a gesture (mutex held): keep the lease for HOLD_S, unless our turn is over."""
+        if not self._store:
+            return
+        st, now = self._store.read(), time.monotonic()
+        st["owner"] = self._pid
+        over = now - st["owner_since"] >= QUANTUM_S and self._other_waiting(st)
+        st["lease_until"] = now if over else now + HOLD_S     # over: do not renew, the other bot is next
+        self._store.write(st)
 
     def _force_foreground(self, top):
         """Robust foreground switch: attach to the current foreground thread's input queue, press and
@@ -295,11 +399,13 @@ class Injector(_ActionBase):
 
     @contextlib.contextmanager
     def _gesture(self):
-        """Lock + activate for the WHOLE gesture; yields False (post nothing) when the lock timed
-        out. The lock is released in a finally, also when posting raises. Sets last_gesture_ok."""
+        """Mutex + lease + activate for the WHOLE gesture; yields False (post nothing) when the turn
+        timed out. The mutex is released in a finally, also when posting raises. Sets last_gesture_ok."""
         self._target()
+        t_begin = time.monotonic()
         self.stats["gestures"] += 1
-        if not self._lock():
+        got, waited = self._take_turn(t_begin)
+        if not got:
             self.stats["lock_timeouts"] += 1
             self.last_gesture_ok = False
             yield False
@@ -308,10 +414,19 @@ class Injector(_ActionBase):
             # AI-NOTE: posts go out even when the window never came to front (they may still work); the
             # caller learns from last_gesture_ok that the gesture is not trustworthy.
             self.last_gesture_ok = self._activate()
+            ms = (time.monotonic() - t_begin) * 1000
+            s = self.stats
+            s["ready_ms_total"] += ms; s["ready_ms_max"] = max(s["ready_ms_max"], ms)
+            if waited:
+                s["waited"] += 1; s["waited_ms_total"] += ms; s["waited_ms_max"] = max(s["waited_ms_max"], ms)
             yield True
         finally:
-            _kernel32.ReleaseMutex(self._mutex)
-            time.sleep(LOCK_YIELD_S)
+            try:
+                self._renew()
+            finally:
+                _kernel32.ReleaseMutex(self._mutex)
+            # AI-NOTE: no LOCK_YIELD_S sleep any more (removed): the other bot waits on the lease by polling,
+            # so an immediate re-take by the owner no longer starves it.
 
     def _post(self, msg, wparam, lparam):
         if not _user32.PostMessageW(self._render, msg, wparam, lparam):
