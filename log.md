@@ -343,3 +343,7 @@
 - Shared-memory foreground lease (HOLD_S 0.8, QUANTUM_S 2.5) keeps a burst of gestures with one bot; LOCK_YIELD_S removed; stats gain start-to-post and waited timings on the per-round input line. Probe description corrected to the exact variants tried.
 - coop_join: joined room disappearing = room->battle loading, wait ROOM_TO_BATTLE_S 30 s with no recover/BACK/tap; accept re-tap needs two popup frames and no joined room. Duo 배속 tapped only by the joiner; joiner unknown-screen BACK waits 15 s.
 - pages: components/input-inject.md (updated), components/coop-join.md (updated), components/gear-loop.md (updated)
+
+## 2026-11-05 · rdT12 · Duo 배속 by both bots again
+- Every role taps 배속 (rdT11 inviter exception removed); confirm_speed stops once its reading rose above the pre-tap reading or reached 2.0, re-taps only while it did not rise (max 3).
+- pages: components/gear-loop.md (updated)
