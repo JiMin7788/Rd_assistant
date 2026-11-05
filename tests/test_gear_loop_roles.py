@@ -258,8 +258,8 @@ def test_wrong_deck_is_guard_without_further_input(env, capsys, profile, text):
     env.battle_res = "wrong_deck"
     assert env.gl.main(["--profile", profile, "--role", "joiner" if profile == "gpg" else "inviter"]) == 3
     assert (text, "frame") in env.status
-    # only the joiner's 배속 tap before the deck was seen (rdT11: the duo inviter never taps 배속)
-    assert env.inj.taps == ([SPEED_UV] if profile == "gpg" else [])
+    # only the 배속 tap before the deck was seen (rdT12: every role taps 배속)
+    assert env.inj.taps == [SPEED_UV]
     assert env.battles[0]["expect"] == "gear"
     assert f"wrong deck: expected gear" in capsys.readouterr().out
     assert not (env.stop.parent / "gear_rounds.jsonl").exists()
@@ -392,24 +392,18 @@ def test_lobby_phase_results(env, monkeypatch):
         assert env.gl.lobby_phase("public", env.g, env.inj, prof, duo) == want
 
 
-@pytest.mark.parametrize("args,taps", [(["--profile", "ld", "--role", "inviter"], 0), (["--role", "joiner"], 1),
-                                       (["--profile", "ld"], 1)])
-def test_speed_tapped_once_per_battle_but_never_by_the_duo_inviter(env, args, taps):
-    # rdT11: 배속 is shared in coop -> the inviter never taps it; the joiner and the public role do
+@pytest.mark.parametrize("args", [["--profile", "ld", "--role", "inviter"], ["--role", "joiner"], ["--profile", "ld"]])
+def test_speed_tapped_once_per_battle_by_every_role(env, args):
+    # rdT12: both duo bots use 배속 (each use raises the shared speed), so every role taps
     assert env.gl.main(args) == 0
-    assert env.inj.taps.count(SPEED_UV) == taps and len(env.battles) == 1
+    assert env.inj.taps.count(SPEED_UV) == 1 and len(env.battles) == 1
 
 
-def test_inviter_only_reads_the_speed_and_logs_partner_sets_it(env, monkeypatch, capsys):
-    _speed_reads(monkeypatch, env.gl, [1.5])
-    assert env.gl.confirm_speed(env.g, env.inj, profiles.get("gpg"), tap_first=True, tap_allowed=False) == 1.5
-    assert env.inj.taps == [] and "배속 1.5 (partner sets it)" in capsys.readouterr().out
-
-
-def test_inviter_resumed_battle_below_2x_is_not_tapped(env, monkeypatch, capsys):
-    _speed_reads(monkeypatch, env.gl, [1.0])
+def test_inviter_resumed_battle_below_2x_is_tapped(env, monkeypatch):
+    _speed_reads(monkeypatch, env.gl, [1.0, 1.5])
     assert env.gl.battle_phase("inviter", env.g, env.inj, profiles.get("gpg"), 1, tap_speed=False) == "ok"
-    assert env.inj.taps == [] and "(partner sets it)" in capsys.readouterr().out
+    assert len(env.inj.taps) == 1
+
 
 
 def test_joiner_unknown_screen_waits_15s_before_back_others_5s(env, monkeypatch):
@@ -435,12 +429,25 @@ def _speed_reads(monkeypatch, gl, seq):
     monkeypatch.setattr(gl, "read_speed", rd)
 
 
-def test_speed_taps_until_2x_and_stops(env, monkeypatch, capsys):
-    prof = profiles.get("gpg")
-    _speed_reads(monkeypatch, env.gl, [1.0, 1.5, 2.0, 1.0])   # before, after tap 1, after tap 2
-    assert env.gl.confirm_speed(env.g, env.inj, prof, tap_first=True) == 2.0
+def test_speed_stops_after_own_tap_raised_it(env, monkeypatch, capsys):
+    _speed_reads(monkeypatch, env.gl, [1.0, 1.5, 2.0])   # before, after tap 1 (rose -> stop)
+    assert env.gl.confirm_speed(env.g, env.inj, profiles.get("gpg"), tap_first=True) == 1.5
+    assert len(env.inj.taps) == 1
+    assert "배속 1.0 -> 1.5" in capsys.readouterr().out
+
+
+def test_speed_1_5_to_2_0_stops(env, monkeypatch, capsys):
+    _speed_reads(monkeypatch, env.gl, [1.5, 2.0, 1.0])
+    assert env.gl.confirm_speed(env.g, env.inj, profiles.get("gpg"), tap_first=True) == 2.0
+    assert len(env.inj.taps) == 1
+    assert "배속 1.5 -> 2.0" in capsys.readouterr().out
+
+
+def test_speed_retaps_only_while_it_did_not_rise(env, monkeypatch, capsys):
+    _speed_reads(monkeypatch, env.gl, [1.0, 1.0, 1.5])   # tap 1 swallowed, tap 2 raised it
+    assert env.gl.confirm_speed(env.g, env.inj, profiles.get("gpg"), tap_first=True) == 1.5
     assert len(env.inj.taps) == 2
-    assert "배속 1.0 -> 2.0" in capsys.readouterr().out
+    assert "배속 1.0 -> 1.5" in capsys.readouterr().out
 
 
 def test_speed_none_after_tap_is_reread_then_succeeds(env, monkeypatch, capsys):

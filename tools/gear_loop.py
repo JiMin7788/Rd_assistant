@@ -301,16 +301,12 @@ def log_input_stats(inj):
         s[k] = 0
 
 
-def confirm_speed(g, inj, prof, tap_first, tap_allowed=True):
-    """Get the battle to 2.0x: tap 배속, re-read the caption and tap again (max 3 taps, ~1 s apart)
-    until it reads 2.0. tap_first=False (a resumed battle) taps only when the caption is legible and
-    below 2.0. An unreadable caption after a tap ends the loop: another blind tap could cycle 2.0 -> 1.0."""
+def confirm_speed(g, inj, prof, tap_first):
+    """Tap 배속 and re-read the caption (max 3 taps, ~1 s apart) until it rose above the reading before
+    our first tap or reads >= 2.0; re-tap only while it did not rise (the tap was swallowed).
+    tap_first=False (a resumed battle) taps only when the caption is legible and below 2.0.
+    An unreadable caption after a tap ends the loop: another blind tap could cycle 2.0 -> 1.0."""
     before = read_speed(g.grab())
-    if not tap_allowed:
-        # AI-NOTE: 배속 is one shared button in coop; both bots tapping it cost extra window switches and
-        # could cycle 2.0 -> 1.0, so in duo only the joiner taps and the inviter just reads.
-        print(f"배속 {before} (partner sets it)", flush=True)
-        return before
     if not tap_first and (before is None or before >= 2.0):
         print(f"배속 {before} -> {before}", flush=True)
         return before
@@ -325,7 +321,10 @@ def confirm_speed(g, inj, prof, tap_first, tap_allowed=True):
         while after is None and waited < SPEED_REREAD_S:
             time.sleep(0.5); waited += 0.5
             after = read_speed(g.grab())
-        if after is None or after >= 2.0: break
+        # AI-NOTE: user 2026-11-05 '아 둘 다 배속 사용': both duo bots use 배속 and each use raises the shared
+        # speed one step (17:19 logs: inviter '1.0 -> 1.5', then joiner '1.5 -> 2.0'). Our own tap worked once
+        # the reading is above the pre-tap one; more taps by us would do nothing (or cycle 2.0 -> 1.0).
+        if after is None or after >= 2.0 or (before is not None and after > before): break
     print(f"배속 {before} -> {after}", flush=True)
     return after
 
@@ -342,10 +341,10 @@ def battle_phase(role, g, inj, prof, rnd, tap_speed=True):
         for _ in range(30):
             if read_speed(g.grab()) is not None: break
             time.sleep(0.5)
-        confirm_speed(g, inj, prof, tap_first=True, tap_allowed=role != "inviter")
+        confirm_speed(g, inj, prof, tap_first=True)
         send_status(f"🎮 {rnd}판 시작")
     else:
-        confirm_speed(g, inj, prof, tap_first=False, tap_allowed=role != "inviter")
+        confirm_speed(g, inj, prof, tap_first=False)
     rl = gear.reload_if_changed()
     if rl: print("models reloaded:", rl, flush=True)
     rl = support.reload_if_changed()
