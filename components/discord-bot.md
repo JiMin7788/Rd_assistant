@@ -1,8 +1,8 @@
 ---
 title: Discord bot (duo / gear texts, /시작 대상)
 type: component
-updated: 2026-11-05
-sources: [rdf04-t11, rdT06]
+updated: 2026-11-06
+sources: [rdf04-t11, rdT06, rdT15]
 ---
 # Discord bot (duo / gear texts, /시작 대상)
 
@@ -20,7 +20,7 @@ sources: [rdf04-t11, rdT06]
 - `/정지` and `/종료` use `pause_reply` / `stop_reply` ("두 봇 모두" in duo).
 - `/상태`: title from `status_title(mode, paused, stopping)`, room line from `room_line`; in duo the log section is `log_blocks(duo_logs(), 6, 1800)`.
 - `/로그`: in duo one message with a header and code block per bot, lines clamped to 1..60; budget `limit // n_tags` per tag, whole message cut to 1900 chars.
-- `/스샷`: `screens_for(mode)`. Duo sends two files (`[기어1]` from `config/recorder.toml` as `gear.jpg`, `[기어2]` from `config/recorder_gpg2.toml` as `gear2.jpg`) with content `SHOT_CONTENT`. Gear-only and off send the first GPG window as `screen.jpg`. Since rdT06 the duo texts name the two Google windows (`기어1=구글 대변먹는자 · 기어2=구글 배속봇`), no LD. `screencap(config)` takes the recorder config path.
+- `/스샷`: `screens_for(mode)`. Duo sends two files (`[기어1]` from `config/recorder.toml` as `gear.jpg`, `[서폿]` from `config/recorder_gpg2.toml` as `support.jpg`; gpg2 is the support joiner since rdT15) with content `SHOT_CONTENT`. Gear-only and off send the first GPG window as `screen.jpg`. Since rdT06 the duo texts name the two Google windows (`기어1=구글 대변먹는자 · 서폿=구글 배속봇`, rdT15), no LD; the `duo_logs()` tag for the `*_gpg2*` log is `[서폿]`. `screencap(config)` takes the recorder config path.
 - Presence: duo "랜다2 봇 두 대 · 오늘 N판", gear "랜다2 협동 · 오늘 N판 · 대기 N명", off "꺼짐" with status idle; a PAUSE file overrides with idle "일시정지".
 
 ## Pitfalls

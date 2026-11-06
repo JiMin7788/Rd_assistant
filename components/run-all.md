@@ -1,16 +1,16 @@
 ---
 title: run_all console (duo / gear-only, tagged tails)
 type: component
-updated: 2026-11-05
-sources: [rdf04-t10, rdf04-i1, rdT06, rdT07]
+updated: 2026-11-06
+sources: [rdf04-t10, rdf04-i1, rdT06, rdT07, rdT15]
 ---
 # run_all console (duo / gear-only, tagged tails)
 
-`tools/run_all.py` starts the Discord bot and the supervisor (default `--mode duo`, `--gear-only` = `--mode gear`) and echoes the important lines of three logs tagged `[기어1]` / `[기어2]` / `[디코]` (rdT06: both duo bots are gear bots on two Google Play Games windows).
+`tools/run_all.py` starts the Discord bot and the supervisor (default `--mode duo`, `--gear-only` = `--mode gear`) and echoes the important lines of three logs tagged `[기어1]` / `[서폿]` / `[디코]` (rdT15: gpg = gear inviter, gpg2 = support joiner, on two Google Play Games windows; the log globs still go by profile).
 
 ## Flags and header
 - `--no-game`: Discord bot only (unchanged). `--gear-only`: supervisor gets `--mode gear`; default gets `--mode duo`. The mode is always passed explicitly (`supervisor_args`), even though the supervisor defaults to duo too.
-- Header printed after the supervisor starts: `두 봇 시작 (기어1=구글 <host> · 기어2=구글 <partner>)` or `기어봇만 시작 (구글)` (`header_text`). Names come from `config/duo.toml` keys `host` / `partner` (`load_names`); a missing file or key falls back to `대변먹는자` / `배속봇`.
+- Header printed after the supervisor starts: `두 봇 시작 (기어1=구글 <host> · 서폿=구글 <partner>)` or `기어봇만 시작 (구글)` (`header_text`). Names come from `config/duo.toml` keys `host` / `partner` (`load_names`); a missing file or key falls back to `대변먹는자` / `배속봇`.
 - **Single instance (rdT07):** if `data/run_all.pid` names another live python process, `main` prints `이미 실행 중이에요 -- 두 번째 실행은 무시합니다 (pid N)...`, waits `SECOND_COPY_WAIT_S` (5 s) and returns 1 without starting a bot or touching the lock. (2026-11-05 two full stacks ran at once and every window had two bots tapping.) Discord `/시작` already refuses when `supervisor.pid` is alive ("이미 실행 중입니다."), and the supervisor itself now refuses too.
 - If `data/supervisor.pid` is alive the supervisor is left alone ("게임봇은 이미 실행 중"), so the flags then have no effect. `PAUSE` / `STOP` are removed before a fresh start, as before.
 

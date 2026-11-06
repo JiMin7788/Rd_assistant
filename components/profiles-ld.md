@@ -1,18 +1,18 @@
 ---
 title: Capture profiles (LDPlayer / GPG) and the LD offline check
 type: component
-updated: 2026-11-05
-sources: [rdf04-t1, rdf04-r1-s2, rdT06]
+updated: 2026-11-06
+sources: [rdf04-t1, rdf04-r1-s2, rdT06, rdT15]
 ---
 # Capture profiles (LDPlayer / GPG) and the LD offline check
 
-rdF04 first ran the gear bot on LDPlayer and the support bot on Google Play Games; since rdT06 LD is unused and the duo is two gear bots on two Google Play Games windows (profiles `gpg` and `gpg2`; LD code is kept until a later removal task). `rdom.profile` names each one
+rdF04 first ran the gear bot on LDPlayer and the support bot on Google Play Games; since rdT06 LD is unused and the duo is a gear bot (`gpg`) and, since rdT15, a support bot (`gpg2`) on two Google Play Games windows (LD code is kept until a later removal task). `rdom.profile` names each one
 (bot, Discord tag, recorder toml, UI overrides); `config/recorder_ld.toml` describes the LD window. Nothing
 calls the profile module yet, and the adb input path does not exist yet (rdf04-t2).
 
 ## Profile module
 - `Profile(name, bot, tag, config, ui)` is frozen. `PROFILES["ld"]` = gear, `[기어]`, `config/recorder_ld.toml`;
-  `PROFILES["gpg"]` = gear, `[기어1]`, `config/recorder.toml` (title `^랜덤 다이스 2 - CumbersomeTutor145$` = 대변먹는자, inviter / public bot; swapped by rdT08, rdT06 had it the wrong way round); `PROFILES["gpg2"]` = gear, `[기어2]`, `config/recorder_gpg2.toml` (title `^랜덤 다이스 2 - CleanCardinal77$` = 배속봇, joiner, same chrome 132/72/0/0 and size 1384x2304 at y 2160, placed left of window 1 at x 1508 so they do not overlap). The `$`-anchored titles keep each regex from matching the other window or the `Google Play Games` launcher. `get(name)` raises KeyError listing known names.
+  `PROFILES["gpg"]` = gear, `[기어1]`, `config/recorder.toml` (title `^랜덤 다이스 2 - CumbersomeTutor145$` = 대변먹는자, inviter / public bot; swapped by rdT08, rdT06 had it the wrong way round); `PROFILES["gpg2"]` = support, `[서폿]` (rdT15; gear before), `config/recorder_gpg2.toml` (title `^랜덤 다이스 2 - CleanCardinal77$` = 배속봇, joiner, same chrome 132/72/0/0 and size 1384x2304 at y 2160, placed left of window 1 at x 1508 so they do not overlap). The `$`-anchored titles keep each regex from matching the other window or the `Google Play Games` launcher. `get(name)` raises KeyError listing known names.
 - `uv(profile, key)` returns the profile's override, else the shared constant of that name in `rdom.input.inject`
   (measured on GPG). Only the LD profile has overrides: `COOP_UV = (0.497, 0.823)`, the pre-GPG LD value of
   commit `3a70f61^`.

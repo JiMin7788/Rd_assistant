@@ -355,3 +355,7 @@
 ## 2026-11-06 · rdT14 · 배속 until 2.0
 - gear_loop.confirm_speed: every bot taps 배속 until the caption reads 2.0 (max 5 taps, 1.5 s apart, 20 s window); per-tap log line `  배속 tap n/5: a -> b (front ok|NOT in front)` and `speed_*` debug frames (newest 30).
 - pages: components/gear-loop.md (updated)
+
+## 2026-11-06 · rdT15 · Duo joiner gpg2 (배속봇) is the support bot again
+- Profile `gpg2` = bot `support`, tag [서폿] (user 2026-11-06 '배속봇 서폿덱으로 변경함'); supervisor duo = gear gpg inviter + support gpg2 joiner (logs still named gpg / gpg2); Discord/run_all/duo texts say `서폿=구글 배속봇`, /스샷 file support.jpg. Support joiner runs run_battle(expect='support') with the duo support_play wrapper; support_bot.play writes support_rounds.jsonl, gear_loop's joiner_rounds.jsonl line is only start/end.
+- pages: components/profiles-ld.md (updated), components/supervisor.md (updated), components/run-all.md (updated), components/discord-bot.md (updated), components/gear-loop.md (updated)

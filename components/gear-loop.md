@@ -2,11 +2,11 @@
 title: gear_loop roles, exit codes and records
 type: component
 updated: 2026-11-06
-sources: [rdf04-t8, rdf04-i1, rdT06, rdT07, rdT10, rdT11, rdT12, rdT14]
+sources: [rdf04-t8, rdf04-i1, rdT06, rdT07, rdT10, rdT11, rdT12, rdT14, rdT15]
 ---
 # gear_loop roles, exit codes and records
 
-`tools/gear_loop.py` runs one round loop per bot: `--role public` (gear-only, today's public room), `inviter` (gear bot on profile `gpg`, invites the partner) or `joiner` (gear bot on profile `gpg2`, accepts the host's invite; since rdT06 both duo bots are gear). `main(argv=None)` returns an exit code; `__main__` is `sys.exit(main())`; importing the module has no side effects.
+`tools/gear_loop.py` runs one round loop per bot: `--role public` (gear-only, today's public room), `inviter` (gear bot on profile `gpg`, invites the partner) or `joiner` (support bot on profile `gpg2`, accepts the host's invite; rdT06 made both duo bots gear, rdT15 made gpg2 the support bot again). For gpg2 `prof.bot` is `support`, so `run_battle(expect='support')` runs the `_duo_support_play` wrapper -> `support_bot.play(duo=True)`, which writes the full round record to `support_rounds.jsonl` (duo flag); gear_loop's own line in `joiner_rounds.jsonl` (start/end, `bot: support`) is a different file and not a second copy. `main(argv=None)` returns an exit code; `__main__` is `sys.exit(main())`; importing the module has no side effects.
 
 ## CLI and start
 - `--profile {ld,gpg,gpg2}` (default gpg), `--role {public,inviter,joiner}` (default public), `--execute`. Without `--execute` the injector is `make_injector(cfg, execute=False)` (dry run); `cfg = os.path.join(ROOT, prof.config)` also feeds `LiveGrabber`.
