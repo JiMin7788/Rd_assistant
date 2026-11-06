@@ -267,6 +267,18 @@ def test_wrong_deck_is_guard_without_further_input(env, capsys, profile, text):
     assert not (env.stop.parent / "joiner_rounds.jsonl").exists()
 
 
+def test_support_joiner_expects_a_support_deck(env, capsys):
+    """gpg2 is the support joiner: run_battle gets expect='support' + the duo support player, a gear deck stops it."""
+    env.battle_res = "wrong_deck"
+    assert env.gl.main(["--profile", "gpg2", "--role", "joiner"]) == 3
+    assert env.battles[0]["expect"] == "support"
+    assert env.battles[0]["support_play"] is env.gl._duo_support_play
+    assert ("⛔ 서포팅덱이 아니에요 -- 덱 확인 후 다시 시작해 주세요", "frame") in env.status
+    assert "wrong deck: expected support" in capsys.readouterr().out
+    assert env.inj.taps == [SPEED_UV]
+    assert not (env.stop.parent / "joiner_rounds.jsonl").exists()
+
+
 def test_start_check_failure_is_guard_before_any_injector(env, capsys):
     env.gl.preflight.check = lambda names, **k: env.checks.append(list(names)) or [
         (names[0], False, "LD플레이어 창을 못 찾았어요")]
@@ -320,7 +332,7 @@ def test_tag_set_at_start_and_ld_scales(env):
     assert env.gl.gear_bot.SUPPORT_SCALES == env.gl.gear_bot.LD_SUPPORT_SCALES
     env.gl.gear_bot.SUPPORT_SCALES = None
     env.gl.main(["--profile", "gpg2", "--role", "joiner"])
-    assert ("tag", "[기어2]") in env.status and env.gl.gear_bot.SUPPORT_SCALES is None
+    assert ("tag", "[서폿]") in env.status and env.gl.gear_bot.SUPPORT_SCALES is None
 
 
 def test_duo_config_file():
@@ -590,7 +602,7 @@ def test_duo_support_play_sets_duo_flag_and_stats(env, monkeypatch):
 @pytest.mark.parametrize("args,fname,other,bot,mode", [
     (["--profile", "ld", "--role", "inviter"], "gear_rounds.jsonl", "joiner_rounds.jsonl", "gear", "duo"),
     (["--profile", "ld"], "gear_rounds.jsonl", "joiner_rounds.jsonl", "gear", "gear"),
-    (["--profile", "gpg2", "--role", "joiner"], "joiner_rounds.jsonl", "gear_rounds.jsonl", "gear", "duo"),
+    (["--profile", "gpg2", "--role", "joiner"], "joiner_rounds.jsonl", "gear_rounds.jsonl", "support", "duo"),
 ])
 def test_round_record_goes_to_the_bots_file(env, args, fname, other, bot, mode):
     assert env.gl.main(args) == 0

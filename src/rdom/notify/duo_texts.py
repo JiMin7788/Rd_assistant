@@ -8,12 +8,12 @@ import json, os
 
 DUO_BLOCK = "지금은 봇 두 대가 같이 플레이 중이라 참가할 수 없어요"
 DUO_CARD_TITLE = "🤖 봇 두 대가 같이 플레이 중"
-DUO_STATUS = "🟢 실행 중 · 🤖 두 봇 (기어1=구글 대변먹는자 · 기어2=구글 배속봇)"
+DUO_STATUS = "🟢 실행 중 · 🤖 두 봇 (기어1=구글 대변먹는자 · 서폿=구글 배속봇)"
 DUO_ROOM_LINE = "🤖 봇 두 대가 같이 플레이 중"
-SHOT_CONTENT = "기어1(구글) · 기어2(구글)"
+SHOT_CONTENT = "기어1(구글) · 서폿(구글)"
 START_HELP = "`/시작` 켜기 (둘 다 · 기어만)"
 
-START_REPLY = {"duo": "▶ 두 봇을 켭니다. (기어1=구글 대변먹는자 · 기어2=구글 배속봇)",
+START_REPLY = {"duo": "▶ 두 봇을 켭니다. (기어1=구글 대변먹는자 · 서폿=구글 배속봇)",
                "gear": "▶ 기어봇만 켭니다. (구글 · 방 코드 공개 + 예약)"}
 
 _GPG, _GPG2 = "config/recorder.toml", "config/recorder_gpg2.toml"
@@ -119,6 +119,6 @@ def log_blocks(paths_by_tag, lines, limit=1900):
 def screens_for(mode):
     """[(tag, recorder config, file name)] to capture for /스샷."""
     if mode == "duo":
-        return [("[기어1]", _GPG, "gear.jpg"), ("[기어2]", _GPG2, "gear2.jpg")]
+        return [("[기어1]", _GPG, "gear.jpg"), ("[서폿]", _GPG2, "support.jpg")]
     # AI-NOTE: gear-only (and off) show the first GPG window, the only window that bot uses.
     return [("[기어1]", _GPG, "screen.jpg")]

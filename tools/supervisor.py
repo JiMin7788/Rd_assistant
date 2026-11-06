@@ -3,14 +3,14 @@
   python tools/supervisor.py [--mode duo|gear]
 
 duo (default): tools/gear_loop.py --profile gpg --role inviter ([기어1]) and --profile gpg2 --role joiner
-([기어2]): two gear bots, one per Google Play Games window. gear: only the gpg bot, --role public.
+([서폿]): a gear bot and a support bot, one per Google Play Games window. gear: only the gpg bot, --role public.
 
 Child exit codes (tools/gear_loop.py): 0 = clean stop, 3 = guard stop, anything else = crash.
 A crash is restarted after 10 s with a status message and a screenshot of that bot's window. The 5th crash
 of one bot within 30 minutes, or a guard stop of either bot, stops both: data/STOP is written (the other bot
 finishes its current game and exits), nothing is restarted, the supervisor waits for all children and exits 1.
 When every child exited 0 the supervisor exits 0. The user rule is: anomaly -> stop and fix, never blind restarts.
-Logs: data/bot_logs/YYYYMMDD_HHMM_<profile>.log (a new file per start; named by profile because both duo bots are "gear").
+Logs: data/bot_logs/YYYYMMDD_HHMM_<profile>.log (a new file per start; named by profile, gpg / gpg2, which the run_all and discord_bot log globs rely on).
 """
 import argparse, collections, datetime, json, os, subprocess, sys, time
 
@@ -26,7 +26,7 @@ POLL_S = 1
 
 # (bot, profile, role) per mode; tag and config come from rdom.profile
 CHILDREN = {
-    "duo": (("gear", "gpg", "inviter"), ("gear", "gpg2", "joiner")),
+    "duo": (("gear", "gpg", "inviter"), ("support", "gpg2", "joiner")),
     "gear": (("gear", "gpg", "public"),),
 }
 
@@ -94,7 +94,7 @@ class Supervisor:
 
     def _log_path(self, bot):
         stamp = datetime.datetime.fromtimestamp(self.clock()).strftime("%Y%m%d_%H%M")
-        # AI-NOTE: rdT06: both duo bots are "gear", so the log is named by profile (gpg / gpg2), not by bot.
+        # AI-NOTE: the log is named by profile (gpg / gpg2), not by bot kind: run_all and discord_bot glob on it.
         path = os.path.join(self.log_dir, f"{stamp}_{bot.profile.name}.log")
         n = 1
         # AI-NOTE: a restart inside the same minute must not overwrite the log of the crash just reported.

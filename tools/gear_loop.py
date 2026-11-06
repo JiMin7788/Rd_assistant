@@ -3,7 +3,7 @@
 
   public   today's gear-only loop: 방 생성 (no invite), wait for any joiner, 협동 시작
   inviter  duo, gear bot (gpg): invite the partner from config/duo.toml, 협동 시작 when accepted
-  joiner   duo, gear bot (gpg2): wait for the host's invite popup, accept it
+  joiner   duo, support bot (gpg2): wait for the host's invite popup, accept it
 
 Models are hot-reloaded before every round (training runs alongside). Each round's start/end
 (perf_counter, same clock as the recorder) goes to data/gear_rounds.jsonl (gear profile) or
@@ -397,8 +397,9 @@ def battle_phase(role, g, inj, prof, rnd, tap_speed=True):
         send_status(WRONG_DECK_TEXT[prof.bot], g.grab())
         return "wrong_deck"
     st = getattr(player, "stats", {})
-    # AI-NOTE: rdT06: both duo bots are gear bots, so the record file follows the role (the joiner keeps
-    # JOINER_LOG), not prof.bot; otherwise inviter and joiner would append to the same file.
+    # AI-NOTE: the record file follows the role (the joiner keeps JOINER_LOG), not prof.bot (rdT06: two gear
+    # bots would share a file). This is only the round start/end line; a support joiner's own round record
+    # (modes, gates, milestones) is written by support_bot.play into support_rounds.jsonl, so nothing is doubled.
     log = JOINER_LOG if role == "joiner" else GEAR_LOG
     os.makedirs(os.path.dirname(os.path.abspath(log)), exist_ok=True)
     with open(log, "a", encoding="utf-8") as fh:
@@ -456,7 +457,7 @@ def run_loop(role, prof, duo, g, inj):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--profile", choices=sorted(profiles.PROFILES), default="gpg",
-                    help="gpg = Google Play Games window 1 (gear, default), gpg2 = window 2 (gear), ld = LDPlayer (gear, unused)")
+                    help="gpg = Google Play Games window 1 (gear, default), gpg2 = window 2 (support), ld = LDPlayer (gear, unused)")
     ap.add_argument("--role", choices=("public", "inviter", "joiner"), default="public")
     ap.add_argument("--execute", action="store_true", help="really inject input (default: dry run)")
     a = ap.parse_args(argv)
