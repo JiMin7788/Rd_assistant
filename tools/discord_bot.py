@@ -8,7 +8,8 @@ Everyone:
 Admins ("서버 관리" permission):
   /스샷          current emulator screen
   /정지 /재개    pause after the current game / resume   (data/PAUSE)
-  /시작 [대상]   start the supervisor if it is not running (둘 다 = duo, 기어만 = gear)
+  /시작 [대상]   start the supervisor if it is not running (둘 다 = duo, 기어만 = gear;
+                 둘 다 with one window open becomes solo "한 창 모드")
   /종료          end the bot after the current game      (data/STOP)
 
 Room codes: the game loop writes data/room.json (code + waiting/playing/closed).
@@ -98,6 +99,19 @@ def duo_logs():
     return {"[기어1]": newest_log("*_gpg[_.]*"), "[서폿]": newest_log("*_gpg2*")}
 
 
+def solo_now():
+    return duo_texts.solo_now(DATA)
+
+
+def mode_logs(mode):
+    """duo_logs(), in solo only the running bot's log (the other window's newest log is an old run)."""
+    logs = duo_logs()
+    if mode == "solo":
+        tag = {"gpg": "[기어1]", "gpg2": "[서폿]"}.get((solo_now() or {}).get("profile"))
+        logs = {t: p for t, p in logs.items() if t == tag} or logs
+    return logs
+
+
 def room_now():
     r = read_room()
     if not running():
@@ -142,8 +156,8 @@ async def notify_positions():
 async def set_card(kind, code=None):
     """One bot message in the room-code channel, edited in place."""
     n = len(Q["queue"])
-    if kind == "duo":
-        title, desc = duo_texts.card_for("duo", None, n)
+    if kind in ("duo", "solo"):
+        title, desc = duo_texts.card_for(kind, None, n)
         e = discord.Embed(title=title, colour=0x9B59B6, description=desc)
     elif kind == "public":
         e = discord.Embed(title="🎲 새 방이 열렸어요", colour=0x5865F2,
@@ -190,8 +204,9 @@ async def purge_webhook_cards():
 
 # ---------------------------------------------------------------- the turn logic
 async def tick():
-    if mode_now() == "duo":                      # queue untouched: no pops, DMs or timeouts
-        await set_card("duo")
+    mode = mode_now()
+    if mode in ("duo", "solo"):                  # queue untouched: no pops, DMs or timeouts
+        await set_card(mode)
         return
     room = room_now(); code, state = room.get("code"), room.get("state")
     cur = Q["current"]; now = time.time()
@@ -291,7 +306,7 @@ async def cmd_queue(it: discord.Interaction):
 
 def status_embed(with_log):
     mode = mode_now()
-    st = duo_texts.status_title(mode, os.path.exists(PAUSE), os.path.exists(STOP))
+    st = duo_texts.status_title(mode, os.path.exists(PAUSE), os.path.exists(STOP), solo_now())
     room = room_now()
     lines = [duo_texts.room_line(mode, room.get("state")),
              f"📋 예약 대기 {len(Q['queue'])}명" + (" · 예약자 차례 진행 중" if Q["current"] else "")]
@@ -302,8 +317,8 @@ def status_embed(with_log):
         lines.append(f"🎲 오늘 {n}판" + (f" · 마지막 판 {games[-1].get('wall_end', '')[11:16]}" if games else ""))
     except Exception:
         pass
-    if with_log and mode == "duo":
-        lines.append(duo_texts.log_blocks(duo_logs(), 6, 1800))
+    if with_log and mode in ("duo", "solo"):
+        lines.append(duo_texts.log_blocks(mode_logs(mode), 6, 1800))
     elif with_log:
         logs = sorted(glob.glob(os.path.join(DATA, "bot_logs", "*.log")))
         if logs:
@@ -378,8 +393,9 @@ async def cmd_deck(it: discord.Interaction):
 @tree.command(name="로그", description="[관리자] 최근 로그")
 @app_commands.describe(lines="줄 수 (기본 30)")
 async def cmd_log(it: discord.Interaction, lines: int = 30):
-    if mode_now() == "duo":
-        return await it.response.send_message(duo_texts.log_blocks(duo_logs(), max(1, min(lines, 60))), ephemeral=True)
+    mode = mode_now()
+    if mode in ("duo", "solo"):
+        return await it.response.send_message(duo_texts.log_blocks(mode_logs(mode), max(1, min(lines, 60))), ephemeral=True)
     logs = sorted(glob.glob(os.path.join(DATA, "bot_logs", "*.log")))
     if not logs:
         return await it.response.send_message("로그가 없어요.", ephemeral=True)
@@ -448,7 +464,7 @@ async def cmd_shot(it: discord.Interaction):
     try:
         mode = mode_now()
         files = [discord.File(io.BytesIO(await asyncio.to_thread(screencap, cfg)), name)
-                 for _tag, cfg, name in duo_texts.screens_for(mode)]
+                 for _tag, cfg, name in duo_texts.screens_for(mode, solo_now())]
         await it.followup.send(content=duo_texts.SHOT_CONTENT if mode == "duo" else None, files=files)
     except Exception as e:
         await it.followup.send(f"스샷 실패: {e}")
