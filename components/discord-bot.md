@@ -1,16 +1,17 @@
 ---
 title: Discord bot (duo / gear texts, /시작 대상)
 type: component
-updated: 2026-11-06
-sources: [rdf04-t11, rdT06, rdT15]
+updated: 2026-11-12
+sources: [rdf04-t11, rdT06, rdT15, rdT17]
 ---
 # Discord bot (duo / gear texts, /시작 대상)
 
-`tools/discord_bot.py` is mode-aware: it asks `duo_texts.mode_now()` (duo | gear | off) and every user-facing text, the room-code card, presence, `/스샷` and `/로그` switch on that mode. All the texts and small pure helpers live in `src/rdom/notify/duo_texts.py`, which is import-safe and has no Discord dependency.
+`tools/discord_bot.py` is mode-aware: it asks `duo_texts.mode_now()` (duo | solo | gear | off) and every user-facing text, the room-code card, presence, `/스샷` and `/로그` switch on that mode. All the texts and small pure helpers live in `src/rdom/notify/duo_texts.py`, which is import-safe and has no Discord dependency.
 
 ## Mode
 - `mode_now()` in the bot is `duo_texts.mode_now(DATA, running())`. It reads `data/bot_mode.json` (written by the supervisor, see [supervisor](supervisor.md)) and returns `off` when the supervisor is not alive or the file is missing, unreadable or holds another value.
 - Gear-only texts are the production texts from before duo mode; only the duo variants are new.
+- **Solo (rdT17, "한 창 모드"):** `mode_now` also returns `solo` (the supervisor found one game window; that bot invites the other account). `solo_now()` = `duo_texts.solo_now(DATA)` gives `{profile, name, partner}` from `bot_mode.json`. Solo behaves like duo for the queue (reservations / `/방코드` blocked with `SOLO_BLOCK` `지금은 봇이 친구를 초대해서 플레이 중이라 참가할 수 없어요`, `tick()` only sets the `solo` card `🤖 봇이 친구를 초대해서 플레이 중`). `/상태` title `status_title(mode, paused, stopping, solo_now())` = `🟢 실행 중 · 🤖 한 창 모드 (서폿=구글 배속봇, 대변먹는자 초대)` (label 기어1 for gpg, 서폿 for gpg2); room line = the solo card title; presence `랜다2 한 창 모드 · 오늘 N판`; `/로그` and the `/상태` log use `mode_logs(mode)` = only the running bot's newest log; `/스샷` `screens_for(mode, solo)` captures only the open window; `/정지` / `/종료` use the single-bot wording. `/시작 둘 다` stays `--mode duo`; the supervisor decides solo. Duo texts are unchanged.
 
 ## Behaviour by command
 - `/시작 [대상]`: choices `둘 다` (value `duo`, the default) and `기어만` (`gear`). Starts `tools/supervisor.py --mode <target>`; replies with `start_reply(target)`. If the supervisor already runs it still answers "이미 실행 중입니다." and does not switch mode.
@@ -30,6 +31,7 @@ sources: [rdf04-t11, rdT06, rdT15]
 - Tests: `tests/test_duo_texts.py` covers the pure helpers; the Discord wiring itself has no automated test.
 
 ## Evidence
+- commit `44e4c3b` (rdT17, task/rdT17) — `src/rdom/notify/duo_texts.py` `SOLO_BLOCK`, `SOLO_TITLE`, `solo_now`, `solo_start_text`, `solo_status`, solo branches of `mode_now` / `reserve_blocked` / `code_reply` / `card_for` / `status_title` / `room_line` / `presence` / `screens_for`; `tools/discord_bot.py` `solo_now`, `mode_logs`, tick / set_card / status_embed / cmd_log / cmd_shot; `tests/test_duo_texts.py` `test_solo_mode_and_details`, `test_solo_texts` and the source checks.
 - `tools/discord_bot.py` — mode_now/duo_logs, tick duo early-return, cmd_start choices and `--mode`, cmd_reserve block, cmd_shot, cmd_log, status_embed, presence_loop.
 - commit `87f0696` (rdT06, branch task/rdT06, not yet merged into this checkout) — `src/rdom/notify/duo_texts.py` (`DUO_STATUS`, `START_REPLY`, `screens_for`) and `tools/discord_bot.py` `duo_logs`.
 - commit `62b1d25` — rdf04-t11 change. It adds src/rdom/notify/duo_texts.py (mode_now, texts, card_for, log_blocks, screens_for, presence) and tests/test_duo_texts.py (helper unit tests); the line-ending note comes from its diffstat.

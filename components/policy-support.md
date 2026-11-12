@@ -1,12 +1,12 @@
 ---
 title: Support-deck rule engine
 type: component
-updated: 2026-10-29
-sources: [rdf01-t1, rdf01-r2-s6]
+updated: 2026-11-12
+sources: [rdf01-t1, rdf01-r2-s6, rdT16]
 ---
 # Support-deck rule engine
 
-`src/rdom/policy/support.py` is a pure rule engine for the support deck (Resonance/Alignment/Bubble/Adjust/Growth). `plan_support` returns one action per call; the deck values come from `[decks.support]` in `config/deck.toml`. Not yet wired into a play loop (later rdF01 tasks).
+`src/rdom/policy/support.py` is a pure rule engine for the support deck (Resonance/Alignment/Bubble/Adjust/Growth). `plan_support` returns one action per call; the deck values come from `[decks.support]` in `config/deck.toml`. Driven by `PlayPlayer.battle_tick` in `tools/support_players.py` ([support players](support-players.md)).
 
 ## Entry points
 - `load_support_deck(path)` → `SupportDeck`; a missing file, bad TOML or a missing `[decks.support]` table gives `DEFAULT`; a missing key keeps its default.
@@ -23,6 +23,9 @@ sources: [rdf01-t1, rdf01-r2-s6]
 - Supporter pool (only when `support_ready`): Adjust 7, then highest Bubble while above keep hi, then Resonance 7 beyond `res7`, then a partnerless Adjust 2..6. Growth, Alignment and pip-1 dice are never chosen.
 - clone_alert: a Bubble/Adjust/Joker above every Resonance/Alignment is rerolled; merges whose result would exceed the top Resonance/Alignment pip are banned.
 
+## Sevens data mode (rdT16)
+`plan_support(..., sevens=True)` (switch `config/data_mode.toml`, see [policy](policy.md)) runs summon and the clone_alert rule, then `_plan_sevens`: bombs; `support_ready` and a pip-7 die -> `support` from that 7 (`_seven_drop`: Adjust 7 first, then the type with the most 7s, then the smaller cell); Joker copy (pip-7 pairs banned, so no copy onto a 7); the legal merge with the highest pip via `_best_merge` with `bubbles` 0 (the surplus-Bubble filter is off, Bubble keep-lo still checked in `_merge_candidates`, no crystal preference); the old `_supporter_pick` pool; `wait` why `no move` (never `complete`). With `sevens` False the old order runs unchanged.
+
 ## Pitfalls
 - `[decks.support]` must stay after `[decks.decay]`: `perception.gear.deck_name()` falls back to the first deck table, which must remain doom. The top-level `force = ""` key is added but nothing reads it yet.
 - It re-implements the bomb/crystal/joker rules of `policy/gear.py` instead of importing them, because those helpers read gear's global `KEEP`; it imports nothing from gear, perception, cv2, numpy or torch.
@@ -33,4 +36,5 @@ sources: [rdf01-t1, rdf01-r2-s6]
 - `config/deck.toml` — `force`, `[decks.support]` placed after `[decks.decay]`
 - `src/rdom/perception/gear.py` — `deck_name()` falls back to the first deck table
 - commit `0720269` — rdf01-t1 change
+- commit `b4ee44c` (task/rdT16) — support.py `_seven_drop`, `_plan_sevens`, `plan_support(sevens=)`; tests in tests/test_sevens_mode.py (`test_support_*`: highest pip beats the surplus-Bubble rule, pip 7 never merged, drop only when ready, Adjust-7 then most-7s preference, no completion wait, switch off = old plan); cited by commit because the branch is not merged yet
 - commit `e3ae428` — rdf01-r2-s6: `_best_merge` key `adj_pref` 2/1/0; tests `test_equal_pip_adjust_res_align_beats_plain_alignment_pair` and `test_keeper_prefers_align_column_else_smaller_cell` (test file not yet in the main checkout when written, so cited by commit)

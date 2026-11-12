@@ -1,8 +1,8 @@
 ---
 title: Support players (Perception, BasePlayer, CollectPlayer, PlayPlayer)
 type: component
-updated: 2026-11-05
-sources: [rdT10, rdf01-t10, rdf01-t11, rdf01-t16, rdf01-i1, rdf02-t5, rdf02-t6, rdf02-i1, rdf02-m1, rdT03, rdf03-t2, rdf03-t6, rdf03-t9, rdf03-i1, rdf03-m2, rdf03-m3, rdf03-m4]
+updated: 2026-11-12
+sources: [rdT16, rdT10, rdf01-t10, rdf01-t11, rdf01-t16, rdf01-i1, rdf02-t5, rdf02-t6, rdf02-i1, rdf02-m1, rdT03, rdf03-t2, rdf03-t6, rdf03-t9, rdf03-i1, rdf03-m2, rdf03-m3, rdf03-m4]
 ---
 # Support players (Perception, BasePlayer, CollectPlayer, PlayPlayer)
 
@@ -36,6 +36,9 @@ Summons (tap `summon`, >= 1 s apart); at battle time >= 120 s (`PANEL_AT`) taps 
 - **Score/milestones (R14):** every battle tick feeds `read_score` to `ScoreTracker`; a confirmed value goes to `MilestoneTracker.on_score`. On a stable board `on_board({res7, align7, bubbles})` is fed too. Each event prints its log line and saves a screenshot to `data/support_runs/<game_id>/<id>_<score|na>.png` or `cross_<S>_<score>.png`; a covered window (Saver returns None) stores shot null via `set_shot`.
 - `last_frame` (last battle frame) is kept for `play()`'s `end.png`.
 
+## Sevens data mode (rdT16)
+`PlayPlayer.__init__` reads `data_mode.sevens()` (one player per game) into `self.sevens`; on prints `data mode: sevens` and adds stats `sevens`, `drops`, `hi_crops` (absent when off). `battle_tick` passes `sevens=self.sevens` to `plan_support` ([policy-support](policy-support.md)). On a stable effective board `collect.HiWatch.update` returns cells whose read changed to pip 6/7 (junk keeps the last read, empty ignored) and the number of new 7s; the cells go to `saver.cells(..., cells=[...])` (`save_support_cells` `cells=` writes only those, returns the count, 0 when covered), at most once per cell per 5 s on top of the 15 s cadence. A supporter swipe from a pip-7 cell bumps `drops`. `support_bot.play` appends `, sevens N, drops N, hi_crops N` to its `support result:` line when the keys exist. CollectPlayer is unchanged.
+
 ## Burster (burst mechanics, called by PlayPlayer since rdf02-t6)
 `Burster(player)` holds the burst state and only grabs and reads; it never touches the injector. `PlayPlayer._burst` drives it (see above); CollectPlayer does not use it. Constants: `BURST_N` 6 (tick frame + 5 grabs), `BURST_DT` 0.08 s, `BURST_GAP` 3 s between bursts, `BURST_REFRESH` 15 s, `BURST_FAILS` 3, `BURST_SAVE_GAP` 10 s, `BURST_SAVE_MAX` 60.
 - `due(now, unreadable_cells, memory)` -> ascending cells to burst. Empty if < `BURST_GAP` since any burst or if the unreadable count is not 1..`MAX_JUNK`. A cell is due when `memory.state(c)` is `unknown` (unless it failed `BURST_FAILS` bursts in a row and its last burst is < `BURST_REFRESH` ago) or `remembered` with the last burst >= `BURST_REFRESH` ago.
@@ -57,6 +60,7 @@ Summons (tap `summon`, >= 1 s apart); at battle time >= 120 s (`PANEL_AT`) taps 
 `PlayPlayer` stores `_swipe_ok = inj.last_gesture_ok` right after each merge swipe. When the pending merge's dice are unchanged and `_swipe_ok` is False (window not confirmed in front, or lock timeout), the verification logs `merge a->b not confirmed in front -- retry` and sets no ban, no fail pair and no fail count, so the planner proposes the merge again. `tools/gear_bot.py` does the same with its `swipe_ok`.
 
 ## Evidence
+- commit `b4ee44c` (task/rdT16) — tools/support_players.py `self.sevens`, `self.hi`, the HiWatch block and `drops` in `battle_tick`; tools/support_bot.py `sev` in the `support result:` line; src/rdom/perception/collect.py `save_support_cells(cells=)`; tests `test_play_player_sevens_drop_crops_and_throttle`, `test_play_player_switch_missing_is_off`, `test_support_result_line_has_sevens_stats` in tests/test_sevens_mode.py; cited by commit because the branch is not merged yet
 - commit `9c8ce09` (rdT10) — `tools/support_players.py` `PlayPlayer._swipe_ok` and the merge verification branch, `tools/gear_bot.py` `swipe_ok`; tests in `tests/test_support_play_player.py`, `tests/test_gear_bot_handover.py`.
 - commit `5c1591d` (branch task/rdf03-m4) — tools/support_players.py `power_visit` (price from `read_price` only, AI-NOTE with the 750/1000 case, `PRICE_NONE_SAVE_MAX`, `_price_saves`), tests/test_support_play_power.py (`test_visit_never_buys_on_the_last_price_when_the_price_is_unreadable`, `test_visit_with_a_read_price_keeps_the_reserve`, `test_visit_unreadable_price_saves_the_panel_frame_with_a_cap`), CLAUDE_CODE_TODO.md runbook line telling to keep the panel_price_none frames.
 - commit `61d2be3` (branch task/rdf03-m3) — tools/support_players.py `power_visit` (`sp0 is None` before the keep-unknown branch), tests/test_support_play_power.py `test_visit_unreadable_sp_with_unknown_cost_gives_sp_unreadable`, CLAUDE_CODE_TODO.md runbook table lines for `SP unreadable` and `nothing to buy ... keep ?`.

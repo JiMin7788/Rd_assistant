@@ -359,3 +359,12 @@
 ## 2026-11-06 · rdT15 · Duo joiner gpg2 (배속봇) is the support bot again
 - Profile `gpg2` = bot `support`, tag [서폿] (user 2026-11-06 '배속봇 서폿덱으로 변경함'); supervisor duo = gear gpg inviter + support gpg2 joiner (logs still named gpg / gpg2); Discord/run_all/duo texts say `서폿=구글 배속봇`, /스샷 file support.jpg. Support joiner runs run_battle(expect='support') with the duo support_play wrapper; support_bot.play writes support_rounds.jsonl, gear_loop's joiner_rounds.jsonl line is only start/end.
 - pages: components/profiles-ld.md (updated), components/supervisor.md (updated), components/run-all.md (updated), components/discord-bot.md (updated), components/gear-loop.md (updated)
+
+## 2026-11-12 · rdT17 · Solo window mode (한 창 모드)
+- Supervisor duo checks once at start which game windows exist (read-only find_window): both -> duo as before; one -> only that window's bot with `--role solo --partner <other account>` (gpg invites 배속봇, gpg2 invites 대변먹는자), `bot_mode.json` mode `solo`; none -> `⛔ 시작 점검 실패`. gear_loop solo = inviter flow, own-window start check; partner not joined within invite_wait_s -> 30 s, invite again, never counted as a failed round, Discord status at most every 10 min. Discord / run_all show `🤖 한 창 모드 (...)`.
+- pages: components/supervisor.md (updated), components/gear-loop.md (updated), components/run-all.md (updated), components/discord-bot.md (updated)
+
+## 2026-11-12 · rdT16 · Sevens data mode (gear + support)
+- `config/data_mode.toml` `sevens = true` (user 2026-11-12, data first), read once per game by gear_bot.play and PlayPlayer (missing/false -> old play; tests/conftest.py keeps it off in tests). Plans: highest-pip legal merge first, pip 7 never merged, no completion wait, supporter drags a pip-7 die when ready (gear: non-gear 7 first; support: Adjust 7 first; then the type with the most 7s).
+- collect.HiWatch: cells whose stable read changed to pip 6/7 get extra crops (once per cell per 5 s); stats sevens/drops/hi_crops in `gear result:` / `support result:` lines.
+- pages: components/policy.md (updated), components/policy-support.md (updated), components/support-players.md (updated)

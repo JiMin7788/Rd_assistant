@@ -1,8 +1,8 @@
 ---
 title: run_all console (duo / gear-only, tagged tails)
 type: component
-updated: 2026-11-06
-sources: [rdf04-t10, rdf04-i1, rdT06, rdT07, rdT15]
+updated: 2026-11-12
+sources: [rdf04-t10, rdf04-i1, rdT06, rdT07, rdT15, rdT17]
 ---
 # run_all console (duo / gear-only, tagged tails)
 
@@ -11,6 +11,7 @@ sources: [rdf04-t10, rdf04-i1, rdT06, rdT07, rdT15]
 ## Flags and header
 - `--no-game`: Discord bot only (unchanged). `--gear-only`: supervisor gets `--mode gear`; default gets `--mode duo`. The mode is always passed explicitly (`supervisor_args`), even though the supervisor defaults to duo too.
 - Header printed after the supervisor starts: `두 봇 시작 (기어1=구글 <host> · 서폿=구글 <partner>)` or `기어봇만 시작 (구글)` (`header_text`). Names come from `config/duo.toml` keys `host` / `partner` (`load_names`); a missing file or key falls back to `대변먹는자` / `배속봇`.
+- **Solo banner (rdT17):** the header is printed before the supervisor has looked at the windows, so the tail loop also polls `solo_banner()` (reads `data/bot_mode.json` via `duo_texts.solo_now`) and prints `HH:MM:SS ▶ 한 창 모드: <name> 혼자 -- <partner> 초대` once when the supervisor chose solo mode. The module now puts `src` on `sys.path` for that import. The solo bot's log keeps its profile name, so the `[기어1]` / `[서폿]` tails are unchanged.
 - **Single instance (rdT07):** if `data/run_all.pid` names another live python process, `main` prints `이미 실행 중이에요 -- 두 번째 실행은 무시합니다 (pid N)...`, waits `SECOND_COPY_WAIT_S` (5 s) and returns 1 without starting a bot or touching the lock. (2026-11-05 two full stacks ran at once and every window had two bots tapping.) Discord `/시작` already refuses when `supervisor.pid` is alive ("이미 실행 중입니다."), and the supervisor itself now refuses too.
 - If `data/supervisor.pid` is alive the supervisor is left alone ("게임봇은 이미 실행 중"), so the flags then have no effect. `PAUSE` / `STOP` are removed before a fresh start, as before.
 
@@ -22,6 +23,7 @@ sources: [rdf04-t10, rdf04-i1, rdT06, rdT07, rdT15]
 Lock file, child processes and the tail loop live in `main(argv)`; importing the module (tests do, via `importlib`) starts nothing. Tests are in the rdf04-t10 duo test file.
 
 ## Evidence
+- commit `44e4c3b` (rdT17, task/rdT17) — `tools/run_all.py` `solo_banner` and the banner check in `main`'s loop; `tests/test_run_all_duo.py` `test_solo_banner_from_bot_mode`, `test_main_prints_the_solo_banner_once`.
 - commit `c5aec51` (rdT07) — `tools/run_all.py` `SECOND_COPY_WAIT_S` and the `return 1` refusal in `main`.
 - `tools/run_all.py` — `supervisor_args`, `header_text`, `load_names`, `tail_specs`, `tag_for`, `shown`, `SHOW`, `main`.
 - rdf04-t10 diff (the run_all duo test file added on the task branch) — args, header texts, default names, tags/patterns, SHOW keys, import starts no process.

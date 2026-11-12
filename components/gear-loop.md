@@ -1,8 +1,8 @@
 ---
 title: gear_loop roles, exit codes and records
 type: component
-updated: 2026-11-06
-sources: [rdf04-t8, rdf04-i1, rdT06, rdT07, rdT10, rdT11, rdT12, rdT14, rdT15]
+updated: 2026-11-12
+sources: [rdf04-t8, rdf04-i1, rdT06, rdT07, rdT10, rdT11, rdT12, rdT14, rdT15, rdT17]
 ---
 # gear_loop roles, exit codes and records
 
@@ -12,6 +12,12 @@ sources: [rdf04-t8, rdf04-i1, rdT06, rdT07, rdT10, rdT11, rdT12, rdT14, rdT15]
 - `--profile {ld,gpg,gpg2}` (default gpg), `--role {public,inviter,joiner}` (default public), `--execute`. Without `--execute` the injector is `make_injector(cfg, execute=False)` (dry run); `cfg = os.path.join(ROOT, prof.config)` also feeds `LiveGrabber`.
 - config/duo.toml (new): `host` (inviter's game name, joiner accepts only it), `partner` (joiner's name, inviter invites it), `invite_wait_s` (300).
 - Order in `main`: `discord.set_tag(prof.tag)` -> `capture.preflight.check([own])` (the inviter checks `['gpg','gpg2']` for window overlap) -> on failure status `⛔ 시작 점검 실패: <reason>` and return 3, before any injector exists -> `gear_bot.SUPPORT_SCALES = LD_SUPPORT_SCALES` for ld -> `▶ 봇 시작`. A clean exit sends the tagged `■ 봇 종료`.
+
+## Solo role (rdT17, "한 창 모드")
+- `--role solo --partner NAME` (started by the supervisor when only one game window is open, see [supervisor](supervisor.md); `--partner` is required with solo, argparse error otherwise). `main` replaces `duo["partner"]` with `--partner`, so the inviter flow and `FAIL_TEXT["solo"]` (`⛔ <partner> 초대 3회 연속 실패 ...`) use it; the start check covers only its own window (no pair / overlap check).
+- `lobby_phase("solo")` runs the same `friend_coop.invite_and_start` as the inviter. Its `False` (invite_wait_s, 300 s, over; an offline partner keeps `invite()` failing until then; the room was already left with MODAL_X) becomes `"absent"`; `None` (navigation broke) is still `"fail"`. The duo inviter's `False` stays `"fail"`.
+- `run_loop` on `"absent"`: logs `partner did not join -- invite again`, sends `⏳ <partner> 아직 안 들어옴 -- 계속 다시 초대 중` at most once per `SOLO_STATUS_EVERY_S` = 600 s (module clock `_clock`, reset after a battle), sleeps `SOLO_RETRY_S` = 30 s and starts the next round. It never touches the failed-round counter (user 2026-11-12 '계속 다시 초대'); other failures still count and 3 in a row stop with exit 3.
+- Battle as the duo inviter: `run_battle(expect=prof.bot)` with the `_duo_support_play` wrapper (gpg gear, gpg2 support with the duo flag), 배속 rule unchanged. Record line goes to `gear_rounds.jsonl` with `mode: "solo"`.
 
 ## Exit codes (supervisor contract)
 `EXIT_CLEAN = 0` (STOP seen between games), `EXIT_GUARD = 3` (window moved, 3 failed rounds in a row, wrong deck, start check failed), anything else is a crash (an exception propagates, never turned into 0 or 3). Each guard sends its status (per-role text in `FAIL_TEXT`, `WRONG_DECK_TEXT`) before returning.
@@ -39,6 +45,7 @@ The file follows the **role** (rdT06): joiner -> `data/joiner_rounds.jsonl`, pub
 `tests/test_gear_loop_roles.py` (fakes, tmp data dirs) covers each exit code, STOP file kept, joiner/inviter call restrictions, 배속 once, record paths, tag insertion, and a joiner whose game cannot be relaunched ending in EXIT_GUARD after 3 rounds with bounded `launch_game` calls. `tests/test_gear_loop_result.py` keeps the import-safe check. Never run the live loop in QA.
 
 ## Evidence
+- commit `44e4c3b` (rdT17, task/rdT17) — `tools/gear_loop.py` `--role solo`, `--partner`, `SOLO_RETRY_S`, `SOLO_STATUS_EVERY_S`, `SOLO_WAIT_TEXT`, `_clock`, `lobby_phase` `"absent"`, `run_loop` absent branch; `tests/test_gear_loop_roles.py` solo tests (own-window check, partner name, deck per profile, real `invite_and_start` with an offline partner re-invited 4 times without `fails=`, absent rounds not counted, status throttled to 10 min).
 - commit `7d8f41a` (rdT14, task/rdT14) — `tools/gear_loop.py` `SPEED_TAPS_MAX` 5, `SPEED_WINDOW_S`, `SPEED_RETAP_S`, `SPEED_DEBUG_KEEP`, `_save_speed_frame`, `confirm_speed` (no stop on own rise, per-tap log line, AI-NOTE with the 23:14 run); `tests/test_gear_loop_roles.py` speed tests (tap log line, frames capped at 30 with patched `COOP_DEBUG_DIR`, 5-tap cap, 20 s window).
 - `tools/gear_loop.py` (rdT11, task/rdT11) — `UNKNOWN_WAIT_S`, `JOINER_UNKNOWN_WAIT_S`, `recover_step(unknown_wait_s=)`, `confirm_speed`, `battle_phase` calls (rdT12 dropped `tap_allowed`), `log_input_stats`; tests in `tests/test_gear_loop_roles.py`.
 - commit `9c8ce09` (rdT10) — `tools/gear_loop.py` `SPEED_REREAD_S`, `confirm_speed` re-read loop, `log_input_stats`; `tests/test_gear_loop_roles.py`.
