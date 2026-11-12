@@ -161,8 +161,11 @@ def play(g, inj, minutes=40, tick=0.6, mode=None, duo=False):
     # AI-NOTE: the tracker may have missed the last digits, so a fresh read of the last battle frame counts too.
     if res == "game_over" and max(mrec["max_score"] or 0, final_score or 0) >= CLEAR_SCORE:
         res = "clear"
+    st = player.stats
+    # AI-NOTE: the sevens counters exist only when config/data_mode.toml switched sevens on for this game.
+    sev = (f", sevens {st['sevens']}, drops {st['drops']}, hi_crops {st['hi_crops']}" if "sevens" in st else "")
     print(f"support result: {res} (max score {mrec['max_score']}, "
-          f"last frame {'-' if final_score is None else final_score})", flush=True)
+          f"last frame {'-' if final_score is None else final_score}{sev})", flush=True)
     rec = build_record(game_id, wall_start, datetime.datetime.now(), res, mode, gates,
                        mrec, power.record() if power else None, dict(player.stats),
                        final_score=final_score)

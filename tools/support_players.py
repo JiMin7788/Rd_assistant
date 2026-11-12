@@ -20,6 +20,7 @@ from rdom.input.inject import cell_uv
 from rdom.perception import board, collect, gear, score, support
 from rdom.perception import sp as spread
 from rdom.perception.support_memory import CellMemory, _unreadable, burst_result, merge_verdict
+from rdom.policy import data_mode
 from rdom.policy.milestones import MilestoneTracker
 from rdom.policy.power import PowerTracker, keep as power_keep, load_power_config, next_card
 from rdom.policy.support import evaluate_support, load_support_deck, plan_support
@@ -338,6 +339,13 @@ class PlayPlayer(BasePlayer):
         self.burster = Burster(self)
         self._unk_logged = set()               # cells whose 'occupied, unknown' line was printed
         self.stats.update(bursts=0, burst_hits=0, mem_ticks=0, forgets=0)
+        # AI-NOTE: user 2026-11-12 data first -- config/data_mode.toml `sevens = true`, read once per game (one
+        # PlayPlayer per game): plan_support chases pip-7 dice and drops them, new pip 6/7 cells get extra crops.
+        self.sevens = data_mode.sevens()
+        self.hi = collect.HiWatch()
+        if self.sevens:
+            print("data mode: sevens", flush=True)
+            self.stats.update(sevens=0, drops=0, hi_crops=0)
 
     def on_panel(self, f, ui, now):
         self.power_visit(f)
@@ -609,6 +617,14 @@ class PlayPlayer(BasePlayer):
         sig = tuple((d["type"], d["pip"]) for d in b)
         stable = sig == self._prev_sig
         self._prev_sig = sig
+        if self.sevens and stable:             # confirmed effective board only: a misread is no new 7
+            hi_cells, new7 = self.hi.update(b, now)
+            self.stats["sevens"] += new7
+            if hi_cells:
+                # AI-NOTE: through the Saver like the 15 s cadence, so unobscured is re-checked (R6).
+                self.stats["hi_crops"] += self.saver.cells(
+                    f, self.game_id, self.t(now), cells=hi_cells, buffed=self.perc.buffed_cells(f),
+                    glare=self.perc.board_glare(f)) or 0
         for d in b:
             h = self._hist.setdefault(d["cell"], [])
             h.append((d["type"], d["pip"]))
@@ -635,7 +651,7 @@ class PlayPlayer(BasePlayer):
             self._events(f, self.milestones.on_board(
                 {"res7": ev["res7"], "align7": ev["align7"], "bubbles": ev["bubbles"]}))
         act = plan_support(b, self.deck, support_ready=now - self._support_last >= SUPPORT_CD,
-                           banned=set(self._banned), clone_alert=now < self.clone_until)
+                           banned=set(self._banned), clone_alert=now < self.clone_until, sevens=self.sevens)
         op = act["op"]
         if op in ("merge", "support") and self._pending:
             return                             # a merge is still being verified; summon stays allowed
@@ -662,6 +678,8 @@ class PlayPlayer(BasePlayer):
             self._support_last = now
             self.memory.supported(act["from"])
             self.stats["support"] += 1
+            if self.sevens and bc[act["from"]]["pip"] == 7:
+                self.stats["drops"] += 1       # a 7 dragged onto the supporter (comes back as a 6)
 
 
 class Burster:
