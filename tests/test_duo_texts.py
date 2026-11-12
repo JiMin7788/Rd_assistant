@@ -101,4 +101,45 @@ def test_discord_bot_source_uses_duo_texts():
     reserve = src[src.index("async def cmd_reserve"):]
     assert reserve.index("reserve_blocked") < reserve.index("async with QLOCK")
     tick = src[src.index("async def tick()"):]
-    assert tick.index('== "duo"') < tick.index("Q[\"queue\"].pop")
+    assert tick.index('in ("duo", "solo")') < tick.index("Q[\"queue\"].pop")
+    # solo (rdT17): status title, /스샷 and /로그 get the solo details from bot_mode.json
+    assert "duo_texts.status_title(mode, os.path.exists(PAUSE), os.path.exists(STOP), solo_now())" in src
+    assert "duo_texts.screens_for(mode, solo_now())" in src
+    assert "duo_texts.log_blocks(mode_logs(mode)" in src
+
+
+# ---- solo window mode (rdT17) ----
+
+def _solo_file(tmp_path, profile, name, partner):
+    (tmp_path / "bot_mode.json").write_text(json.dumps(
+        {"mode": "solo", "bots": [{"profile": profile}],
+         "solo": {"profile": profile, "name": name, "partner": partner}}, ensure_ascii=False), encoding="utf-8")
+
+
+def test_solo_mode_and_details(tmp_path):
+    _solo_file(tmp_path, "gpg2", "배속봇", "대변먹는자")
+    assert d.mode_now(str(tmp_path), True) == "solo"
+    assert d.solo_now(str(tmp_path)) == {"profile": "gpg2", "name": "배속봇", "partner": "대변먹는자"}
+    _mode_file(tmp_path, "duo")
+    assert d.solo_now(str(tmp_path)) is None
+    assert d.solo_now(str(tmp_path / "none")) is None
+
+
+def test_solo_texts():
+    s2 = {"profile": "gpg2", "name": "배속봇", "partner": "대변먹는자"}
+    s1 = {"profile": "gpg", "name": "대변먹는자", "partner": "배속봇"}
+    assert d.status_title("solo", False, False, s2) == "🟢 실행 중 · 🤖 한 창 모드 (서폿=구글 배속봇, 대변먹는자 초대)"
+    assert d.status_title("solo", False, False, s1) == "🟢 실행 중 · 🤖 한 창 모드 (기어1=구글 대변먹는자, 배속봇 초대)"
+    assert d.status_title("solo", True, False, None) == "🟢 실행 중 · 🤖 한 창 모드 · ⏸ 일시정지(판 사이 대기)"
+    assert d.solo_start_text("대변먹는자", "배속봇") == "▶ 한 창 모드: 대변먹는자 혼자 -- 배속봇 초대"
+    assert d.solo_start_text("배속봇", "대변먹는자") == "▶ 한 창 모드: 배속봇 혼자 -- 대변먹는자 초대"
+    assert d.reserve_blocked("solo") == d.SOLO_BLOCK == "지금은 봇이 친구를 초대해서 플레이 중이라 참가할 수 없어요"
+    assert d.code_reply("solo", {"state": "waiting", "code": "1"}, False) == d.SOLO_BLOCK
+    assert d.card_for("solo", None, 1) == ("🤖 봇이 친구를 초대해서 플레이 중", "지금은 참가할 수 없어요\n대기 1명")
+    assert d.room_line("solo", "playing") == "🤖 봇이 친구를 초대해서 플레이 중"
+    assert d.presence("solo", 3, "") == "랜다2 한 창 모드 · 오늘 3판"
+    assert d.screens_for("solo", s2) == [("[서폿]", "config/recorder_gpg2.toml", "support.jpg")]
+    assert d.screens_for("solo", s1) == [("[기어1]", "config/recorder.toml", "screen.jpg")]
+    assert d.stop_reply("solo") == "⏹ 지금 판이 끝나면 봇을 종료합니다."
+    # duo texts unchanged
+    assert d.status_title("duo", False, False, s2) == d.DUO_STATUS

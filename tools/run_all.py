@@ -5,7 +5,8 @@
 - Discord bot: always running; restarted 10 s after it dies.
 - Supervisor (game loops): started now unless --no-game, or later with Discord /시작.
   Default = duo (a gear bot and a support bot, one per Google Play Games window); --gear-only starts
-  the first gear bot alone (public room).
+  the first gear bot alone (public room). With only one game window open the supervisor runs that
+  window's bot alone ("한 창 모드", it invites the other account); this console prints that line once.
   All children share THIS console's window but write their output to files
   (data/discord_bot.log, data/bot_logs/*) -- no extra windows. This console shows
   the important lines of the logs, tagged [기어1] / [서폿] / [디코].
@@ -14,7 +15,8 @@
 import argparse, fnmatch, glob, os, subprocess, sys, time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PY = os.path.join(ROOT, ".venv", "Scripts", "python.exe")
+sys.path.insert(0, os.path.join(ROOT, "src"))
+PY =os.path.join(ROOT, ".venv", "Scripts", "python.exe")
 DATA = os.path.join(ROOT, "data")
 PID = os.path.join(DATA, "supervisor.pid")
 LOCK = os.path.join(DATA, "run_all.pid")
@@ -49,6 +51,14 @@ def load_names(root=ROOT):
     except Exception:
         cfg = {}
     return cfg.get("host", "대변먹는자"), cfg.get("partner", "배속봇")
+
+
+def solo_banner(data_dir=DATA):
+    """'▶ 한 창 모드: <name> 혼자 -- <partner> 초대' once the supervisor chose solo (bot_mode.json), else None.
+    AI-NOTE: the header above is printed before the supervisor has looked at the windows."""
+    from rdom.notify import duo_texts
+    solo = duo_texts.solo_now(data_dir)
+    return duo_texts.solo_start_text(solo.get("name"), solo.get("partner")) if solo else None
 
 
 def tail_specs(data_dir=DATA):
@@ -140,8 +150,12 @@ def main(argv=None):
             print(header_text(a.gear_only, *load_names()))
 
     tails = [(tag, Tail(pattern)) for pattern, tag in tail_specs()]
+    banner_shown = False
     try:
         while True:
+            if not banner_shown and (b := solo_banner()):
+                print(f"{time.strftime('%H:%M:%S')} {b}", flush=True)
+                banner_shown = True
             for tag, t in tails:
                 for l in t.lines():
                     if shown(l):

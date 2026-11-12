@@ -77,10 +77,17 @@ class Env:
     def texts(self):
         return [t for t, _ in self.notes]
 
-    def run(self, mode="duo"):
+    def run(self, mode="duo", windows=("gpg", "gpg2")):
+        """windows: the game windows the fake start probe finds (never the real window search)."""
+        self.probed = []
+
+        def missing(name):
+            self.probed.append(name)
+            return None if name in windows else f"{name} 창이 없어요"
         sup = self.mod.Supervisor(mode, self.dir, spawn=self.spawn, clock=lambda: self.now,
                                   sleep=self.sleep, notify=self.notify,
-                                  screenshot=lambda prof: "shot:" + prof.name)
+                                  screenshot=lambda prof: "shot:" + prof.name, missing=missing,
+                                  duo_cfg=lambda: {"host": "대변먹는자", "partner": "배속봇", "invite_wait_s": 300})
         return sup.run()
 
 
@@ -290,6 +297,80 @@ def test_duo_children_are_gear_inviter_gpg_and_support_joiner_gpg2(sup_mod):
     p1, p2 = profile.get("gpg"), profile.get("gpg2")
     assert (p1.bot, p2.bot) == ("gear", "support") and (p1.tag, p2.tag) == ("[기어1]", "[서폿]")
     assert (p1.config, p2.config) == ("config/recorder.toml", "config/recorder_gpg2.toml")
+
+
+# ---- solo window mode (rdT17) ----
+
+def _tails(e):
+    return [c[c.index("--profile"):] for c in e.cmds]
+
+
+def test_both_windows_start_duo_as_before(mk):
+    e = mk({"gpg": [(5, 0)], "gpg2": [(5, 0)]})
+    assert e.run(windows=("gpg", "gpg2")) == 0
+    assert sorted(e.probed) == ["gpg", "gpg2"]
+    assert sorted(_tails(e)) == [["--profile", "gpg", "--role", "inviter", "--execute"],
+                                 ["--profile", "gpg2", "--role", "joiner", "--execute"]]
+    assert e.notes == [] and e.sleeps[0][2]["mode"] == "duo" and "solo" not in e.sleeps[0][2]
+
+
+@pytest.mark.parametrize("window,bot,tag,name,partner", [
+    ("gpg", "gear", "[기어1]", "대변먹는자", "배속봇"),
+    ("gpg2", "support", "[서폿]", "배속봇", "대변먹는자"),
+])
+def test_one_window_starts_one_solo_child_inviting_the_other_account(mk, window, bot, tag, name, partner):
+    e = mk({window: [(5, 0)]})
+    assert e.run(windows=(window,)) == 0
+    assert _tails(e) == [["--profile", window, "--role", "solo", "--partner", partner, "--execute"]]
+    assert e.texts() == [f"▶ 한 창 모드: {name} 혼자 -- {partner} 초대"]
+    mode = e.sleeps[0][2]
+    assert mode["mode"] == "solo"
+    assert mode["bots"] == [{"bot": bot, "tag": tag, "profile": window, "pid": 1001}]
+    assert mode["solo"] == {"profile": window, "name": name, "partner": partner}
+    assert e.read("room.json")["state"] == "duo"        # an invite room: reservations stay blocked
+
+
+def test_solo_child_restart_and_crash_limit(mk):
+    e = mk({"gpg2": [(5, 1)] * 5})
+    assert e.run(windows=("gpg2",)) == 1
+    assert e.starts == {"gpg2": 5}
+    assert all("--partner" in c for c in e.cmds)       # restarts keep the solo role and partner
+    heads = [t.split("\n")[0] for t in e.texts()]
+    assert heads[1:5] == [f"⚠ [서폿] 봇 오류로 재시작 ({n}/5)" for n in (1, 2, 3, 4)]
+    assert heads[-1] == "⛔ [서폿] 30분 안에 5번 오류 -- 봇 정지. 확인 필요"
+    assert "■ 두 봇 모두 정지됨" not in heads and not e.exists("STOP")
+
+
+def test_solo_guard_stop_is_left_to_the_child(mk):
+    e = mk({"gpg": [(5, 3)]})
+    assert e.run(windows=("gpg",)) == 1
+    assert e.texts() == ["▶ 한 창 모드: 대변먹는자 혼자 -- 배속봇 초대"]
+
+
+def test_no_window_fails_the_start_and_starts_nothing(mk):
+    e = mk({})
+    assert e.run(windows=()) == 1
+    assert e.cmds == []
+    assert e.texts() == ["⛔ 시작 점검 실패: gpg 창이 없어요 · gpg2 창이 없어요"]
+    for n in ("supervisor.pid", "bot_mode.json", "STOP", "room.json"):
+        assert not e.exists(n)
+
+
+def test_gear_mode_does_not_look_at_windows(mk):
+    e = mk({"gpg": [(5, 0)]})
+    assert e.run("gear", windows=()) == 0
+    assert e.probed == [] and _tails(e) == [["--profile", "gpg", "--role", "public", "--execute"]]
+
+
+def test_window_missing_is_read_only_and_maps_reasons(sup_mod, monkeypatch):
+    from rdom.capture import preflight, live
+    from rdom.recorder import window
+    monkeypatch.setattr(live, "place_game_window", lambda *a, **k: 1 / 0)      # must never place
+    for msg, want in (("no visible window x", preflight.MISSING["gpg2"]), ("2 windows match x", None)):
+        monkeypatch.setattr(window, "find_window", lambda t, _m=msg: (_ for _ in ()).throw(RuntimeError(_m)))
+        assert sup_mod.window_missing("gpg2") == want
+    monkeypatch.setattr(window, "find_window", lambda t: 1234)
+    assert sup_mod.window_missing("gpg") is None
 
 
 def test_import_has_no_side_effects(sup_mod):

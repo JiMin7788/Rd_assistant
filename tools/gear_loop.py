@@ -4,6 +4,8 @@
   public   today's gear-only loop: 방 생성 (no invite), wait for any joiner, 협동 시작
   inviter  duo, gear bot (gpg): invite the partner from config/duo.toml, 협동 시작 when accepted
   joiner   duo, support bot (gpg2): wait for the host's invite popup, accept it
+  solo     one window open (rdT17): this bot invites --partner (the other account, played elsewhere) like
+           the inviter; a round the partner did not join is no fault: wait SOLO_RETRY_S, invite again
 
 Models are hot-reloaded before every round (training runs alongside). Each round's start/end
 (perf_counter, same clock as the recorder) goes to data/gear_rounds.jsonl (gear profile) or
@@ -13,7 +15,7 @@ don't loop blindly).
 Exit code: 0 clean (/종료), 3 guard stop (window moved, 3 failed rounds, wrong deck, start check),
 anything else = crash. Real input only with --execute.
 
-  python tools/gear_loop.py [--profile gpg|gpg2|ld] [--role public|inviter|joiner] [--execute]
+  python tools/gear_loop.py [--profile gpg|gpg2|ld] [--role public|inviter|joiner|solo] [--partner NAME] [--execute]
 """
 import argparse, datetime, functools, glob, json, os, sys, time, tomllib
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -61,7 +63,12 @@ FAIL_TEXT = {
     "public": "⛔ 방 만들기 3회 연속 실패 -- 정지. 화면 확인 필요",
     "inviter": "⛔ {partner} 초대 3회 연속 실패 -- 정지. 화면 확인 필요",
     "joiner": "⛔ 초대 수락 후 판이 3회 연속 시작되지 않음 -- 정지. 화면 확인 필요",
+    "solo": "⛔ {partner} 초대 3회 연속 실패 -- 정지. 화면 확인 필요",
 }
+SOLO_RETRY_S = 30.0                                # solo: pause before inviting again
+SOLO_STATUS_EVERY_S = 600.0                        # solo: at most one 'not joined' Discord status per 10 min
+SOLO_WAIT_TEXT = "⏳ {partner} 아직 안 들어옴 -- 계속 다시 초대 중"
+_clock = time.monotonic                            # tests replace it
 WRONG_DECK_TEXT = {
     "gear": "⛔ 기어덱이 아니에요 -- 덱 확인 후 다시 시작해 주세요",
     "support": "⛔ 서포팅덱이 아니에요 -- 덱 확인 후 다시 시작해 주세요",
@@ -251,7 +258,8 @@ def _invite_uvs(prof):
 
 def lobby_phase(role, g, inj, prof, duo):
     """Get the room started with the role's partner logic.
-    -> "ok" (battle can start) | "wait" (nothing wrong, go round again) | "fail" | "stop" (/종료)."""
+    -> "ok" (battle can start) | "wait" (nothing wrong, go round again) | "fail" | "stop" (/종료) |
+       "absent" (solo: the partner did not join within invite_wait_s, offline included; room left)."""
     if role == "public":
         ok = open_room_and_wait(g, inj, timeout=1800)
         if ok is False:                         # nobody joined: keep waiting, not a fault
@@ -259,12 +267,16 @@ def lobby_phase(role, g, inj, prof, duo):
         if not ok:
             print(f"round did not start ({ok})", flush=True); return "fail"
         return "ok"
-    if role == "inviter":
+    if role in ("inviter", "solo"):
         r = friend_coop.invite_and_start(g, inj, duo["partner"], duo["invite_wait_s"], should_stop,
                                          uv=_invite_uvs(prof))
         if r == "stopped": return "stop"
         if r == "paused": return "wait"
         if r is True: return "ok"
+        # AI-NOTE: False = invite_wait_s over (an offline partner keeps invite() failing until then) and
+        # the room was left with MODAL_X. In solo the partner is a person/another device: user 2026-11-12
+        # '계속 다시 초대' -- not a fault. A broken navigation (None) is still a failed round.
+        if r is False and role == "solo": return "absent"
         print(f"round did not start ({r})", flush=True); return "fail"
     r = coop_join.wait_and_accept(g, inj, duo["host"], should_stop,
                                   recover=functools.partial(_joiner_recover, g=g, inj=inj, prof=prof))
@@ -405,7 +417,7 @@ def battle_phase(role, g, inj, prof, rnd, tap_speed=True):
     with open(log, "a", encoding="utf-8") as fh:
         fh.write(json.dumps({"round": rnd, "t_start": t_start, "t_end": t_end, "result": res,
                              "wall_end": datetime.datetime.now().isoformat(),
-                             "bot": prof.bot, "mode": "gear" if role == "public" else "duo",
+                             "bot": prof.bot, "mode": {"public": "gear", "solo": "solo"}.get(role, "duo"),
                              "stats": {k: st.get(k) for k in ("merges", "fails", "support", "complete")}},
                             ensure_ascii=False) + "\n")
     def report():
@@ -423,6 +435,7 @@ def battle_phase(role, g, inj, prof, rnd, tap_speed=True):
 def run_loop(role, prof, duo, g, inj):
     """The round loop. Returns EXIT_CLEAN or EXIT_GUARD; an exception propagates (crash)."""
     fails = 0; rnd = 0
+    told_at = None                       # solo: when the last 'not joined' status went to Discord
     while True:
         rnd += 1
         code = round_start(g, rnd)
@@ -442,6 +455,14 @@ def run_loop(role, prof, duo, g, inj):
                 return EXIT_CLEAN
             if r == "wait":
                 continue
+            if r == "absent":            # never counts toward the 3-failed-rounds stop
+                print("partner did not join -- invite again", flush=True)
+                t = _clock()
+                if told_at is None or t - told_at >= SOLO_STATUS_EVERY_S:
+                    send_status(SOLO_WAIT_TEXT.format(partner=duo["partner"]))
+                    told_at = t
+                time.sleep(SOLO_RETRY_S)
+                continue
             if r == "fail":
                 fails += 1; print(f"fails={fails}", flush=True)
                 if fails >= 3:
@@ -449,7 +470,7 @@ def run_loop(role, prof, duo, g, inj):
                     send_status(FAIL_TEXT[role].format(partner=duo["partner"]), g.grab())
                     return EXIT_GUARD
                 time.sleep(5); continue
-        fails = 0
+        fails = 0; told_at = None
         if battle_phase(role, g, inj, prof, rnd, tap_speed=came_from_lobby) != "ok":
             return EXIT_GUARD
 
@@ -458,14 +479,19 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--profile", choices=sorted(profiles.PROFILES), default="gpg",
                     help="gpg = Google Play Games window 1 (gear, default), gpg2 = window 2 (support), ld = LDPlayer (gear, unused)")
-    ap.add_argument("--role", choices=("public", "inviter", "joiner"), default="public")
+    ap.add_argument("--role", choices=("public", "inviter", "joiner", "solo"), default="public")
+    ap.add_argument("--partner", help="solo: game name of the account to invite (the supervisor passes it)")
     ap.add_argument("--execute", action="store_true", help="really inject input (default: dry run)")
     a = ap.parse_args(argv)
+    if a.role == "solo" and not a.partner:
+        ap.error("--role solo needs --partner")
     prof = profiles.get(a.profile)
     duo = load_duo()
+    if a.role == "solo":
+        duo = dict(duo, partner=a.partner)       # the inviter flow and texts read duo["partner"]
     discord.set_tag(prof.tag)
     # AI-NOTE: the start check runs before any injector exists; the duo inviter also checks the
-    # partner's window so the two windows are known not to overlap.
+    # partner's window so the two windows are known not to overlap. Solo has only its own window.
     names = ["gpg", "gpg2"] if a.role == "inviter" else [a.profile]
     results = preflight.check(names)
     for line in preflight.format_lines(results):

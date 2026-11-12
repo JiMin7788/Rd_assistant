@@ -60,6 +60,47 @@ def test_show_has_new_keys():
     assert not m.shown("plain noise")
 
 
+def test_solo_banner_from_bot_mode(tmp_path):
+    import json
+    m = _load()
+    assert m.solo_banner(str(tmp_path)) is None                       # supervisor has not decided yet
+    p = tmp_path / "bot_mode.json"
+    p.write_text(json.dumps({"mode": "duo", "bots": []}), encoding="utf-8")
+    assert m.solo_banner(str(tmp_path)) is None
+    p.write_text(json.dumps({"mode": "solo", "bots": [], "solo": {"profile": "gpg2", "name": "배속봇",
+                                                                  "partner": "대변먹는자"}}), encoding="utf-8")
+    assert m.solo_banner(str(tmp_path)) == "▶ 한 창 모드: 배속봇 혼자 -- 대변먹는자 초대"
+
+
+def test_main_prints_the_solo_banner_once(tmp_path, monkeypatch, capsys):
+    """main with --no-game and every outside effect faked: the console shows the solo line once."""
+    import json
+    m = _load()
+    (tmp_path / "bot_logs").mkdir()
+    (tmp_path / "bot_mode.json").write_text(json.dumps(
+        {"mode": "solo", "bots": [], "solo": {"profile": "gpg", "name": "대변먹는자", "partner": "배속봇"}}),
+        encoding="utf-8")
+    monkeypatch.setattr(m, "DATA", str(tmp_path))
+    monkeypatch.setattr(m, "LOCK", str(tmp_path / "run_all.pid"))
+    monkeypatch.setattr(m, "solo_banner", lambda data_dir=str(tmp_path), _f=m.solo_banner: _f(data_dir))
+    monkeypatch.setattr(m, "tail_specs", lambda data_dir=None: [])
+    monkeypatch.setattr(m.os, "system", lambda c: 0)
+
+    class Disc:
+        returncode = None
+        def poll(self): return None
+        def terminate(self): pass
+    monkeypatch.setattr(m, "start", lambda *a, **k: Disc())
+    n = [0]
+    def sleep(s):
+        n[0] += 1
+        if n[0] >= 3:
+            raise KeyboardInterrupt
+    monkeypatch.setattr(m.time, "sleep", sleep)
+    assert m.main(["--no-game"]) == 0
+    assert capsys.readouterr().out.count("▶ 한 창 모드: 대변먹는자 혼자 -- 배속봇 초대") == 1
+
+
 def test_import_starts_nothing(monkeypatch):
     def boom(*a, **k):
         raise AssertionError("started a process")

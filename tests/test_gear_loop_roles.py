@@ -615,6 +615,123 @@ def test_round_record_goes_to_the_bots_file(env, args, fname, other, bot, mode):
     assert {"t_start", "t_end", "wall_end"} <= set(rec)
 
 
+# ---- solo window mode (rdT17) ----
+
+SOLO_GPG2 = ["--profile", "gpg2", "--role", "solo", "--partner", "대변먹는자"]
+SOLO_GPG = ["--profile", "gpg", "--role", "solo", "--partner", "배속봇"]
+
+
+def test_solo_needs_a_partner(env):
+    with pytest.raises(SystemExit):
+        env.gl.main(["--profile", "gpg", "--role", "solo"])
+    assert env.checks == [] and env.injectors == []
+
+
+@pytest.mark.parametrize("args,own,partner,expect", [(SOLO_GPG, "gpg", "배속봇", "gear"),
+                                                     (SOLO_GPG2, "gpg2", "대변먹는자", "support")])
+def test_solo_invites_the_partner_checks_only_its_window_and_plays_its_deck(env, monkeypatch, args, own,
+                                                                            partner, expect):
+    seen = {}
+    def invite(g, inj, name, wait_s, stop, uv=None):
+        seen.update(name=name, wait_s=wait_s, stop=stop, uv=uv)
+        env.state["battle"] = True
+        return True
+    monkeypatch.setattr(friend_coop, "invite_and_start", invite)
+    monkeypatch.setattr(env.gl, "open_room_and_wait", lambda *a, **k: 1 / 0)
+    monkeypatch.setattr(coop_join, "wait_and_accept", lambda *a, **k: 1 / 0)
+    assert env.gl.main(args) == 0
+    assert env.checks == [[own]]                         # own window only, no pair / overlap check
+    assert (seen["name"], seen["wait_s"], seen["stop"]) == (partner, 300, env.gl.should_stop)
+    assert seen["uv"]["FRIEND"] == profiles.uv(profiles.get(own), "FRIEND_UV")
+    b = env.battles[0]
+    assert b["expect"] == expect and b["support_play"] is env.gl._duo_support_play
+    assert env.inj.taps == [SPEED_UV]                    # 배속 as every role
+    rec = json.loads((env.stop.parent / "gear_rounds.jsonl").read_text(encoding="utf-8"))
+    assert (rec["bot"], rec["mode"]) == (expect, "solo")
+    assert env.rooms == []
+
+
+def test_solo_lobby_phase_results(env, monkeypatch):
+    prof, duo = profiles.get("gpg2"), {"host": "h", "partner": "p", "invite_wait_s": 5}
+    for inv, want in ((True, "ok"), (False, "absent"), (None, "fail"), ("stopped", "stop"), ("paused", "wait")):
+        monkeypatch.setattr(friend_coop, "invite_and_start", lambda *a, _r=inv, **k: _r)
+        assert env.gl.lobby_phase("solo", env.g, env.inj, prof, duo) == want
+    monkeypatch.setattr(friend_coop, "invite_and_start", lambda *a, **k: False)
+    assert env.gl.lobby_phase("inviter", env.g, env.inj, prof, duo) == "fail"    # duo inviter unchanged
+
+
+def test_solo_partner_offline_or_not_joining_is_invited_again(env, monkeypatch, capsys):
+    """The real invite_and_start with the partner never in the friend list: wait_s runs out, the room is
+    left (MODAL_X) -> 'absent'; the loop waits SOLO_RETRY_S and invites again, fails never rise."""
+    from rdom.perception import board
+    for n, v in (("is_lobby", False), ("is_friend_menu", False), ("is_coop_room", True),
+                 ("has_popup_close", True)):
+        monkeypatch.setattr(board, n, lambda f, _v=v: _v)
+    monkeypatch.setattr(friend_coop, "start_ready", lambda f: False)
+    monkeypatch.setattr(friend_coop, "slot_pending", lambda f: False)
+    monkeypatch.setattr(friend_coop, "find_friend_in_popup", lambda f, name: None)   # not online
+    clock = [0.0]
+    def now():
+        clock[0] += 1.0
+        return clock[0]
+    rounds = []
+    real = REAL_INVITE_AND_START
+    def invite(g, inj, name, wait_s, stop, uv=None):
+        rounds.append(name)
+        if len(rounds) > 4:
+            env.stop.write_text("")
+            return "stopped"
+        return real(g, inj, name, wait_s, stop, uv=uv, now=now, sleep=lambda s: None)
+    monkeypatch.setattr(friend_coop, "invite_and_start", invite)
+    sleeps = []
+    monkeypatch.setattr(env.gl.time, "sleep", lambda s: sleeps.append(s))
+    monkeypatch.setattr(env.gl, "_clock", now)
+    assert env.gl.main(SOLO_GPG2) == env.gl.EXIT_CLEAN
+    out = capsys.readouterr().out
+    assert rounds == ["대변먹는자"] * 5
+    assert out.count("대변먹는자 not online / not found") >= 4
+    assert out.count("invite wait over -- leaving the room") == 4
+    assert out.count("partner did not join -- invite again") == 4
+    assert "fails=" not in out and sleeps.count(env.gl.SOLO_RETRY_S) == 4
+    assert env.inj.taps.count(profiles.uv(profiles.get("gpg2"), "MODAL_X_UV")) == 4
+    assert not any(t.startswith("⛔") for t in texts(env))
+
+
+def test_solo_absent_rounds_do_not_count_but_other_failures_do(env, monkeypatch):
+    results = iter(["fail", "absent", "absent", "fail", "absent", "fail", "absent"])
+    monkeypatch.setattr(env.gl, "lobby_phase", lambda *a: next(results))
+    assert env.gl.main(SOLO_GPG2) == env.gl.EXIT_GUARD
+    assert ("⛔ 대변먹는자 초대 3회 연속 실패 -- 정지. 화면 확인 필요", "frame") in env.status
+
+
+def test_solo_wait_status_at_most_once_per_10_minutes(env, monkeypatch):
+    n = 40
+    results = iter(["absent"] * n + ["stop"])
+    monkeypatch.setattr(env.gl, "lobby_phase", lambda *a: next(results))
+    t = [0.0]
+    def clock():                                     # every round (invite_wait_s + retry) takes 330 s
+        t[0] += 330.0
+        return t[0]
+    monkeypatch.setattr(env.gl, "_clock", clock)
+    assert env.gl.main(SOLO_GPG) == 0
+    waits = [s for s in texts(env) if s.startswith("⏳")]
+    assert waits[0] == "⏳ 배속봇 아직 안 들어옴 -- 계속 다시 초대 중"
+    assert len(waits) == 20                          # 40 rounds 330 s apart: rounds 1, 3, 5, ... (>= 600 s gap)
+
+
+def test_solo_wait_status_throttle_restarts_after_a_battle(env, monkeypatch):
+    results = iter(["absent", "absent", "ok", "absent", "stop"])
+    def lobby(*a):
+        r = next(results)
+        env.state["battle"] = r == "ok"
+        return r
+    monkeypatch.setattr(env.gl, "lobby_phase", lobby)
+    monkeypatch.setattr(env.gl, "_clock", lambda: 100.0)          # no time passes
+    env.stop_after_battle = False
+    assert env.gl.main(SOLO_GPG) == 0
+    assert len([s for s in texts(env) if s.startswith("⏳")]) == 2  # first wait, and first wait after the battle
+
+
 # ---- tagged status ----
 
 def test_send_status_inserts_tag_after_the_emoji(monkeypatch):
