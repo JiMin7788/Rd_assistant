@@ -32,6 +32,7 @@ BUFF_STEADY = 4                                    # ticks (~2.4 s) a buffed cel
 from rdom.perception.gear import (read_board, ui_state, UI, GEAR_VARIANTS,
                                   banner_present, banner_text, effect_kind)
 from rdom.policy.gear import evaluate, plan_next
+from rdom.policy import data_mode
 
 SUPPORT_CD = 130.0
 # AI-NOTE: None = detect_support_deck's GPG scales; the loop sets LD_SUPPORT_SCALES for the ld profile
@@ -63,6 +64,20 @@ def play(g, inj, minutes=30, tick=0.6):
     """Play the battle on screen until game over / window move / timeout.
     Returns "game_over", "moved" or "timeout". Per-game counters in play.stats."""
     play.stats = stats = {"merges": 0, "fails": 0, "support": 0, "complete": False}
+    # AI-NOTE: user 2026-11-12 data first -- config/data_mode.toml `sevens = true` makes plan_next chase pip-7
+    # dice and drop them with the supporter; new pip 6/7 cells get extra crops (HiWatch, once per cell per 5 s).
+    sevens = data_mode.sevens()                    # read once per game
+    hi = collect.HiWatch()
+    if sevens:
+        print("data mode: sevens", flush=True)
+        stats.update(sevens=0, drops=0, hi_crops=0)
+
+    def _end(res):
+        if sevens:
+            print(f"gear result: {res} (merges {stats['merges']}, fails {stats['fails']}, "
+                  f"support {stats['support']}, sevens {stats['sevens']}, drops {stats['drops']}, "
+                  f"hi_crops {stats['hi_crops']})", flush=True)
+        return res
     # completion rule of the deck in play (config/deck.toml [keep]), re-read every game
     import rdom.policy.gear as _pg
     import rdom.perception.gear as _gp
@@ -96,12 +111,12 @@ def play(g, inj, minutes=30, tick=0.6):
         time.sleep(OPENING_TICK if stats["merges"] == 0 else tick)
         try:
             if g.window_moved():
-                print("window moved -- stopping"); return "moved"
+                print("window moved -- stopping"); return _end("moved")
         except OSError:
             continue
         f = g.grab(); now = time.monotonic()
         if is_game_over(f):
-            print("game over"); return "game_over"
+            print("game over"); return _end("game_over")
         # AI-NOTE: before every other rule -- the support deck must never get the HP->SP rule below
         if now - support_check >= 10.0:
             support_check = now
@@ -208,6 +223,12 @@ def play(g, inj, minutes=30, tick=0.6):
                 m[1] = True
             if m[1]:
                 d["pip"] = base + 1
+        if sevens and stable:                          # confirmed reads only: a misread is no new 7
+            hi_cells, new7 = hi.update(b, now)
+            stats["sevens"] += new7
+            if hi_cells:
+                stats["hi_crops"] += collect.save_cells(
+                    f, b, hi_cells, unobscured=g.unobscured() if hasattr(g, "unobscured") else True)
         # type only: a flickering pip read cleared a pip-keyed ban and the same misread
         # Adjust-4 pair was retried 26x (2026-10-08); cap at 90 s for real changes
         cellsig = lambda c: bc[c]["type"]
@@ -245,7 +266,7 @@ def play(g, inj, minutes=30, tick=0.6):
 
         act = plan_next(b, transcended=transcended,
                         support_ready=now - support_last >= SUPPORT_CD, banned=set(banned),
-                        clone_alert=now < clone_until)
+                        clone_alert=now < clone_until, sevens=sevens)
         shaky = [c for c in (act.get("from"), act.get("to")) if c in buffed
                  and (len(hist[c]) < BUFF_STEADY or len(set(hist[c])) > 1)]
         if act["op"] in ("merge", "support") and shaky:
@@ -277,7 +298,9 @@ def play(g, inj, minutes=30, tick=0.6):
             print(f"{fmt(b)} -> supporter <- {act['from']}", flush=True)
             inj.swipe(*cell_uv(act["from"]), *UI["support"], dur_ms=400)
             support_last = now; acted_at = now; stats["support"] += 1
-    return "timeout"
+            if sevens and bc[act["from"]]["pip"] == 7:
+                stats["drops"] += 1                    # a 7 dragged onto the supporter (comes back as a 6)
+    return _end("timeout")
 
 
 def main():

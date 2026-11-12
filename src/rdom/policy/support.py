@@ -232,12 +232,56 @@ def _supporter_pick(board, ev, deck):
                  and not any(can_merge_support(d, o) for o in board)])
 
 
-def plan_support(board, deck=DEFAULT, support_ready=False, banned=frozenset(), clone_alert=False):
+def _seven_drop(board):
+    """Sevens mode: the pip-7 die to drag onto the supporter (it comes back as a 6, maybe another
+    type): an Adjust 7 first, then the 7 whose type has the most 7s on the board, then the smaller
+    cell. None without a pip-7 die."""
+    sevens = [d for d in board if d["pip"] == MAX_PIP and d["type"] not in ("empty", "junk", "Crystal", "Bomb")]
+    if not sevens:
+        return None
+    n7 = {t: sum(1 for d in sevens if d["type"] == t) for t in {d["type"] for d in sevens}}
+    return max(sevens, key=lambda d: (d["type"] == "Adjust", n7[d["type"]], -d["cell"]))["cell"]
+
+
+def _plan_sevens(board, ev, deck, support_ready, banned):
+    """Sevens data mode (user 2026-11-12, data first): make as many pip-7 dice as possible.
+    bombs -> supporter drags a pip-7 die (when ready) -> Joker copy -> the legal merge with the
+    HIGHEST pip (ties as in _best_merge) -> the old supporter pool -> wait. No completion wait;
+    can_merge_support already never merges a pip-7 die or Growth."""
+    # AI-NOTE: also ban Joker copies onto a 7 (the Joker is not a merge in can_merge_support).
+    banned = set(banned) | {(a["cell"], b["cell"]) for a in board for b in board
+                            if a["pip"] >= MAX_PIP or b["pip"] >= MAX_PIP}
+    act = _bomb_action(board, banned, support_ready)
+    if act:
+        return act
+    if support_ready:
+        c = _seven_drop(board)
+        if c:
+            return {"op": "support", "from": c}
+    act = _joker_copy(board, ev, deck, banned)
+    if act:
+        return act
+    cands = _merge_candidates(board, ev, deck, banned)
+    if cands:
+        # AI-NOTE: the highest pip always goes first: no crystal preference, and bubbles=0 switches off
+        # _best_merge's surplus-Bubble filter (the keep-lo check already ran in _merge_candidates).
+        return _best_merge(cands, {**ev, "bubbles": 0}, deck)
+    if support_ready:
+        cell = _supporter_pick(board, ev, deck)
+        if cell:
+            return {"op": "support", "from": cell}
+    return {"op": "wait", "why": "no move"}
+
+
+def plan_support(board, deck=DEFAULT, support_ready=False, banned=frozenset(), clone_alert=False,
+                 sevens=False):
     """Next action. `banned` = (from, to) pairs that recently failed.
 
     clone_alert: a field effect will clone the highest die. The copy must be a Resonance/
     Alignment: a Bubble/Adjust/Joker above every one of them is rerolled with the supporter,
-    and merges whose result (pip+1) could become the new maximum are held back."""
+    and merges whose result (pip+1) could become the new maximum are held back.
+
+    sevens: config/data_mode.toml data mode -> _plan_sevens after the clone_alert rule."""
     ev = evaluate_support(board, deck)
     if ev["empty"]:
         return {"op": "summon"}
@@ -248,6 +292,8 @@ def plan_support(board, deck=DEFAULT, support_ready=False, banned=frozenset(), c
             return {"op": "support", "from": max(rogue, key=lambda d: d["pip"])["cell"]}
         banned = set(banned) | {(a["cell"], b["cell"]) for a in board for b in board
                                 if a["pip"] + 1 > top}
+    if sevens:
+        return _plan_sevens(board, ev, deck, support_ready, banned)
     act = _bomb_action(board, banned, support_ready)
     if act:
         return act

@@ -1,0 +1,7 @@
+# Data-mode switches, read once per game by tools/gear_bot.py and the support PlayPlayer
+# (src/rdom/policy/data_mode.py). Missing file or false -> normal play.
+#
+# user 2026-11-12: '일단 봇이 최대한 7성을 많이 찍게 하기 기어 서폿 둘 다 스킬로 7성을 6성으로 내리면서라도
+# 6, 7성구간 데이터 확보' -- data first (games may be lost): merge the highest pip pair first, never merge a
+# pip-7 die, drag a pip-7 die onto the supporter whenever it is ready, extra crops of new pip 6/7 cells.
+sevens = true

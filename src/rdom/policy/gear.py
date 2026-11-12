@@ -352,15 +352,68 @@ def _crystal_merge(board, ev, transcended, banned):
     return {"op": "merge", "from": a["cell"], "to": b["cell"]}
 
 
+SEVEN = 7                                       # top pip (7성)
+_NOT_DICE = ("empty", "junk", "Crystal", "Bomb")
+
+
+def _seven_drop(board):
+    """Sevens mode: the pip-7 die to drag onto the supporter (it comes back as a 6, maybe another
+    type): a non-gear 7 first, then the 7 whose type has the most 7s on the board, then the smaller
+    cell. None without a pip-7 die."""
+    sevens = [d for d in board if d["pip"] == SEVEN and d["type"] not in _NOT_DICE]
+    if not sevens:
+        return None
+    n7 = {t: sum(1 for d in sevens if d["type"] == t) for t in {d["type"] for d in sevens}}
+    return max(sevens, key=lambda d: (d["type"] != "Gear", n7[d["type"]], -d["cell"]))["cell"]
+
+
+def _plan_sevens(board, ev, transcended, support_ready, banned):
+    """Sevens data mode (user 2026-11-12, data first): make as many pip-7 dice as possible.
+    summon -> bombs -> supporter drags a pip-7 die (when ready) -> Joker copy -> the legal merge
+    with the HIGHEST pip (ties: the phase A/B score) -> the old supporter pool -> wait.
+    No 'complete' wait; a pip-7 die is never merged."""
+    if ev["empty"]:
+        return {"op": "summon"}
+    # AI-NOTE: every pair touching a pip-7 die is banned, so no merge rule (Joker copy included) consumes a 7.
+    banned = set(banned) | {(a["cell"], b["cell"]) for a in board for b in board
+                            if a["pip"] >= SEVEN or b["pip"] >= SEVEN}
+    act = _bomb_action(board, ev, banned, support_ready)
+    if act:
+        return act
+    if support_ready:
+        c = _seven_drop(board)
+        if c:
+            return {"op": "support", "from": c}
+    act = _joker_copy(board, ev, banned)
+    if act:
+        return act
+    # AI-NOTE: gear pairs are allowed before 초월 too (6+6 gears -> 7); the keep minimum still holds.
+    bc, cands = _merge_candidates(board, allow_gear=True, banned=banned)
+    if cands:
+        tie = ((lambda p: _score_phase_b(bc, *p, ev["gear_avg"])) if transcended
+               else (lambda p: _score_phase_a(bc, *p)))
+        a, b = max(cands, key=lambda p: (p[0]["pip"], tie(p)))
+        return {"op": "merge", "from": a["cell"], "to": b["cell"]}
+    if support_ready:
+        pool = [d for d in board if d["type"] in ("Doom", "Adjust")
+                or (d["type"] in KEEP and ev["kept"][d["type"]] > KEEP[d["type"]][2])]
+        if pool:
+            d = max(pool, key=lambda d: (_gear_adj(bc, d["cell"]), d["pip"]))
+            return {"op": "support", "from": d["cell"]}
+    return {"op": "wait", "why": "no move"}
+
+
 def plan_next(board, transcended=False, support_ready=False, banned=frozenset(),
-              clone_alert=False):
+              clone_alert=False, sevens=False):
     """Next action for the board. `banned` = (from, to) pairs that recently failed
     (the merge did not change the board -> recognition was wrong).
 
     clone_alert: the field effect "N초 후 낮은 눈금 3개 파괴 + 최고 눈금 주사위 1개 복제"
     is counting down. The copy must be a gear: a non-gear die above every gear is
     rerolled with the supporter, and merges whose result (pip+1, random type) could
-    become the new maximum are held back."""
+    become the new maximum are held back.
+
+    sevens: config/data_mode.toml data mode -> _plan_sevens after the clone_alert rule."""
     ev = evaluate(board)
     if clone_alert:
         top = _max_gear_pip(board)
@@ -369,6 +422,8 @@ def plan_next(board, transcended=False, support_ready=False, banned=frozenset(),
             return {"op": "support", "from": max(rogue, key=lambda d: d["pip"])["cell"]}
         banned = set(banned) | {(a["cell"], b["cell"]) for a in board for b in board
                                 if a["pip"] + 1 > top}
+    if sevens:
+        return _plan_sevens(board, ev, transcended, support_ready, banned)
     if ev["complete"] and not transcended:
         return {"op": "wait", "why": "complete"}
     if ev["empty"]:
