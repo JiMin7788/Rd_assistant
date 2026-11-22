@@ -1,0 +1,7 @@
+{
+  "phase": "maintenance",
+  "focus": "Gear-deck coop loop in production on Google Play Games (PostMessage input since 2026-10-16)",
+  "next_action": "Reconcile CLAUDE_CODE_TODO.md with the gear-deck/GPG reality (it predates both), then pick the top open item",
+  "blocked_on_human": [],
+  "updated": "2026-10-29"
+}
